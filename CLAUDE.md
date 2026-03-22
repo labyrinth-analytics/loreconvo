@@ -33,21 +33,26 @@ Cross-surface persistent memory for Claude sessions.
 **Completed:**
 - vault_suggest tool (commit 636dcf5, 2026-03-22)
 
+**Completed:**
+- Marketplace listing draft (docs/marketplace_listing.md, 2026-03-22) -- AWAITING DEBBIE REVIEW
+
 **Priority TODOs:**
-1. Marketplace listing for public distribution
-2. Rebrand Excel revenue projection for public-facing materials
+1. Rebrand Excel revenue projection for public-facing materials
+2. Publish marketplace listing after Debbie approves draft
 
 ### ProjectVault (v0.1.0) - ALPHA
 Knowledge management MCP server for AI projects.
 - Location: `ron_skills/projectvault/`
 - Stack: FastMCP, SQLite+FTS5, filesystem storage
-- Status: 27/32 tools implemented, permanently installed
+- Status: 32/32 tools implemented, permanently installed
 - Data: `~/.projectvault/projectvault.db` + `~/.projectvault/vaults/`
 - Revenue target: $1,635 MRR by month 12
 
+**Completed:**
+- Phase 2 tools: vault_link_doc, vault_unlink_doc, vault_find_related, vault_suggest, vault_export_manifest (2026-03-22) -- 32/32 tools, 7 tests passing
+
 **Priority TODOs:**
-1. Phase 2 tools: vault_link_doc, vault_unlink_doc, vault_find_related, vault_suggest, vault_export_manifest
-2. Free/Pro tier gating logic (everything unlimited currently)
+1. Free/Pro tier gating logic (everything unlimited currently)
 3. Cowork plugin packaging (.plugin format)
 4. Expand test suite beyond storage layer to MCP tool layer
 5. Marketplace listing for public distribution

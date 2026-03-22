@@ -205,6 +205,24 @@ def _init_db(db_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Schema migrations (safe to run on every startup)
+# ---------------------------------------------------------------------------
+
+def _migrate_db(db_path: Path) -> None:
+    """Apply incremental schema migrations that are safe to run repeatedly."""
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA foreign_keys=ON")
+
+    # v0.2: add label column to doc_links if missing
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(doc_links)")}
+    if "label" not in existing_cols:
+        conn.execute("ALTER TABLE doc_links ADD COLUMN label TEXT DEFAULT 'related'")
+
+    conn.commit()
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Storage class
 # ---------------------------------------------------------------------------
 
@@ -222,6 +240,7 @@ class VaultStorage:
 
         # Initialize database
         _init_db(self.db_path)
+        _migrate_db(self.db_path)
 
     @contextmanager
     def _db(self):
@@ -1007,3 +1026,278 @@ class VaultStorage:
                     count += 1
 
         return count
+
+    # -------------------------------------------------------------------
+    # Document linking (Phase 2)
+    # -------------------------------------------------------------------
+
+    def link_doc(self, source_doc_id: str, target_doc_id: str,
+                 label: str = "related") -> Optional[Dict[str, Any]]:
+        """Create a link between two documents.
+
+        Links are stored bidirectionally: one row per direction so queries
+        work without UNION.  If the link already exists it is returned as-is.
+        Returns the link record, or None if either document is not found.
+        """
+        with self._db() as conn:
+            # Verify both documents exist and are not deleted
+            src = conn.execute(
+                "SELECT id, vault_id, name FROM documents WHERE id = ? AND deleted = 0",
+                (source_doc_id,)
+            ).fetchone()
+            tgt = conn.execute(
+                "SELECT id, vault_id, name FROM documents WHERE id = ? AND deleted = 0",
+                (target_doc_id,)
+            ).fetchone()
+            if not src or not tgt:
+                return None
+
+            now = self._now()
+            link_id = str(uuid.uuid4())
+            reverse_id = str(uuid.uuid4())
+
+            # Check if forward link already exists
+            existing = conn.execute(
+                "SELECT id FROM doc_links WHERE source_doc_id = ? AND target_doc_id = ?",
+                (source_doc_id, target_doc_id)
+            ).fetchone()
+            if existing:
+                return {
+                    "id": existing["id"],
+                    "source_doc_id": source_doc_id,
+                    "source_doc_name": src["name"],
+                    "target_doc_id": target_doc_id,
+                    "target_doc_name": tgt["name"],
+                    "label": label,
+                    "already_existed": True,
+                }
+
+            conn.execute(
+                """INSERT INTO doc_links (id, source_vault_id, source_doc_id,
+                                          target_vault_id, target_doc_id, created_at, label)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (link_id, src["vault_id"], source_doc_id,
+                 tgt["vault_id"], target_doc_id, now, label)
+            )
+            # Store reverse direction for symmetric lookup
+            conn.execute(
+                """INSERT INTO doc_links (id, source_vault_id, source_doc_id,
+                                          target_vault_id, target_doc_id, created_at, label)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (reverse_id, tgt["vault_id"], target_doc_id,
+                 src["vault_id"], source_doc_id, now, label)
+            )
+
+            return {
+                "id": link_id,
+                "source_doc_id": source_doc_id,
+                "source_doc_name": src["name"],
+                "target_doc_id": target_doc_id,
+                "target_doc_name": tgt["name"],
+                "label": label,
+                "created_at": now,
+                "already_existed": False,
+            }
+
+    def unlink_doc(self, source_doc_id: str, target_doc_id: str) -> int:
+        """Remove all links between two documents (both directions).
+
+        Returns the number of link rows deleted (0 if no link existed).
+        """
+        with self._db() as conn:
+            cursor = conn.execute(
+                """DELETE FROM doc_links
+                   WHERE (source_doc_id = ? AND target_doc_id = ?)
+                      OR (source_doc_id = ? AND target_doc_id = ?)""",
+                (source_doc_id, target_doc_id, target_doc_id, source_doc_id)
+            )
+            return cursor.rowcount
+
+    def find_related_docs(self, doc_id: str) -> List[Dict[str, Any]]:
+        """Return all documents linked to or from the given document.
+
+        Each result includes the related document's metadata and the link label.
+        """
+        with self._db() as conn:
+            rows = conn.execute(
+                """SELECT d.id, d.vault_id, d.name, d.category, d.tags, d.notes,
+                          d.updated_at, dl.label, v.name as vault_name
+                   FROM doc_links dl
+                   JOIN documents d ON dl.target_doc_id = d.id
+                   JOIN vaults v ON d.vault_id = v.id
+                   WHERE dl.source_doc_id = ? AND d.deleted = 0
+                   ORDER BY dl.created_at DESC""",
+                (doc_id,)
+            ).fetchall()
+            results = []
+            for row in rows:
+                item = dict(row)
+                item["tags"] = json.loads(item.get("tags") or "[]")
+                results.append(item)
+            return results
+
+    # -------------------------------------------------------------------
+    # Vault manifest export (Phase 2)
+    # -------------------------------------------------------------------
+
+    def get_vault_manifest(self, vault_id: str) -> Optional[Dict[str, Any]]:
+        """Return a JSON-serializable manifest of the vault.
+
+        Includes vault metadata, all document metadata (not file contents),
+        tag index, and document count by category.  Useful for quick overviews
+        and for generating marketplace showcase exports.
+        """
+        with self._db() as conn:
+            vault = conn.execute(
+                "SELECT * FROM vaults WHERE id = ? AND archived = 0",
+                (vault_id,)
+            ).fetchone()
+            if not vault:
+                return None
+
+            vault_dict = dict(vault)
+            vault_dict["tags"] = json.loads(vault_dict.get("tags") or "[]")
+            vault_dict["linked_projects"] = json.loads(vault_dict.get("linked_projects") or "[]")
+
+            docs = conn.execute(
+                """SELECT id, name, original_filename, category, priority, tags,
+                          notes, created_at, updated_at, file_size_bytes, version_count
+                   FROM documents
+                   WHERE vault_id = ? AND deleted = 0
+                   ORDER BY updated_at DESC""",
+                (vault_id,)
+            ).fetchall()
+
+            doc_list = []
+            tag_counts: Dict[str, int] = {}
+            category_counts: Dict[str, int] = {}
+
+            for doc in docs:
+                d = dict(doc)
+                d["tags"] = json.loads(d.get("tags") or "[]")
+                for t in d["tags"]:
+                    tag_counts[t] = tag_counts.get(t, 0) + 1
+                category_counts[d["category"]] = category_counts.get(d["category"], 0) + 1
+                doc_list.append(d)
+
+            # Link count (stored bidirectionally so divide by 2)
+            link_row = conn.execute(
+                "SELECT COUNT(*) as cnt FROM doc_links WHERE source_vault_id = ?",
+                (vault_id,)
+            ).fetchone()
+            link_count = (link_row["cnt"] // 2) if link_row else 0
+
+            return {
+                "vault": vault_dict,
+                "document_count": len(doc_list),
+                "link_count": link_count,
+                "category_counts": category_counts,
+                "tag_counts": tag_counts,
+                "documents": doc_list,
+                "generated_at": self._now(),
+            }
+
+    # -------------------------------------------------------------------
+    # Suggestions (Phase 2)
+    # -------------------------------------------------------------------
+
+    def get_suggestions(self, vault_id: Optional[str] = None,
+                        limit: int = 5) -> List[Dict[str, Any]]:
+        """Return suggested documents to review or improve.
+
+        Surfaces documents that may need attention:
+        - Recently added with no notes (undocumented)
+        - No tags (unorganized)
+        - Never linked to any other document (isolated)
+
+        Optionally scoped to a single vault.
+        """
+        suggestions: List[Dict[str, Any]] = []
+
+        with self._db() as conn:
+            vault_filter = "AND d.vault_id = ?" if vault_id else ""
+            params_base: List[Any] = [vault_id] if vault_id else []
+
+            # 1. Recently added but no notes
+            rows = conn.execute(
+                f"""SELECT d.id, d.name, d.vault_id, v.name as vault_name,
+                           d.category, d.created_at, d.updated_at
+                    FROM documents d
+                    JOIN vaults v ON d.vault_id = v.id
+                    WHERE d.deleted = 0 AND (d.notes IS NULL OR d.notes = '')
+                    {vault_filter}
+                    ORDER BY d.created_at DESC
+                    LIMIT ?""",
+                params_base + [limit]
+            ).fetchall()
+            for row in rows:
+                suggestions.append({
+                    "reason": "no_notes",
+                    "label": "Add notes to describe this document",
+                    "doc_id": row["id"],
+                    "doc_name": row["name"],
+                    "vault_id": row["vault_id"],
+                    "vault_name": row["vault_name"],
+                    "category": row["category"],
+                    "updated_at": row["updated_at"],
+                })
+
+            if len(suggestions) >= limit:
+                return suggestions[:limit]
+
+            # 2. Documents with no tags
+            rows = conn.execute(
+                f"""SELECT d.id, d.name, d.vault_id, v.name as vault_name,
+                           d.category, d.updated_at
+                    FROM documents d
+                    JOIN vaults v ON d.vault_id = v.id
+                    WHERE d.deleted = 0
+                      AND (d.tags IS NULL OR d.tags = '[]')
+                    {vault_filter}
+                    ORDER BY d.updated_at DESC
+                    LIMIT ?""",
+                params_base + [limit - len(suggestions)]
+            ).fetchall()
+            for row in rows:
+                if not any(s["doc_id"] == row["id"] for s in suggestions):
+                    suggestions.append({
+                        "reason": "no_tags",
+                        "label": "Tag this document for better discoverability",
+                        "doc_id": row["id"],
+                        "doc_name": row["name"],
+                        "vault_id": row["vault_id"],
+                        "vault_name": row["vault_name"],
+                        "category": row["category"],
+                        "updated_at": row["updated_at"],
+                    })
+
+            if len(suggestions) >= limit:
+                return suggestions[:limit]
+
+            # 3. Documents never linked to anything
+            rows = conn.execute(
+                f"""SELECT d.id, d.name, d.vault_id, v.name as vault_name,
+                           d.category, d.updated_at
+                    FROM documents d
+                    JOIN vaults v ON d.vault_id = v.id
+                    WHERE d.deleted = 0
+                      AND d.id NOT IN (SELECT DISTINCT source_doc_id FROM doc_links)
+                    {vault_filter}
+                    ORDER BY d.created_at DESC
+                    LIMIT ?""",
+                params_base + [limit - len(suggestions)]
+            ).fetchall()
+            for row in rows:
+                if not any(s["doc_id"] == row["id"] for s in suggestions):
+                    suggestions.append({
+                        "reason": "no_links",
+                        "label": "Link this document to related documents",
+                        "doc_id": row["id"],
+                        "doc_name": row["name"],
+                        "vault_id": row["vault_id"],
+                        "vault_name": row["vault_name"],
+                        "category": row["category"],
+                        "updated_at": row["updated_at"],
+                    })
+
+        return suggestions[:limit]

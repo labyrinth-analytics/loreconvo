@@ -1059,6 +1059,230 @@ async def vault_export(params: ExportInput, ctx: Context) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Phase 2: Document linking
+# ---------------------------------------------------------------------------
+
+class LinkDocInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    source_doc: str = Field(..., description="Source document ID", min_length=1)
+    target_doc: str = Field(..., description="Target document ID", min_length=1)
+    label: str = Field(default="related", description="Relationship label, e.g. 'related', 'references', 'supersedes', 'part-of'")
+
+
+@mcp.tool(
+    name="vault_link_doc",
+    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+)
+async def vault_link_doc(params: LinkDocInput, ctx: Context) -> str:
+    """Create a link between two documents across any vault.
+
+    Links are bidirectional and labelled (e.g. 'related', 'references',
+    'supersedes', 'part-of').  If the link already exists, reports it.
+    Use vault_find_related to discover all docs linked to a given document.
+    """
+    storage = _get_storage(ctx)
+    result = storage.link_doc(params.source_doc, params.target_doc, params.label)
+    if result is None:
+        return (
+            f"Error: One or both documents not found "
+            f"(source='{params.source_doc}', target='{params.target_doc}')."
+        )
+    if result.get("already_existed"):
+        return (
+            f"Link already exists between '{result['source_doc_name']}' and "
+            f"'{result['target_doc_name']}' (label: {result['label']})."
+        )
+    return (
+        f"Linked '{result['source_doc_name']}' -> '{result['target_doc_name']}' "
+        f"(label: {result['label']}, link ID: {result['id']})"
+    )
+
+
+class UnlinkDocInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    source_doc: str = Field(..., description="Source document ID", min_length=1)
+    target_doc: str = Field(..., description="Target document ID", min_length=1)
+
+
+@mcp.tool(
+    name="vault_unlink_doc",
+    annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False}
+)
+async def vault_unlink_doc(params: UnlinkDocInput, ctx: Context) -> str:
+    """Remove a link between two documents (both directions).
+
+    If no link exists between the two documents, reports that cleanly.
+    """
+    storage = _get_storage(ctx)
+    deleted = storage.unlink_doc(params.source_doc, params.target_doc)
+    if deleted == 0:
+        return f"No link found between '{params.source_doc}' and '{params.target_doc}'."
+    return (
+        f"Removed link between '{params.source_doc}' and '{params.target_doc}' "
+        f"({deleted} row(s) deleted)."
+    )
+
+
+class FindRelatedInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    doc_id: str = Field(..., description="Document ID to find related documents for", min_length=1)
+
+
+@mcp.tool(
+    name="vault_find_related",
+    annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+)
+async def vault_find_related(params: FindRelatedInput, ctx: Context) -> str:
+    """Find all documents linked to a given document.
+
+    Returns each related document with its vault, category, tags, and link label.
+    Use vault_link_doc to create new links.
+    """
+    storage = _get_storage(ctx)
+    related = storage.find_related_docs(params.doc_id)
+    if not related:
+        return (
+            f"No related documents found for '{params.doc_id}'. "
+            "Use vault_link_doc to create links."
+        )
+
+    lines = [f"Found {len(related)} related document(s):", ""]
+    for r in related:
+        tag_str = ", ".join(r["tags"]) if r["tags"] else "none"
+        lines.append(
+            f"- [{r['label']}] {r['name']} "
+            f"(vault: {r['vault_name']}, category: {r['category']}, tags: {tag_str})"
+        )
+        lines.append(f"  ID: {r['id']}  updated: {r['updated_at'][:10]}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: vault_suggest
+# ---------------------------------------------------------------------------
+
+class VaultSuggestInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    vault: Optional[str] = Field(
+        default=None,
+        description="Vault ID or name to scope suggestions to (omit for all vaults)"
+    )
+    limit: int = Field(default=5, ge=1, le=20, description="Max suggestions to return")
+
+
+@mcp.tool(
+    name="vault_suggest",
+    annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+)
+async def vault_suggest(params: VaultSuggestInput, ctx: Context) -> str:
+    """Get suggestions for documents that may need attention.
+
+    Surfaces documents that are undocumented (no notes), unorganized (no tags),
+    or isolated (no links to other documents).  Use to guide housekeeping work
+    or to discover documents that haven't been connected to the broader graph.
+
+    Optionally scope to a single vault.
+    """
+    storage = _get_storage(ctx)
+    vault_id: Optional[str] = None
+    if params.vault:
+        vault = _resolve_vault(storage, params.vault)
+        if not vault:
+            return f"Error: Vault '{params.vault}' not found."
+        vault_id = vault["id"]
+
+    suggestions = storage.get_suggestions(vault_id=vault_id, limit=params.limit)
+    if not suggestions:
+        return "No suggestions right now -- your vaults look well-organized!"
+
+    lines = [f"Found {len(suggestions)} suggestion(s):", ""]
+    for s in suggestions:
+        lines.append(f"[{s['reason']}] {s['doc_name']} (vault: {s['vault_name']})")
+        lines.append(f"  -> {s['label']}")
+        lines.append(f"  doc_id: {s['doc_id']}  updated: {s['updated_at'][:10]}")
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: vault_export_manifest
+# ---------------------------------------------------------------------------
+
+class ExportManifestInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    vault: str = Field(..., description="Vault ID or name to export manifest for", min_length=1)
+    format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format: markdown or json"
+    )
+
+
+@mcp.tool(
+    name="vault_export_manifest",
+    annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+)
+async def vault_export_manifest(params: ExportManifestInput, ctx: Context) -> str:
+    """Export a complete manifest of a vault's contents.
+
+    Returns vault metadata, document list with tags and categories,
+    tag frequency index, category counts, and link count.
+    Use the json format for machine-readable output.
+    Use the markdown format for human-readable summaries.
+    """
+    storage = _get_storage(ctx)
+    vault = _resolve_vault(storage, params.vault)
+    if not vault:
+        return f"Error: Vault '{params.vault}' not found."
+
+    manifest = storage.get_vault_manifest(vault["id"])
+    if not manifest:
+        return f"Error: Could not generate manifest for vault '{params.vault}'."
+
+    if params.format == ResponseFormat.JSON:
+        import json as _json
+        return _json.dumps(manifest, indent=2, default=str)
+
+    # Markdown format
+    v = manifest["vault"]
+    lines = [
+        f"# Vault Manifest: {v['name']}",
+        "",
+        f"**Description:** {v['description'] or '(none)'}",
+        f"**Documents:** {manifest['document_count']}",
+        f"**Links:** {manifest['link_count']}",
+        f"**Generated:** {manifest['generated_at'][:19]}",
+        "",
+    ]
+
+    if manifest["category_counts"]:
+        lines.append("## By Category")
+        for cat, cnt in sorted(manifest["category_counts"].items()):
+            lines.append(f"- {cat}: {cnt}")
+        lines.append("")
+
+    if manifest["tag_counts"]:
+        lines.append("## Tag Index")
+        sorted_tags = sorted(manifest["tag_counts"].items(), key=lambda x: -x[1])
+        for tag, cnt in sorted_tags:
+            lines.append(f"- {tag}: {cnt}")
+        lines.append("")
+
+    if manifest["documents"]:
+        lines.append("## Documents")
+        for doc in manifest["documents"]:
+            tag_str = ", ".join(doc["tags"]) if doc["tags"] else "untagged"
+            lines.append(f"- **{doc['name']}** [{doc['category']}]  tags: {tag_str}")
+            lines.append(f"  ID: {doc['id']}  updated: {doc['updated_at'][:10]}")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
