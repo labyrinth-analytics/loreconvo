@@ -21,17 +21,16 @@ Build and ship products that generate $8K/month passive income through Claude pl
 Cross-surface persistent memory for Claude sessions.
 - Location: `ron_skills/convovault/`
 - Stack: FastMCP, SQLite+FTS5, Click CLI
-- Status: MVP complete, permanently installed, auto-save hook working
+- Status: MVP complete, permanently installed, auto-save + auto-load hooks working
 - MCP tools: 11 | CLI commands: 6
+- Hooks: SessionEnd (auto-save) + SessionStart (auto-load context)
 - Data: `~/.convovault/sessions.db`
 - Revenue target: $3,268 MRR by month 12
 
 **Priority TODOs:**
-1. SessionStart hook - auto-load recent context on session begin (P0 - biggest UX gap)
-2. Replace debug on_session_end.sh with production version (slim logging)
-3. `vault_suggest` tool - proactive context recommendations
-4. Fix duplicate session guard (session_id not stored, dedup check never matches)
-5. Marketplace listing for public distribution
+1. `vault_suggest` tool - proactive context recommendations
+2. Marketplace listing for public distribution
+3. Rebrand Excel revenue projection for public-facing materials
 
 ### ProjectVault (v0.1.0) - ALPHA
 Knowledge management MCP server for AI projects.
@@ -56,7 +55,7 @@ Knowledge management MCP server for AI projects.
 ## Session Workflow
 
 When starting a session:
-1. Check ConvoVault: `get_recent_sessions(limit=5, days_back=7)`
+1. ConvoVault auto-loads recent context via SessionStart hook (no manual step needed)
 2. Check ProjectVault: `vault_list()` then `vault_inject_summary()` for active vaults
 3. Read this file and the TODOs above
 4. Pick the highest-priority TODO that isn't blocked
