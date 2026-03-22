@@ -11,6 +11,9 @@ Build and ship products that generate $8K/month passive income through Claude pl
 - ALWAYS check ConvoVault for recent sessions before starting work: call `get_recent_sessions` to see what was done last.
 - ALWAYS check ProjectVault for current docs: call `vault_list` then `vault_inject_summary` for relevant vaults.
 - ALWAYS commit your work to git with clear commit messages before ending a session.
+- ALWAYS push to origin after committing: `git push origin master`
+- ALWAYS update this CLAUDE.md when you complete a TODO (move it to Completed, add date/commit).
+- ALWAYS follow the priority order in the TODOs list. Work on #1 first unless it's blocked, then #2, etc. Do NOT skip ahead to lower-priority or different-product work.
 - Use Python 3.10+ and SQLite for all products. No external database dependencies.
 - Use FastMCP for MCP servers, Pydantic v2 for validation.
 - Dataclasses require direct attribute access (asset.description), not .get() dict access.
@@ -22,15 +25,17 @@ Cross-surface persistent memory for Claude sessions.
 - Location: `ron_skills/convovault/`
 - Stack: FastMCP, SQLite+FTS5, Click CLI
 - Status: MVP complete, permanently installed, auto-save + auto-load hooks working
-- MCP tools: 11 | CLI commands: 6
+- MCP tools: 12 | CLI commands: 6
 - Hooks: SessionEnd (auto-save) + SessionStart (auto-load context)
 - Data: `~/.convovault/sessions.db`
 - Revenue target: $3,268 MRR by month 12
 
+**Completed:**
+- vault_suggest tool (commit 636dcf5, 2026-03-22)
+
 **Priority TODOs:**
-1. `vault_suggest` tool - proactive context recommendations
-2. Marketplace listing for public distribution
-3. Rebrand Excel revenue projection for public-facing materials
+1. Marketplace listing for public distribution
+2. Rebrand Excel revenue projection for public-facing materials
 
 ### ProjectVault (v0.1.0) - ALPHA
 Knowledge management MCP server for AI projects.
@@ -47,10 +52,17 @@ Knowledge management MCP server for AI projects.
 4. Expand test suite beyond storage layer to MCP tool layer
 5. Marketplace listing for public distribution
 
-### SQL Query Optimizer - NOT STARTED
-- Location: `ron_skills/sql_query_optimizer/` (planned)
-- Concept: Paste SQL, get optimized version with explanation
+### SQL Query Optimizer (v0.1.0) - IN PROGRESS
+SQL optimization tool with analysis and recommendations.
+- Location: `ron_skills/sql_query_optimizer/`
+- Stack: FastMCP, sqlparse, Python
+- Status: Backend built (analyzer + server), 34 tests passing (commit adfd10d, 2026-03-22)
 - Target platform: ClawHub skill + paid API backend
+
+**Priority TODOs:**
+1. ClawHub skill packaging
+2. Paid API backend (deployment, auth, billing)
+3. Integration tests with real SQL Server queries
 
 ## Session Workflow
 
