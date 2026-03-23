@@ -33,10 +33,16 @@ Cross-surface persistent memory for Claude sessions.
 **Completed:**
 - vault_suggest tool (commit 636dcf5, 2026-03-22)
 - Marketplace listing draft (docs/marketplace_listing.md, 2026-03-22) -- AWAITING DEBBIE REVIEW
-- Public-facing revenue projection Excel (docs/ConvoVault_Revenue_Projection.xlsx, 2026-03-22) -- AWAITING DEBBIE REVIEW
+- Marketplace listing revised per Debbie feedback (email, platforms, ProjectVault mention, install path) (2026-03-22)
+- Public-facing revenue projection Excel (docs/ConvoVault_Revenue_Projection.xlsx, 2026-03-22) -- APPROVED
 
 **Priority TODOs:**
-1. Publish marketplace listing after Debbie approves draft
+1. Publish marketplace listing after Debbie gives final approval
+
+## Approvals / Review
+
+## ConvoVault Revenue Projection
+* Approved
 
 ### ProjectVault (v0.1.0) - ALPHA
 Knowledge management MCP server for AI projects.
@@ -51,13 +57,13 @@ Knowledge management MCP server for AI projects.
 
 **Completed:**
 - Free/Pro tier gating logic: tiers.py + TierEnforcer + vault_tier_status + vault_set_tier tools (35 tests passing, commit TBD, 2026-03-22)
-
-**Completed:**
 - Cowork plugin packaging (ron_skills/projectvault-plugin/, ron_skills/projectvault-v0.1.0.plugin, commit TBD, 2026-03-22) -- AWAITING DEBBIE REVIEW
+- Plugin README updated with platform table (Cowork/Code/Chat) and companion product note (2026-03-22)
+- MCP tool-layer test suite: test_mcp_tools.py, 43 tests covering vault lifecycle, doc management, search, inject, tiers (2026-03-22)
+- Bug fix: vault_create and vault_add_doc now return error strings for TierLimitError instead of raising exceptions (2026-03-22)
 
 **Priority TODOs:**
-1. Expand test suite beyond storage layer to MCP tool layer
-2. Marketplace listing for public distribution
+1. Marketplace listing for public distribution
 
 ### SQL Query Optimizer (v0.1.0) - IN PROGRESS
 SQL optimization tool with analysis and recommendations.

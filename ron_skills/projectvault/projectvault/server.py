@@ -133,12 +133,15 @@ async def vault_create(params: VaultCreateInput, ctx: Context) -> str:
     Returns the new vault's ID and metadata.
     """
     storage = _get_storage(ctx)
-    vault = storage.create_vault(
-        name=params.name,
-        description=params.description,
-        tags=params.tags,
-        linked_projects=params.linked_projects,
-    )
+    try:
+        vault = storage.create_vault(
+            name=params.name,
+            description=params.description,
+            tags=params.tags,
+            linked_projects=params.linked_projects,
+        )
+    except TierLimitError as exc:
+        return f"Error: {exc}"
     return json.dumps(vault, indent=2)
 
 
@@ -336,16 +339,19 @@ async def vault_add_doc(params: DocAddInput, ctx: Context) -> str:
     if not vault:
         return f"Error: Vault '{params.vault}' not found. Use vault_list to see available vaults."
 
-    result = storage.add_document_from_text(
-        vault_id=vault["id"],
-        name=params.name,
-        text_content=params.content,
-        filename=params.filename,
-        tags=params.tags,
-        category=params.category.value,
-        priority=params.priority.value,
-        notes=params.notes,
-    )
+    try:
+        result = storage.add_document_from_text(
+            vault_id=vault["id"],
+            name=params.name,
+            text_content=params.content,
+            filename=params.filename,
+            tags=params.tags,
+            category=params.category.value,
+            priority=params.priority.value,
+            notes=params.notes,
+        )
+    except TierLimitError as exc:
+        return f"Error: {exc}"
     if result:
         return json.dumps(result, indent=2)
     return "Error: Could not add document."

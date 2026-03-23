@@ -13,9 +13,9 @@
 | Category | Memory & Context / Productivity |
 | Version | 0.3.0 |
 | Author | Labyrinth Analytics Consulting |
-| Support email | debbie.wonderkitty@gmail.com |
+| Support email | info@labyrinthanalyticsconsulting.com |
 | License | MIT (core plugin) / Pro features require subscription |
-| Platforms | Claude Code, Cowork |
+| Platforms | Claude Code, Cowork, Chat |
 
 ---
 
@@ -92,15 +92,29 @@ Your data lives on your machine in a SQLite database. No API calls, no subscript
 
 ---
 
-### Chat Bridge (No Plugin Required)
+### Companion Product: ProjectVault
 
-Claude Chat does not support plugins. ConvoVault includes a one-command bridge:
+ConvoVault remembers your *conversations*. **ProjectVault** remembers your *project artifacts*.
 
+If you work on complex projects across multiple Claude sessions, consider pairing ConvoVault with ProjectVault. ProjectVault stores documents, specs, and reference materials in named vaults -- and injects them into any Claude session on demand. The two products share a common local-first philosophy and complement each other naturally.
+
+- ConvoVault = "what did we decide last session?"
+- ProjectVault = "what does my project documentation say?"
+
+---
+
+### Chat Support (No Plugin Required)
+
+Claude Chat does not support plugins natively, but ConvoVault works with Chat in two ways:
+
+**Option 1 -- Chat bridge script:**
 ```bash
 bash export-to-chat.sh
 ```
-
 This exports your last session as markdown and copies it to your clipboard. Paste into Chat -- Claude has full context from your Code or Cowork session in seconds.
+
+**Option 2 -- Manual paste:**
+Use `get_recent_sessions` or `get_context_for` in Claude Code or Cowork to retrieve the context you need, then paste the output directly into Chat.
 
 ---
 
@@ -126,11 +140,14 @@ This exports your last session as markdown and copies it to your clipboard. Past
 
 ## Installation
 
-### One-command install
+ConvoVault lives in the `side_hustle` monorepo. To install:
 
 ```bash
-git clone https://github.com/labyrinth-analytics/convovault.git
-cd convovault
+# Clone the full repo (or pull the latest if you already have it)
+git clone https://github.com/labyrinth-analytics/side_hustle.git
+cd side_hustle/ron_skills/convovault
+
+# Run the installer
 bash install.sh
 ```
 
@@ -138,20 +155,21 @@ The install script creates a virtual environment, installs dependencies, and ver
 
 ### Load in Claude Code
 
-```bash
-claude --plugin-dir ~/projects/convovault
-```
+Add the plugin to your Claude Code config or load it in an existing session:
 
-Or inside an existing session:
-```
-/plugin add ~/projects/convovault
+```bash
+/plugin add ~/projects/side_hustle/ron_skills/convovault
 ```
 
 ### Load in Cowork
 
 1. Click **+** next to the prompt box
 2. Select **Plugins** then **Add plugin**
-3. Browse to the `convovault` source folder
+3. Browse to `~/projects/side_hustle/ron_skills/convovault`
+
+### Use in Chat
+
+No plugin install needed. Use the Chat bridge script or manual paste method described above.
 
 ---
 
@@ -169,7 +187,7 @@ Or inside an existing session:
 Yes. ConvoVault stores everything locally in SQLite on your machine. Nothing is sent to any server. Labyrinth Analytics never sees your session data.
 
 **Does it work with Claude Chat (web)?**
-Chat does not support plugins, but the included `export-to-chat.sh` bridge lets you paste context from Code or Cowork sessions into Chat in seconds.
+Yes, with a small workaround -- see the "Chat Support" section above. Use the export script or paste context manually. Full Chat plugin support is on the roadmap.
 
 **What happens if I uninstall it?**
 Your database remains at `~/.convovault/sessions.db`. Nothing is deleted. Reinstall anytime and your full history is still there.
@@ -180,12 +198,15 @@ Yes. The project management tools let you create named projects, associate sessi
 **Does it slow down my Claude sessions?**
 No. The save and recall operations are synchronous SQLite queries that complete in under 100ms. The SessionEnd hook runs after the session closes.
 
+**What is ProjectVault and do I need it?**
+ProjectVault is a companion product for storing project documents and reference materials. ConvoVault and ProjectVault are independent -- you can use either or both. See the Companion Product section above.
+
 ---
 
 ## Support
 
 - GitHub Issues: [github link TBD]
-- Email: debbie.wonderkitty@gmail.com
+- Email: info@labyrinthanalyticsconsulting.com
 - Docs: See `README.md` and `docs/` in the plugin directory
 
 ---
