@@ -41,6 +41,7 @@ Cross-surface persistent memory for Claude sessions.
 2. Research how to submit plugins to the Claude plugin marketplace (knowledge-work-plugins) -- document the process in docs/PUBLISHING.md
 3. Clean up duplicate/test sessions in sessions.db (leftover "What is ProjectVault?" entries from debugging)
 4. Improve SessionStart hook context quality -- add smarter filtering to prioritize sessions with open questions or decisions over generic ones, reduce noise as session count grows
+5. Update README.md with "How it works across surfaces" section documenting the persistence chain: Code (SessionEnd hook) -> ConvoVault DB -> (SessionStart hook) -> Code loop, Cowork via MCP tools, Chat via export-to-chat.sh. This is also the core marketing story.
 
 ## Approvals / Review
 
@@ -90,6 +91,7 @@ SQL optimization tool with analysis and recommendations.
 - ProjectVault tiers.py has Free/Pro/Team limits and TierEnforcer ready
 - Next step: wire vault_set_tier to Stripe subscription webhooks
 - Blocked on: marketplace publishing (need to know how billing integrates with the plugin marketplace)
+- Key unknown: whether Claude marketplace and ClawHub have different billing integration requirements (same Stripe setup for both, or separate handling per platform?)
 
 ## Session Workflow
 
