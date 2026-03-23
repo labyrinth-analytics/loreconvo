@@ -32,9 +32,9 @@ Cross-surface persistent memory for Claude sessions.
 
 **Completed:**
 - vault_suggest tool (commit 636dcf5, 2026-03-22)
-- Marketplace listing draft (docs/marketplace_listing.md, 2026-03-22) -- AWAITING DEBBIE REVIEW
+- Marketplace listing draft (docs/marketplace_listing.md, 2026-03-22) -- **APPROVED**
 - Marketplace listing revised per Debbie feedback (email, platforms, ProjectVault mention, install path) (2026-03-22)
-- Public-facing revenue projection Excel (docs/ConvoVault_Revenue_Projection.xlsx, 2026-03-22) -- APPROVED
+- Public-facing revenue projection Excel (docs/ConvoVault_Revenue_Projection.xlsx, 2026-03-22) -- **APPROVED**
 
 **Priority TODOs:**
 1. Publish marketplace listing after Debbie gives final approval
