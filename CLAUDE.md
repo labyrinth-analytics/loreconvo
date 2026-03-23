@@ -37,12 +37,18 @@ Cross-surface persistent memory for Claude sessions.
 - Public-facing revenue projection Excel (docs/ConvoVault_Revenue_Projection.xlsx, 2026-03-22) -- **APPROVED**
 
 **Priority TODOs:**
-1. Publish marketplace listing after Debbie gives final approval
+1. Package ConvoVault as a .plugin file for the knowledge-work-plugins marketplace (same pattern as ProjectVault plugin)
+2. Research how to submit plugins to the Claude plugin marketplace (knowledge-work-plugins) -- document the process in docs/PUBLISHING.md
 
 ## Approvals / Review
 
-## ConvoVault Revenue Projection
-* Approved
+## ConvoVault
+* Marketplace listing -- **APPROVED**
+* Revenue projection Excel -- **APPROVED**
+
+## ProjectVault
+* Cowork plugin packaging -- **APPROVED**
+* Marketplace listing -- **APPROVED**
 
 ### ProjectVault (v0.1.0) - ALPHA
 Knowledge management MCP server for AI projects.
@@ -62,7 +68,8 @@ Knowledge management MCP server for AI projects.
 - Marketplace listing draft (docs/marketplace_listing.md, 2026-03-22) -- AWAITING DEBBIE REVIEW
 
 **Priority TODOs:**
-1. Publish marketplace listing after Debbie gives final approval
+1. Research and document how to submit ProjectVault plugin to Claude marketplace (knowledge-work-plugins) -- document in docs/PUBLISHING.md
+2. Integration tests for tier enforcement with real MCP client calls
 
 ### SQL Query Optimizer (v0.1.0) - IN PROGRESS
 SQL optimization tool with analysis and recommendations.
