@@ -27,3 +27,4 @@ Thumbs.db
 .venv_test/
 .venv_test/
 .claude/
+.mcp.json
