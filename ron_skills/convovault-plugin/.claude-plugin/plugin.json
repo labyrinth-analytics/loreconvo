@@ -1,0 +1,10 @@
+{
+  "name": "convovault",
+  "version": "0.3.0",
+  "description": "Cross-surface persistent memory for Claude sessions. Vault conversations from Code, Cowork, and Chat -- recall decisions, artifacts, and context in any future session.",
+  "author": {
+    "name": "Labyrinth Analytics Consulting"
+  },
+  "keywords": ["memory", "sessions", "conversations", "recall", "context", "cross-surface"],
+  "license": "MIT"
+}

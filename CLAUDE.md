@@ -35,10 +35,10 @@ Cross-surface persistent memory for Claude sessions.
 - Marketplace listing draft (docs/marketplace_listing.md, 2026-03-22) -- **APPROVED**
 - Marketplace listing revised per Debbie feedback (email, platforms, ProjectVault mention, install path) (2026-03-22)
 - Public-facing revenue projection Excel (docs/ConvoVault_Revenue_Projection.xlsx, 2026-03-22) -- **APPROVED**
+- Cowork plugin packaging (ron_skills/convovault-plugin/, ron_skills/convovault-v0.3.0.plugin, 2026-03-23) -- awaiting review
 
 **Priority TODOs:**
-1. Package ConvoVault as a .plugin file for the knowledge-work-plugins marketplace (same pattern as ProjectVault plugin)
-2. Research how to submit plugins to the Claude plugin marketplace (knowledge-work-plugins) -- document the process in docs/PUBLISHING.md
+1. Research how to submit plugins to the Claude plugin marketplace (knowledge-work-plugins) -- document the process in docs/PUBLISHING.md
 3. Clean up duplicate/test sessions in sessions.db (leftover "What is ProjectVault?" entries from debugging)
 4. Improve SessionStart hook context quality -- add smarter filtering to prioritize sessions with open questions or decisions over generic ones, reduce noise as session count grows
 5. Update README.md with "How it works across surfaces" section documenting the persistence chain: Code (SessionEnd hook) -> ConvoVault DB -> (SessionStart hook) -> Code loop, Cowork via MCP tools, Chat via export-to-chat.sh. This is also the core marketing story.
