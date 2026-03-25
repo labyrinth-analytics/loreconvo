@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ConvoVault + ProjectVault - How They Work Together</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1a1a2e;
+    font-family: 'Nunito', sans-serif;
+    color: #e0e0e0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.03) 1px, transparent 0);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 20px 60px;
+  }
+
+  /* ---- TITLE ---- */
+  .title-block {
+    text-align: center;
+    margin-bottom: 50px;
+  }
+  .title-block h1 {
+    font-size: 2.6em;
+    font-weight: 900;
+    background: linear-gradient(135deg, #a78bfa, #60a5fa, #34d399);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+  .title-block .subtitle {
+    font-size: 1.15em;
+    color: #94a3b8;
+    font-weight: 600;
+  }
+
+  /* ---- CARD BASE ---- */
+  .card {
+    border-radius: 24px;
+    padding: 30px;
+    position: relative;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+  }
+  .card h2 {
+    font-size: 1.5em;
+    font-weight: 800;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .card .tagline {
+    font-size: 0.95em;
+    opacity: 0.8;
+    margin-bottom: 18px;
+    font-weight: 600;
+  }
+
+  /* ---- PRODUCT CARDS ---- */
+  .products-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 40px;
+  }
+
+  .card-convo {
+    background: linear-gradient(145deg, #1e1b4b, #312e81);
+    border: 2px solid #6366f1;
+    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.2), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .card-convo:hover { box-shadow: 0 12px 40px rgba(99, 102, 241, 0.35); }
+  .card-convo h2 { color: #a5b4fc; }
+
+  .card-project {
+    background: linear-gradient(145deg, #064e3b, #065f46);
+    border: 2px solid #10b981;
+    box-shadow: 0 8px 32px rgba(16, 185, 129, 0.2), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .card-project:hover { box-shadow: 0 12px 40px rgba(16, 185, 129, 0.35); }
+  .card-project h2 { color: #6ee7b7; }
+
+  /* ---- ICON BUBBLES ---- */
+  .icon-bubble {
+    width: 44px; height: 44px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .icon-convo { background: rgba(99, 102, 241, 0.3); }
+  .icon-project { background: rgba(16, 185, 129, 0.3); }
+
+  /* ---- TOOL PILLS ---- */
+  .tools-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .pill {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.78em;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.3px;
+    transition: transform 0.2s ease;
+  }
+  .pill:hover { transform: scale(1.08); }
+  .pill-convo {
+    background: rgba(99, 102, 241, 0.2);
+    color: #c7d2fe;
+    border: 1px solid rgba(99, 102, 241, 0.4);
+  }
+  .pill-project {
+    background: rgba(16, 185, 129, 0.2);
+    color: #a7f3d0;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+  }
+
+  /* ---- SECTION LABEL ---- */
+  .section-label {
+    font-size: 0.82em;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 10px;
+    opacity: 0.7;
+  }
+
+  /* ---- DB BLOCK ---- */
+  .db-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 40px;
+  }
+  .db-card {
+    border-radius: 18px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .db-convo {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1.5px dashed rgba(99, 102, 241, 0.4);
+  }
+  .db-project {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1.5px dashed rgba(16, 185, 129, 0.4);
+  }
+  .db-icon {
+    font-size: 32px;
+    flex-shrink: 0;
+  }
+  .db-info .db-path {
+    font-family: 'Courier New', monospace;
+    font-size: 0.82em;
+    color: #94a3b8;
+    margin-top: 2px;
+  }
+  .db-info .db-label {
+    font-weight: 700;
+    font-size: 0.95em;
+  }
+
+  /* ---- SURFACES ROW ---- */
+  .surfaces-section {
+    margin-bottom: 40px;
+  }
+  .surfaces-section .section-title {
+    text-align: center;
+    font-size: 1.3em;
+    font-weight: 800;
+    color: #f8fafc;
+    margin-bottom: 20px;
+  }
+  .surfaces-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .surface-card {
+    border-radius: 20px;
+    padding: 24px;
+    text-align: center;
+    background: rgba(255,255,255,0.04);
+    border: 1.5px solid rgba(255,255,255,0.08);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    transition: transform 0.3s ease, border-color 0.3s ease;
+  }
+  .surface-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(255,255,255,0.15);
+  }
+  .surface-icon {
+    font-size: 40px;
+    margin-bottom: 10px;
+    display: block;
+  }
+  .surface-name {
+    font-weight: 800;
+    font-size: 1.1em;
+    color: #f1f5f9;
+    margin-bottom: 6px;
+  }
+  .surface-desc {
+    font-size: 0.85em;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+  .surface-badges {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .badge {
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 0.7em;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-convo { background: rgba(99, 102, 241, 0.25); color: #a5b4fc; }
+  .badge-project { background: rgba(16, 185, 129, 0.25); color: #6ee7b7; }
+  .badge-limited { background: rgba(251, 191, 36, 0.2); color: #fcd34d; }
+
+  /* ---- FLOW SECTION ---- */
+  .flow-section {
+    margin-bottom: 40px;
+  }
+  .flow-section .section-title {
+    text-align: center;
+    font-size: 1.3em;
+    font-weight: 800;
+    color: #f8fafc;
+    margin-bottom: 24px;
+  }
+
+  .flow-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    flex-wrap: wrap;
+  }
+
+  .flow-step {
+    background: rgba(255,255,255,0.05);
+    border: 1.5px solid rgba(255,255,255,0.1);
+    border-radius: 18px;
+    padding: 20px;
+    width: 180px;
+    text-align: center;
+    position: relative;
+    transition: transform 0.3s ease;
+  }
+  .flow-step:hover { transform: scale(1.05); }
+  .flow-step .step-icon { font-size: 32px; margin-bottom: 8px; display: block; }
+  .flow-step .step-label { font-weight: 700; font-size: 0.9em; color: #e2e8f0; margin-bottom: 4px; }
+  .flow-step .step-detail { font-size: 0.78em; color: #94a3b8; line-height: 1.4; }
+
+  .flow-arrow {
+    font-size: 28px;
+    color: #64748b;
+    padding: 0 6px;
+    animation: pulse-arrow 2s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  @keyframes pulse-arrow {
+    0%, 100% { opacity: 0.4; transform: translateX(0); }
+    50% { opacity: 1; transform: translateX(4px); }
+  }
+
+  /* Color-coded flow steps */
+  .flow-step.convo-step { border-color: rgba(99, 102, 241, 0.3); }
+  .flow-step.project-step { border-color: rgba(16, 185, 129, 0.3); }
+  .flow-step.surface-step { border-color: rgba(251, 191, 36, 0.3); }
+  .flow-step.combined-step {
+    border-image: linear-gradient(135deg, #6366f1, #10b981) 1;
+    border-width: 2px;
+    border-style: solid;
+    border-radius: 18px;
+    border-image: none;
+    border-color: rgba(139, 92, 246, 0.4);
+    background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(16,185,129,0.08));
+  }
+
+  /* ---- INTERACTION CARD ---- */
+  .interaction-section {
+    margin-bottom: 30px;
+  }
+  .interaction-card {
+    border-radius: 24px;
+    padding: 30px;
+    background: linear-gradient(145deg, rgba(139, 92, 246, 0.08), rgba(16, 185, 129, 0.08));
+    border: 2px solid;
+    border-image: linear-gradient(135deg, #6366f1, #10b981) 1;
+    border-image-slice: 1;
+    position: relative;
+    overflow: hidden;
+  }
+  /* Fix border radius with gradient border */
+  .interaction-card {
+    border: none;
+    background:
+      linear-gradient(145deg, rgba(139, 92, 246, 0.1), rgba(16, 185, 129, 0.1)) padding-box,
+      linear-gradient(135deg, #6366f1, #10b981) border-box;
+    border: 2px solid transparent;
+    border-radius: 24px;
+  }
+  .interaction-card h2 {
+    font-size: 1.35em;
+    font-weight: 800;
+    color: #e2e8f0;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .interaction-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  .interaction-item {
+    background: rgba(0,0,0,0.25);
+    border-radius: 16px;
+    padding: 18px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    transition: transform 0.2s ease;
+  }
+  .interaction-item:hover { transform: translateX(4px); }
+  .interaction-item .ii-icon {
+    font-size: 28px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .interaction-item .ii-title {
+    font-weight: 700;
+    font-size: 0.95em;
+    color: #f1f5f9;
+    margin-bottom: 4px;
+  }
+  .interaction-item .ii-desc {
+    font-size: 0.82em;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+
+  /* ---- ANIMATED CONNECTORS (SVG) ---- */
+  .connector-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ---- FLOATING DOTS ---- */
+  .floating-dot {
+    position: fixed;
+    border-radius: 50%;
+    opacity: 0.12;
+    pointer-events: none;
+    z-index: 0;
+    animation: float-around 20s ease-in-out infinite;
+  }
+  @keyframes float-around {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(30px, -40px); }
+    50% { transform: translate(-20px, 20px); }
+    75% { transform: translate(40px, 30px); }
+  }
+
+  /* ---- ANIMATED DASH on SVG lines ---- */
+  .dash-line {
+    stroke-dasharray: 8 6;
+    animation: dash-flow 1.5s linear infinite;
+  }
+  @keyframes dash-flow {
+    to { stroke-dashoffset: -28; }
+  }
+
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 900px) {
+    .products-row, .db-row, .interaction-grid { grid-template-columns: 1fr; }
+    .surfaces-row { grid-template-columns: 1fr; }
+    .flow-container { flex-direction: column; }
+    .flow-arrow { transform: rotate(90deg); }
+  }
+
+  /* ---- KEY DIFFERENCE CALLOUT ---- */
+  .callout-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 40px;
+  }
+  .callout {
+    border-radius: 16px;
+    padding: 20px 24px;
+    font-size: 0.9em;
+    line-height: 1.6;
+  }
+  .callout-convo {
+    background: rgba(99, 102, 241, 0.08);
+    border-left: 4px solid #6366f1;
+    color: #c7d2fe;
+  }
+  .callout-project {
+    background: rgba(16, 185, 129, 0.08);
+    border-left: 4px solid #10b981;
+    color: #a7f3d0;
+  }
+  .callout strong { color: #f1f5f9; }
+
+  /* ---- FOOTER ---- */
+  .footer {
+    text-align: center;
+    margin-top: 30px;
+    color: #475569;
+    font-size: 0.8em;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<!-- Floating background decorations -->
+<div class="floating-dot" style="width:200px;height:200px;background:#6366f1;top:10%;left:5%;animation-delay:-3s;"></div>
+<div class="floating-dot" style="width:150px;height:150px;background:#10b981;top:30%;right:8%;animation-delay:-8s;"></div>
+<div class="floating-dot" style="width:180px;height:180px;background:#8b5cf6;bottom:15%;left:50%;animation-delay:-12s;"></div>
+<div class="floating-dot" style="width:120px;height:120px;background:#34d399;top:60%;left:15%;animation-delay:-5s;"></div>
+
+<div class="container">
+
+  <!-- TITLE -->
+  <div class="title-block">
+    <h1>ConvoVault + ProjectVault</h1>
+    <div class="subtitle">Two vaults, one memory layer for Claude</div>
+  </div>
+
+  <!-- KEY DIFFERENCE CALLOUTS -->
+  <div class="callout-row">
+    <div class="callout callout-convo">
+      <strong>ConvoVault</strong> remembers <em>what you talked about</em> -- sessions, decisions, open questions, and the flow of work across time.
+    </div>
+    <div class="callout callout-project">
+      <strong>ProjectVault</strong> remembers <em>what you know</em> -- documents, references, configs, and structured knowledge organized by project.
+    </div>
+  </div>
+
+  <!-- PRODUCT CARDS -->
+  <div class="products-row">
+    <!-- ConvoVault -->
+    <div class="card card-convo">
+      <h2>
+        <div class="icon-bubble icon-convo">&#128172;</div>
+        ConvoVault
+      </h2>
+      <div class="tagline">Session memory across surfaces</div>
+      <div class="section-label">What it stores</div>
+      <p style="font-size:0.88em; line-height:1.6; margin-bottom:14px; color:#cbd5e1;">
+        Session summaries, decisions made, artifacts created, open questions, skill usage, persona tags, and cross-session links.
+      </p>
+      <div class="section-label">MCP Tools (12)</div>
+      <div class="tools-grid">
+        <span class="pill pill-convo">save_session</span>
+        <span class="pill pill-convo">search_sessions</span>
+        <span class="pill pill-convo">get_context_for</span>
+        <span class="pill pill-convo">get_recent_sessions</span>
+        <span class="pill pill-convo">vault_suggest</span>
+        <span class="pill pill-convo">tag_session</span>
+        <span class="pill pill-convo">link_sessions</span>
+        <span class="pill pill-convo">create_project</span>
+        <span class="pill pill-convo">get_project</span>
+        <span class="pill pill-convo">list_projects</span>
+        <span class="pill pill-convo">get_session</span>
+        <span class="pill pill-convo">get_skill_history</span>
+      </div>
+    </div>
+
+    <!-- ProjectVault -->
+    <div class="card card-project">
+      <h2>
+        <div class="icon-bubble icon-project">&#128218;</div>
+        ProjectVault
+      </h2>
+      <div class="tagline">Knowledge management for AI projects</div>
+      <div class="section-label">What it stores</div>
+      <p style="font-size:0.88em; line-height:1.6; margin-bottom:14px; color:#cbd5e1;">
+        Versioned documents organized into vaults, with full-text search, category/priority tagging, cross-vault linking, and Free/Pro tier gating.
+      </p>
+      <div class="section-label">Key MCP Tools (32)</div>
+      <div class="tools-grid">
+        <span class="pill pill-project">vault_create</span>
+        <span class="pill pill-project">vault_list</span>
+        <span class="pill pill-project">vault_add_doc</span>
+        <span class="pill pill-project">vault_search</span>
+        <span class="pill pill-project">vault_inject_summary</span>
+        <span class="pill pill-project">vault_link_doc</span>
+        <span class="pill pill-project">vault_find_related</span>
+        <span class="pill pill-project">vault_suggest</span>
+        <span class="pill pill-project">vault_export_manifest</span>
+        <span class="pill pill-project">vault_tier_status</span>
+        <span class="pill pill-project">vault_set_tier</span>
+        <span class="pill pill-project">vault_info</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- STORAGE LAYER -->
+  <div class="db-row">
+    <div class="db-card db-convo">
+      <div class="db-icon">&#128451;</div>
+      <div class="db-info">
+        <div class="db-label">SQLite + FTS5</div>
+        <div class="db-path">~/.convovault/sessions.db</div>
+      </div>
+    </div>
+    <div class="db-card db-project">
+      <div class="db-icon">&#128451;</div>
+      <div class="db-info">
+        <div class="db-label">SQLite + FTS5 + Filesystem</div>
+        <div class="db-path">~/.projectvault/projectvault.db + vaults/</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SURFACES -->
+  <div class="surfaces-section">
+    <div class="section-title">&#127760; Where They Run</div>
+    <div class="surfaces-row">
+      <div class="surface-card">
+        <span class="surface-icon">&#9000;</span>
+        <div class="surface-name">Claude Code</div>
+        <div class="surface-desc">Terminal. Full plugin support. SessionEnd hook auto-saves to ConvoVault.</div>
+        <div class="surface-badges">
+          <span class="badge badge-convo">ConvoVault</span>
+          <span class="badge badge-project">ProjectVault</span>
+        </div>
+      </div>
+      <div class="surface-card">
+        <span class="surface-icon">&#128421;</span>
+        <div class="surface-name">Cowork</div>
+        <div class="surface-desc">Desktop app. Plugin support via .plugin files. Mount ~/.convovault for shared DB.</div>
+        <div class="surface-badges">
+          <span class="badge badge-convo">ConvoVault</span>
+          <span class="badge badge-project">ProjectVault</span>
+        </div>
+      </div>
+      <div class="surface-card">
+        <span class="surface-icon">&#127912;</span>
+        <div class="surface-name">Claude Chat</div>
+        <div class="surface-desc">Web. No plugin support. Use export-to-chat.sh to bridge context via clipboard.</div>
+        <div class="surface-badges">
+          <span class="badge badge-limited">Clipboard bridge</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTEXT SHARING FLOW -->
+  <div class="flow-section">
+    <div class="section-title">&#128260; Cross-Project Context Sharing</div>
+    <div class="flow-container">
+      <div class="flow-step surface-step">
+        <span class="step-icon">&#128172;</span>
+        <div class="step-label">Project A Chat</div>
+        <div class="step-detail">Work happens here -- decisions, artifacts, questions</div>
+      </div>
+      <div class="flow-arrow">&#10145;</div>
+      <div class="flow-step convo-step">
+        <span class="step-icon">&#128190;</span>
+        <div class="step-label">save_session</div>
+        <div class="step-detail">ConvoVault captures the session summary</div>
+      </div>
+      <div class="flow-arrow">&#10145;</div>
+      <div class="flow-step combined-step">
+        <span class="step-icon">&#128451;</span>
+        <div class="step-label">Shared DB</div>
+        <div class="step-detail">Global SQLite -- not scoped to any project</div>
+      </div>
+      <div class="flow-arrow">&#10145;</div>
+      <div class="flow-step convo-step">
+        <span class="step-icon">&#128269;</span>
+        <div class="step-label">get_context_for</div>
+        <div class="step-detail">Search by topic from any project</div>
+      </div>
+      <div class="flow-arrow">&#10145;</div>
+      <div class="flow-step surface-step">
+        <span class="step-icon">&#128172;</span>
+        <div class="step-label">Project B Chat</div>
+        <div class="step-detail">Context arrives without moving the chat</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOW THEY INTERACT -->
+  <div class="interaction-section">
+    <div class="interaction-card">
+      <h2>&#9889; How They Complement Each Other</h2>
+      <div class="interaction-grid">
+        <div class="interaction-item">
+          <div class="ii-icon">&#128203;</div>
+          <div>
+            <div class="ii-title">Session saves reference docs</div>
+            <div class="ii-desc">ConvoVault's <code>artifacts</code> field tracks which ProjectVault docs were created or updated during a session.</div>
+          </div>
+        </div>
+        <div class="interaction-item">
+          <div class="ii-icon">&#128268;</div>
+          <div>
+            <div class="ii-title">Vaults link to projects</div>
+            <div class="ii-desc">ProjectVault's <code>linked_projects</code> maps vaults to ConvoVault project names, so both systems share a project namespace.</div>
+          </div>
+        </div>
+        <div class="interaction-item">
+          <div class="ii-icon">&#128161;</div>
+          <div>
+            <div class="ii-title">Proactive suggestions</div>
+            <div class="ii-desc">Both have a <code>vault_suggest</code> tool. ConvoVault surfaces open questions; ProjectVault surfaces related docs you might need.</div>
+          </div>
+        </div>
+        <div class="interaction-item">
+          <div class="ii-icon">&#128736;</div>
+          <div>
+            <div class="ii-title">Skill tracking bridges both</div>
+            <div class="ii-desc">ConvoVault logs which skills were used per session. ProjectVault organizes the reference docs those skills need. Skills are the common thread.</div>
+          </div>
+        </div>
+        <div class="interaction-item">
+          <div class="ii-icon">&#128337;</div>
+          <div>
+            <div class="ii-title">Temporal vs. structural</div>
+            <div class="ii-desc">ConvoVault is a <em>timeline</em> -- "what happened when." ProjectVault is a <em>library</em> -- "what do we know." Together they cover both dimensions.</div>
+          </div>
+        </div>
+        <div class="interaction-item">
+          <div class="ii-icon">&#128274;</div>
+          <div>
+            <div class="ii-title">Same local-first architecture</div>
+            <div class="ii-desc">Both use SQLite + FTS5, store data on your machine, run over stdio MCP transport, and cost zero API calls. Same DNA, different jobs.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARCHITECTURE SUMMARY -->
+  <div style="text-align:center; margin-bottom: 20px;">
+    <svg width="700" height="180" viewBox="0 0 700 180" style="max-width:100%;">
+      <!-- ConvoVault box -->
+      <rect x="20" y="20" width="200" height="60" rx="16" fill="#312e81" stroke="#6366f1" stroke-width="2"/>
+      <text x="120" y="48" text-anchor="middle" fill="#a5b4fc" font-family="Nunito,sans-serif" font-weight="800" font-size="15">ConvoVault</text>
+      <text x="120" y="66" text-anchor="middle" fill="#94a3b8" font-family="Nunito,sans-serif" font-size="11">sessions + decisions</text>
+
+      <!-- ProjectVault box -->
+      <rect x="480" y="20" width="200" height="60" rx="16" fill="#065f46" stroke="#10b981" stroke-width="2"/>
+      <text x="580" y="48" text-anchor="middle" fill="#6ee7b7" font-family="Nunito,sans-serif" font-weight="800" font-size="15">ProjectVault</text>
+      <text x="580" y="66" text-anchor="middle" fill="#94a3b8" font-family="Nunito,sans-serif" font-size="11">documents + knowledge</text>
+
+      <!-- Bidirectional arrows -->
+      <line x1="225" y1="50" x2="475" y2="50" stroke="url(#grad1)" stroke-width="2.5" class="dash-line"/>
+      <defs>
+        <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:#6366f1"/>
+          <stop offset="100%" style="stop-color:#10b981"/>
+        </linearGradient>
+      </defs>
+      <!-- Arrow label -->
+      <rect x="280" y="32" width="140" height="24" rx="12" fill="#1a1a2e" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+      <text x="350" y="49" text-anchor="middle" fill="#cbd5e1" font-family="Nunito,sans-serif" font-weight="700" font-size="10">shared project names</text>
+
+      <!-- Claude surfaces -->
+      <rect x="230" y="110" width="240" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+      <text x="350" y="134" text-anchor="middle" fill="#f1f5f9" font-family="Nunito,sans-serif" font-weight="800" font-size="13">Code  |  Cowork  |  Chat</text>
+      <text x="350" y="152" text-anchor="middle" fill="#64748b" font-family="Nunito,sans-serif" font-size="10">All surfaces read from both vaults</text>
+
+      <!-- Lines down to surfaces -->
+      <line x1="120" y1="82" x2="300" y2="110" stroke="#6366f1" stroke-width="1.5" stroke-dasharray="5 4" opacity="0.5"/>
+      <line x1="580" y1="82" x2="400" y2="110" stroke="#10b981" stroke-width="1.5" stroke-dasharray="5 4" opacity="0.5"/>
+    </svg>
+  </div>
+
+  <div class="footer">
+    Labyrinth Analytics Consulting -- local-first AI memory layer
+  </div>
+
+</div>
+</body>
+</html>

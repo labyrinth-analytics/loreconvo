@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ConvoVault + ProjectVault - User Interaction Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Patrick+Hand&family=Nunito:wght@700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #fdf6e3;
+    font-family: 'Patrick Hand', cursive;
+    color: #2d2a26;
+    min-height: 100vh;
+  }
+
+  /* Notebook paper texture */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+      repeating-linear-gradient(transparent, transparent 31px, #e8dcc8 31px, #e8dcc8 32px);
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 30px 60px;
+  }
+
+  /* ---- WOBBLY BORDER UTIL ---- */
+  .wobbly {
+    border-radius: 12px 18px 14px 20px / 20px 12px 18px 14px;
+  }
+
+  /* ---- TITLE ---- */
+  .title {
+    text-align: center;
+    margin-bottom: 10px;
+    position: relative;
+  }
+  .title h1 {
+    font-family: 'Caveat', cursive;
+    font-size: 3.2em;
+    font-weight: 700;
+    color: #2d2a26;
+    position: relative;
+    display: inline-block;
+  }
+  /* Highlight behind title */
+  .title h1::before {
+    content: '';
+    position: absolute;
+    bottom: 4px; left: -10px; right: -10px;
+    height: 18px;
+    background: #ffd166;
+    opacity: 0.5;
+    z-index: -1;
+    border-radius: 4px;
+    transform: rotate(-0.8deg);
+  }
+  .title .sub {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 1.3em;
+    color: #6b6560;
+    margin-top: 4px;
+  }
+
+  /* ---- SECTION BANNERS (like the orange banner in the reference) ---- */
+  .banner {
+    display: inline-block;
+    padding: 8px 28px;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+    font-size: 1.15em;
+    color: #fff;
+    border-radius: 6px;
+    transform: rotate(-1deg);
+    margin-bottom: 18px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.1);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .banner-orange { background: #ef8354; }
+  .banner-blue { background: #4a90d9; }
+  .banner-green { background: #2a9d8f; }
+  .banner-purple { background: #7b68ee; }
+  .banner-red { background: #e07a5f; }
+
+  /* ---- STICK FIGURES (pure CSS) ---- */
+  .stick-figure {
+    position: relative;
+    width: 60px;
+    height: 90px;
+    flex-shrink: 0;
+  }
+  .stick-figure .head {
+    width: 24px; height: 24px;
+    border: 2.5px solid #2d2a26;
+    border-radius: 50%;
+    position: absolute;
+    top: 0; left: 18px;
+  }
+  .stick-figure .body-line {
+    position: absolute;
+    top: 24px; left: 29px;
+    width: 2.5px; height: 30px;
+    background: #2d2a26;
+  }
+  .stick-figure .arms {
+    position: absolute;
+    top: 32px; left: 10px;
+    width: 40px; height: 2.5px;
+    background: #2d2a26;
+    transform: rotate(-5deg);
+  }
+  .stick-figure .leg-l {
+    position: absolute;
+    top: 54px; left: 16px;
+    width: 2.5px; height: 28px;
+    background: #2d2a26;
+    transform: rotate(15deg);
+    transform-origin: top center;
+  }
+  .stick-figure .leg-r {
+    position: absolute;
+    top: 54px; left: 38px;
+    width: 2.5px; height: 28px;
+    background: #2d2a26;
+    transform: rotate(-15deg);
+    transform-origin: top center;
+  }
+  /* Happy face */
+  .stick-figure .face-happy::before {
+    content: ':)';
+    position: absolute;
+    top: 4px; left: 22px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #2d2a26;
+  }
+
+  /* ---- SPEECH BUBBLES ---- */
+  .speech-bubble {
+    position: relative;
+    background: #fff;
+    border: 2.5px solid #2d2a26;
+    border-radius: 16px 16px 16px 4px;
+    padding: 12px 16px;
+    font-size: 1.05em;
+    line-height: 1.5;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.08);
+    max-width: 320px;
+  }
+  .speech-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -12px; left: 20px;
+    border-width: 12px 10px 0 0;
+    border-style: solid;
+    border-color: #2d2a26 transparent transparent transparent;
+  }
+  .speech-bubble::before {
+    content: '';
+    position: absolute;
+    bottom: -8px; left: 22px;
+    border-width: 9px 8px 0 0;
+    border-style: solid;
+    border-color: #fff transparent transparent transparent;
+    z-index: 1;
+  }
+
+  /* Thought cloud variant */
+  .thought-bubble {
+    position: relative;
+    background: #eef4ff;
+    border: 2.5px solid #2d2a26;
+    border-radius: 20px;
+    padding: 12px 16px;
+    font-size: 1em;
+    line-height: 1.5;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.06);
+  }
+  .thought-bubble .dot1, .thought-bubble .dot2 {
+    position: absolute;
+    border: 2px solid #2d2a26;
+    border-radius: 50%;
+    background: #eef4ff;
+  }
+  .thought-bubble .dot1 { width: 12px; height: 12px; bottom: -16px; left: 24px; }
+  .thought-bubble .dot2 { width: 8px; height: 8px; bottom: -26px; left: 18px; }
+
+  /* ---- HIGHLIGHT BOXES ---- */
+  .highlight {
+    display: inline;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .hl-yellow { background: #ffd166; color: #2d2a26; }
+  .hl-blue { background: #a8d8ea; color: #2d2a26; }
+  .hl-green { background: #b5e8c3; color: #2d2a26; }
+  .hl-pink { background: #f4a4a4; color: #2d2a26; }
+  .hl-purple { background: #d4b8ff; color: #2d2a26; }
+
+  /* ---- DOODLE BOXES ---- */
+  .doodle-box {
+    border: 2.5px solid #2d2a26;
+    border-radius: 12px 18px 14px 20px / 20px 12px 18px 14px;
+    padding: 20px 24px;
+    position: relative;
+    background: #fff;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.08);
+    margin-bottom: 20px;
+  }
+  .doodle-box .box-label {
+    position: absolute;
+    top: -14px; left: 16px;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 800;
+    font-size: 0.85em;
+    padding: 2px 12px;
+    border-radius: 6px;
+    color: #fff;
+  }
+
+  /* ---- SURFACE SECTIONS ---- */
+  .surface-section {
+    margin-bottom: 50px;
+    position: relative;
+  }
+  .surface-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+  }
+  .surface-content {
+    flex: 1;
+  }
+
+  /* ---- DASHED ARROW CONNECTORS ---- */
+  .arrow-down {
+    text-align: center;
+    font-size: 2em;
+    color: #9a9590;
+    margin: 10px 0;
+    letter-spacing: 6px;
+  }
+  .arrow-right {
+    font-size: 2em;
+    color: #9a9590;
+    align-self: center;
+  }
+
+  /* ---- ICON DOODLES ---- */
+  .doodle-icon {
+    width: 60px; height: 60px;
+    border: 2.5px solid #2d2a26;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    background: #fff;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.08);
+    flex-shrink: 0;
+  }
+
+  /* ---- 3-COLUMN SURFACE LAYOUT ---- */
+  .surfaces-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+    margin-bottom: 40px;
+  }
+
+  .surface-panel {
+    border: 3px solid #2d2a26;
+    border-radius: 14px 20px 16px 22px / 22px 14px 20px 16px;
+    background: #fff;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 5px 5px 0 rgba(0,0,0,0.1);
+    position: relative;
+  }
+  .surface-panel .panel-header {
+    padding: 14px 18px;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+    font-size: 1.2em;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .surface-panel .panel-header .panel-icon { font-size: 26px; }
+  .surface-panel .panel-body {
+    padding: 18px;
+  }
+
+  .header-code { background: #2d2a26; }
+  .header-cowork { background: #4a90d9; }
+  .header-chat { background: #e07a5f; }
+
+  /* ---- STEP ITEMS inside panels ---- */
+  .step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .step-item:last-child { margin-bottom: 0; }
+  .step-num {
+    width: 28px; height: 28px;
+    border: 2.5px solid #2d2a26;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+    font-size: 0.85em;
+    flex-shrink: 0;
+    background: #fdf6e3;
+  }
+  .step-text {
+    font-size: 1.05em;
+    line-height: 1.5;
+  }
+  .step-text code {
+    font-family: 'Courier New', monospace;
+    background: #f0ebe0;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.88em;
+    color: #6b4c2a;
+  }
+
+  /* ---- VAULT TAG PILLS ---- */
+  .vault-tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 0.82em;
+    font-weight: 700;
+    margin: 2px 2px;
+    border: 2px solid;
+  }
+  .tag-convo { background: #e8deff; border-color: #7b68ee; color: #5a3ec8; }
+  .tag-project { background: #d0f0e0; border-color: #2a9d8f; color: #1a7a6d; }
+  .tag-both { background: #ffecd0; border-color: #ef8354; color: #c05e30; }
+
+  /* ---- FLOW DIAGRAM SECTION ---- */
+  .flow-section {
+    margin: 40px 0;
+    text-align: center;
+  }
+
+  .flow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin: 20px 0;
+    flex-wrap: wrap;
+  }
+  .flow-box {
+    border: 2.5px solid #2d2a26;
+    border-radius: 10px 16px 12px 18px / 18px 10px 16px 12px;
+    padding: 14px 18px;
+    background: #fff;
+    text-align: center;
+    min-width: 140px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.08);
+    position: relative;
+  }
+  .flow-box .fb-icon { font-size: 28px; display: block; margin-bottom: 4px; }
+  .flow-box .fb-label {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 800;
+    font-size: 0.9em;
+  }
+  .flow-box .fb-sub {
+    font-size: 0.85em;
+    color: #8a8580;
+  }
+  .flow-box.fb-purple { border-color: #7b68ee; background: #f5f0ff; }
+  .flow-box.fb-green { border-color: #2a9d8f; background: #eefaf5; }
+  .flow-box.fb-orange { border-color: #ef8354; background: #fff5f0; }
+
+  .flow-arrow-r {
+    font-family: 'Caveat', cursive;
+    font-size: 1.6em;
+    color: #9a9590;
+    padding: 0 8px;
+    position: relative;
+  }
+  .flow-arrow-r::after {
+    content: '--->';
+    font-family: 'Courier New', monospace;
+    letter-spacing: -2px;
+  }
+  .flow-label {
+    font-family: 'Caveat', cursive;
+    font-size: 1.1em;
+    color: #6b6560;
+    position: absolute;
+    top: -22px; left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
+
+  /* ---- BOTTOM LEGEND ---- */
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 30px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1em;
+  }
+  .legend-dot {
+    width: 18px; height: 18px;
+    border: 2px solid #2d2a26;
+    border-radius: 50%;
+  }
+
+  /* ---- SCRIBBLE UNDERLINES ---- */
+  .scribble-underline {
+    text-decoration: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='8' viewBox='0 0 100 8'%3E%3Cpath d='M0 6 Q25 0 50 5 Q75 10 100 4' stroke='%23ef8354' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+    background-repeat: repeat-x;
+    background-position: bottom;
+    background-size: 100px 8px;
+    padding-bottom: 6px;
+  }
+
+  /* ---- COMPARISON TABLE ---- */
+  .compare-section {
+    margin: 30px 0 40px;
+  }
+  .compare-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 2.5px solid #2d2a26;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.08);
+    background: #fff;
+  }
+  .compare-table th {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 2.5px solid #2d2a26;
+  }
+  .compare-table th:first-child { background: #fdf6e3; }
+  .compare-table th.th-convo { background: #e8deff; color: #5a3ec8; }
+  .compare-table th.th-project { background: #d0f0e0; color: #1a7a6d; }
+  .compare-table td {
+    padding: 10px 16px;
+    border-bottom: 1px dashed #d8d0c4;
+    font-size: 1.05em;
+    line-height: 1.5;
+  }
+  .compare-table tr:last-child td { border-bottom: none; }
+  .compare-table td:first-child {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 800;
+    font-size: 0.9em;
+    color: #6b6560;
+    background: #fdf6e3;
+    border-right: 1px dashed #d8d0c4;
+  }
+  .td-check { color: #2a9d8f; font-weight: 700; }
+  .td-partial { color: #ef8354; font-weight: 700; }
+  .td-none { color: #ccc5bc; }
+
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 900px) {
+    .surfaces-grid { grid-template-columns: 1fr; }
+    .flow-row { flex-direction: column; }
+    .flow-arrow-r { transform: rotate(90deg); }
+  }
+
+  /* ---- FOOTER ---- */
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    font-family: 'Caveat', cursive;
+    font-size: 1.1em;
+    color: #9a9590;
+  }
+
+  /* ---- ANIMATED DASHED CONNECTOR SVG ---- */
+  @keyframes dash-march {
+    to { stroke-dashoffset: -20; }
+  }
+  .marching-dash {
+    stroke-dasharray: 6 4;
+    animation: dash-march 1s linear infinite;
+  }
+
+  /* ---- CROSS-PROJECT FLOW SCENE ---- */
+  .scene {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin: 24px 0;
+    flex-wrap: wrap;
+  }
+  .scene-box {
+    border: 2.5px solid #2d2a26;
+    border-radius: 10px 14px 12px 16px / 16px 10px 14px 12px;
+    padding: 16px;
+    text-align: center;
+    background: #fff;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.08);
+    min-width: 130px;
+  }
+  .scene-box .sb-emoji { font-size: 32px; display: block; margin-bottom: 6px; }
+  .scene-box .sb-title {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 800;
+    font-size: 0.9em;
+    margin-bottom: 2px;
+  }
+  .scene-box .sb-desc {
+    font-size: 0.88em;
+    color: #8a8580;
+    line-height: 1.4;
+  }
+  .scene-arrow {
+    font-family: 'Courier New', monospace;
+    font-size: 1.4em;
+    color: #9a9590;
+    letter-spacing: -2px;
+    flex-shrink: 0;
+  }
+  .scene-arrow-label {
+    font-family: 'Caveat', cursive;
+    font-size: 0.95em;
+    color: #6b6560;
+    text-align: center;
+  }
+  .scene-arrow-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ======== TITLE ======== -->
+  <div class="title">
+    <h1>ConvoVault + ProjectVault</h1>
+    <div class="sub">How you actually use them from Code, Cowork, and Chat</div>
+  </div>
+
+  <div style="height:30px;"></div>
+
+  <!-- ======== WHAT EACH ONE DOES (quick sketch) ======== -->
+  <div style="display:flex; gap:28px; margin-bottom:40px; flex-wrap:wrap;">
+    <!-- ConvoVault -->
+    <div style="flex:1; min-width:280px;">
+      <div class="doodle-box" style="border-color:#7b68ee;">
+        <div class="box-label" style="background:#7b68ee;">ConvoVault</div>
+        <div style="display:flex; gap:16px; align-items:flex-start; margin-top:8px;">
+          <div class="doodle-icon" style="border-color:#7b68ee;">&#128172;</div>
+          <div>
+            <div style="font-size:1.15em; font-weight:600;">Remembers <span class="hl-purple">what you talked about</span></div>
+            <div style="font-size:0.95em; color:#6b6560; margin-top:6px;">
+              Sessions, decisions, open questions, skill usage, persona tags. A <em>timeline</em> of your work.
+            </div>
+            <div style="margin-top:8px;">
+              <span class="vault-tag tag-convo">12 MCP tools</span>
+              <span class="vault-tag tag-convo">SQLite + FTS5</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- ProjectVault -->
+    <div style="flex:1; min-width:280px;">
+      <div class="doodle-box" style="border-color:#2a9d8f;">
+        <div class="box-label" style="background:#2a9d8f;">ProjectVault</div>
+        <div style="display:flex; gap:16px; align-items:flex-start; margin-top:8px;">
+          <div class="doodle-icon" style="border-color:#2a9d8f;">&#128218;</div>
+          <div>
+            <div style="font-size:1.15em; font-weight:600;">Remembers <span class="hl-green">what you know</span></div>
+            <div style="font-size:0.95em; color:#6b6560; margin-top:6px;">
+              Versioned docs organized in vaults. Full-text search, categories, linked projects. A <em>library</em> of knowledge.
+            </div>
+            <div style="margin-top:8px;">
+              <span class="vault-tag tag-project">32 MCP tools</span>
+              <span class="vault-tag tag-project">SQLite + files</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== SURFACE PANELS ======== -->
+  <div style="text-align:center; margin-bottom:20px;">
+    <span class="banner banner-orange">How you interact from each surface</span>
+  </div>
+
+  <div class="surfaces-grid">
+
+    <!-- CLAUDE CODE -->
+    <div class="surface-panel">
+      <div class="panel-header header-code">
+        <span class="panel-icon">&#9000;&#65039;</span> Claude Code
+      </div>
+      <div class="panel-body">
+        <div style="font-size:0.88em; color:#8a8580; margin-bottom:12px; font-style:italic;">Terminal -- full plugin support</div>
+
+        <div style="margin-bottom:14px;">
+          <div style="font-family:'Nunito',sans-serif; font-weight:800; font-size:0.82em; text-transform:uppercase; letter-spacing:1px; color:#7b68ee; margin-bottom:6px;">ConvoVault</div>
+          <div class="step-item">
+            <div class="step-num">1</div>
+            <div class="step-text">Load plugin: <code>claude --plugin-dir ~/convovault</code></div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">2</div>
+            <div class="step-text"><span class="hl-yellow">Auto-saves</span> on session end via hook</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">3</div>
+            <div class="step-text"><span class="hl-blue">Auto-loads</span> context on session start</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">4</div>
+            <div class="step-text">"Recall what we discussed about taxes"</div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-family:'Nunito',sans-serif; font-weight:800; font-size:0.82em; text-transform:uppercase; letter-spacing:1px; color:#2a9d8f; margin-bottom:6px;">ProjectVault</div>
+          <div class="step-item">
+            <div class="step-num">1</div>
+            <div class="step-text">Loads via <code>python -m projectvault.server</code></div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">2</div>
+            <div class="step-text">"What docs do we have in the Tax vault?"</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">3</div>
+            <div class="step-text">"Add this config to the vault"</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COWORK -->
+    <div class="surface-panel">
+      <div class="panel-header header-cowork">
+        <span class="panel-icon">&#128421;&#65039;</span> Cowork
+      </div>
+      <div class="panel-body">
+        <div style="font-size:0.88em; color:#8a8580; margin-bottom:12px; font-style:italic;">Desktop app -- .plugin files</div>
+
+        <div style="margin-bottom:14px;">
+          <div style="font-family:'Nunito',sans-serif; font-weight:800; font-size:0.82em; text-transform:uppercase; letter-spacing:1px; color:#7b68ee; margin-bottom:6px;">ConvoVault</div>
+          <div class="step-item">
+            <div class="step-num">1</div>
+            <div class="step-text">Install .plugin via <span class="hl-yellow">+ button</span></div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">2</div>
+            <div class="step-text"><span class="hl-pink">Mount ~/.convovault</span> for shared DB access</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">3</div>
+            <div class="step-text">Same MCP tools as Code -- save, search, recall</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">4</div>
+            <div class="step-text">Sessions from Code appear <span class="hl-green">instantly</span></div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-family:'Nunito',sans-serif; font-weight:800; font-size:0.82em; text-transform:uppercase; letter-spacing:1px; color:#2a9d8f; margin-bottom:6px;">ProjectVault</div>
+          <div class="step-item">
+            <div class="step-num">1</div>
+            <div class="step-text">Install .plugin via + button</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">2</div>
+            <div class="step-text">Mount ~/.projectvault for shared DB</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">3</div>
+            <div class="step-text">"Inject a summary of the Rental vault"</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHAT -->
+    <div class="surface-panel">
+      <div class="panel-header header-chat">
+        <span class="panel-icon">&#127912;</span> Claude Chat
+      </div>
+      <div class="panel-body">
+        <div style="font-size:0.88em; color:#8a8580; margin-bottom:12px; font-style:italic;">Web -- no plugin support</div>
+
+        <div style="margin-bottom:14px;">
+          <div style="font-family:'Nunito',sans-serif; font-weight:800; font-size:0.82em; text-transform:uppercase; letter-spacing:1px; color:#ef8354; margin-bottom:6px;">Clipboard Bridge</div>
+          <div class="step-item">
+            <div class="step-num">1</div>
+            <div class="step-text">In terminal: <code>bash export-to-chat.sh</code></div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">2</div>
+            <div class="step-text">Copies last session to <span class="hl-yellow">clipboard</span></div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">3</div>
+            <div class="step-text">Paste (Cmd+V) into Chat</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">4</div>
+            <div class="step-text">Search: <code>bash export-to-chat.sh "topic"</code></div>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; padding:10px 14px; background:#fff5f0; border:2px dashed #e07a5f; border-radius:8px; font-size:0.92em; color:#6b6560;">
+          No direct MCP access -- context arrives via paste. Works for both vaults' exported data.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== CROSS-PROJECT SHARING FLOW ======== -->
+  <div style="text-align:center; margin-bottom:20px;">
+    <span class="banner banner-purple">Sharing context between projects</span>
+  </div>
+
+  <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:40px; flex-wrap:wrap;">
+    <div class="stick-figure" style="margin-top:20px;">
+      <div class="head"></div>
+      <div class="body-line"></div>
+      <div class="arms"></div>
+      <div class="leg-l"></div>
+      <div class="leg-r"></div>
+    </div>
+
+    <div style="flex:1; min-width:300px;">
+      <div class="speech-bubble" style="max-width:100%; margin-bottom:20px;">
+        "I need the rental insurance decision from my <span class="hl-purple">Tax Prep</span> project over in my <span class="hl-green">Side Hustle</span> project -- but I don't want to move the chat!"
+      </div>
+
+      <div class="scene">
+        <div class="scene-box" style="border-color:#7b68ee; background:#f5f0ff;">
+          <span class="sb-emoji">&#128172;</span>
+          <div class="sb-title">Tax Prep Project</div>
+          <div class="sb-desc">Chat where the decision happened</div>
+        </div>
+        <div class="scene-arrow-wrap">
+          <div class="scene-arrow-label">save_session</div>
+          <div class="scene-arrow">---&gt;</div>
+        </div>
+        <div class="scene-box" style="border-color:#2d2a26; background:#fdf6e3;">
+          <span class="sb-emoji">&#128451;</span>
+          <div class="sb-title">ConvoVault DB</div>
+          <div class="sb-desc">Global -- not scoped to any project</div>
+        </div>
+        <div class="scene-arrow-wrap">
+          <div class="scene-arrow-label">get_context_for</div>
+          <div class="scene-arrow">---&gt;</div>
+        </div>
+        <div class="scene-box" style="border-color:#2a9d8f; background:#eefaf5;">
+          <span class="sb-emoji">&#128172;</span>
+          <div class="sb-title">Side Hustle Project</div>
+          <div class="sb-desc">Context arrives here!</div>
+        </div>
+      </div>
+
+      <div class="thought-bubble" style="max-width:500px; margin:20px auto 0;">
+        The chat stays in Tax Prep. Only the <span class="hl-purple">context</span> travels -- decisions, summaries, open questions. Same trick works between Cowork projects too!
+        <div class="dot1"></div>
+        <div class="dot2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== SURFACE COMPARISON TABLE ======== -->
+  <div class="compare-section">
+    <div style="text-align:center; margin-bottom:16px;">
+      <span class="banner banner-blue">Feature support by surface</span>
+    </div>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th style="width:200px;">Feature</th>
+          <th class="th-convo" style="width:30%;">&#9000;&#65039; Code</th>
+          <th class="th-convo" style="width:30%;">&#128421;&#65039; Cowork</th>
+          <th class="th-project" style="width:30%;">&#127912; Chat</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>ConvoVault MCP tools</td>
+          <td class="td-check">[OK] All 12 tools</td>
+          <td class="td-check">[OK] All 12 tools</td>
+          <td class="td-none">-- via paste only</td>
+        </tr>
+        <tr>
+          <td>ProjectVault MCP tools</td>
+          <td class="td-check">[OK] All 32 tools</td>
+          <td class="td-check">[OK] All 32 tools</td>
+          <td class="td-none">-- via paste only</td>
+        </tr>
+        <tr>
+          <td>Auto-save on exit</td>
+          <td class="td-check">[OK] SessionEnd hook</td>
+          <td class="td-partial">~ Manual or ask Claude</td>
+          <td class="td-none">-- N/A</td>
+        </tr>
+        <tr>
+          <td>Auto-load on start</td>
+          <td class="td-check">[OK] SessionStart hook</td>
+          <td class="td-partial">~ Ask Claude to load</td>
+          <td class="td-none">-- N/A</td>
+        </tr>
+        <tr>
+          <td>Shared database</td>
+          <td class="td-check">[OK] Native filesystem</td>
+          <td class="td-check">[OK] After mounting folder</td>
+          <td class="td-none">-- No DB access</td>
+        </tr>
+        <tr>
+          <td>Cross-project context</td>
+          <td class="td-check">[OK] search_sessions</td>
+          <td class="td-check">[OK] search_sessions</td>
+          <td class="td-partial">~ Paste exported session</td>
+        </tr>
+        <tr>
+          <td>CLI access</td>
+          <td class="td-check">[OK] Full CLI</td>
+          <td class="td-partial">~ Via bash tool</td>
+          <td class="td-none">-- N/A</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ======== THE PERSISTENCE CHAIN ======== -->
+  <div style="text-align:center; margin-bottom:16px;">
+    <span class="banner banner-green">The persistence chain</span>
+  </div>
+
+  <div class="scene" style="margin-bottom: 10px;">
+    <div class="scene-box" style="border-color:#2d2a26;">
+      <span class="sb-emoji">&#9000;&#65039;</span>
+      <div class="sb-title">Code</div>
+      <div class="sb-desc">SessionEnd hook fires</div>
+    </div>
+    <div class="scene-arrow-wrap">
+      <div class="scene-arrow-label">auto-save</div>
+      <div class="scene-arrow">---&gt;</div>
+    </div>
+    <div class="scene-box" style="border-color:#7b68ee; background:#f5f0ff;">
+      <span class="sb-emoji">&#128451;</span>
+      <div class="sb-title">ConvoVault DB</div>
+      <div class="sb-desc">~/.convovault/sessions.db</div>
+    </div>
+    <div class="scene-arrow-wrap">
+      <div class="scene-arrow-label">SessionStart hook</div>
+      <div class="scene-arrow">---&gt;</div>
+    </div>
+    <div class="scene-box" style="border-color:#2d2a26;">
+      <span class="sb-emoji">&#9000;&#65039;</span>
+      <div class="sb-title">Next Code session</div>
+      <div class="sb-desc">Context pre-loaded</div>
+    </div>
+  </div>
+  <div class="scene" style="margin-bottom:40px;">
+    <div style="width:140px;"></div>
+    <div style="width:140px;"></div>
+    <div class="scene-box" style="border-color:#7b68ee; background:#f5f0ff; visibility:hidden;">
+      <span class="sb-emoji">&#128451;</span>
+    </div>
+    <div style="display:flex; flex-direction:column; align-items:center; margin-top:-10px;">
+      <div style="font-family:'Caveat',cursive; color:#6b6560; font-size:0.95em;">also feeds</div>
+      <div style="font-size:1.2em; color:#9a9590;">&#8595;</div>
+    </div>
+    <div style="display:flex; gap:16px;">
+      <div class="scene-box" style="border-color:#4a90d9; background:#eef4ff;">
+        <span class="sb-emoji">&#128421;&#65039;</span>
+        <div class="sb-title">Cowork</div>
+        <div class="sb-desc">via mounted DB</div>
+      </div>
+      <div class="scene-box" style="border-color:#e07a5f; background:#fff5f0;">
+        <span class="sb-emoji">&#127912;</span>
+        <div class="sb-title">Chat</div>
+        <div class="sb-desc">via export-to-chat.sh</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== LEGEND ======== -->
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#e8deff; border-color:#7b68ee;"></div>
+      ConvoVault
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#d0f0e0; border-color:#2a9d8f;"></div>
+      ProjectVault
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#ffecd0; border-color:#ef8354;"></div>
+      Clipboard bridge (Chat)
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#ffd166; border-color:#2d2a26;"></div>
+      Automatic (hooks)
+    </div>
+  </div>
+
+  <div class="footer">
+    Labyrinth Analytics Consulting ~ local-first AI memory layer
+  </div>
+
+</div>
+</body>
+</html>

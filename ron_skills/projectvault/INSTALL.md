@@ -6,61 +6,36 @@
 
 ## Prerequisites
 
-You need **Python 3.10 or higher** installed on your computer.
+You need **[uv](https://docs.astral.sh/uv/getting-started/installation/)** -- a fast Python package manager that handles everything for you.
 
-**Check if you have Python:**
-Open a terminal (or Command Prompt on Windows) and type:
+**Install uv (one time):**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
-python3 --version
-```
-You should see something like `Python 3.12.4`. If you get an error, install Python from [python.org/downloads](https://www.python.org/downloads/).
+
+> **Windows users:** See [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/) for the PowerShell installer.
 
 ---
 
-## Step 1: Download ProjectVault
+## Option A: Install as a Cowork Plugin (Recommended)
 
-**Option A: Clone from GitHub (recommended)**
+If you use Claude's Cowork mode, install the plugin directly:
+
 ```bash
-git clone https://github.com/your-org/projectvault.git
-cd projectvault
+/plugin install projectvault@labyrinth-analytics-claude-plugins
 ```
 
-**Option B: Download the ZIP file**
-Download and unzip the project, then open a terminal in that folder.
+That's it -- restart Cowork and ProjectVault is available.
 
 ---
 
-## Step 2: Install ProjectVault
+## Option B: Install as a Claude Code MCP Server
 
-Run this single command in the `projectvault` folder:
-
-```bash
-pip install -e .
-```
-
-> **Windows users:** If you get a permissions error, try `pip install -e . --user`
->
-> **Mac/Linux users:** If you get a permissions error, try `pip install -e . --break-system-packages` or use a virtual environment (see Troubleshooting below).
-
-This installs ProjectVault and all its dependencies (PDF reader, Word doc reader, etc.).
-
-**Verify it installed correctly:**
-```bash
-projectvault --help
-```
-You should see output about the MCP server starting. Press Ctrl+C to stop it.
-
----
-
-## Step 3: Connect to Claude Code
-
-Add ProjectVault to your Claude Code configuration. Open your terminal and run:
+Add ProjectVault to your Claude Code configuration:
 
 ```bash
-claude mcp add projectvault -- python -m projectvault.server
+claude mcp add projectvault -- uvx projectvault
 ```
-
-That's it! ProjectVault is now available in all your Claude Code conversations.
 
 **Verify it's connected:**
 ```bash
@@ -68,30 +43,52 @@ claude mcp list
 ```
 You should see `projectvault` in the list.
 
----
-
-## Step 4: Connect to Cowork (Optional)
-
-If you use Claude's Cowork mode, add ProjectVault there too.
-
-1. Open your Claude Code settings file. You can find it at:
-   - **Mac/Linux:** `~/.claude/settings.json`
-   - **Windows:** `%USERPROFILE%\.claude\settings.json`
-
-2. Add ProjectVault to the `mcpServers` section:
+Or add it manually to `~/.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
     "projectvault": {
-      "command": "python",
-      "args": ["-m", "projectvault.server"]
+      "command": "uvx",
+      "args": ["projectvault"]
     }
   }
 }
 ```
 
-3. Restart Claude/Cowork.
+Restart Claude Code after editing the file.
+
+---
+
+## Option C: Developer Install (Build from Source)
+
+If you want to modify ProjectVault or contribute:
+
+```bash
+git clone https://github.com/labyrinth-analytics/projectvault.git
+cd projectvault
+uv venv
+uv pip install -e .
+```
+
+Then add to Claude Code using the venv Python:
+
+```bash
+claude mcp add projectvault -- /path/to/projectvault/.venv/bin/python -m projectvault.server
+```
+
+Or in `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "projectvault": {
+      "command": "/path/to/projectvault/.venv/bin/python",
+      "args": ["-m", "projectvault.server"]
+    }
+  }
+}
+```
 
 ---
 
@@ -133,68 +130,40 @@ ProjectVault stores everything locally on your computer at:
                     history/            (previous versions)
 ```
 
-Your documents are plain files on disk. You can:
-- Back them up with any backup tool
-- Version control them with git
-- Open and edit them with any text editor
-- Copy the entire `~/.projectvault/` folder to another computer
+Your documents are plain files on disk. You can back them up with any backup tool, version control them with git, open and edit them with any text editor, or copy the entire `~/.projectvault/` folder to another computer.
 
 ---
 
 ## Troubleshooting
 
-### "command not found: projectvault"
+### "uvx: command not found"
 
-The install didn't put the command in your PATH. Try running ProjectVault directly:
+uv isn't installed or isn't in your PATH. Re-run the installer:
 ```bash
-python -m projectvault.server
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
+Then restart your terminal.
 
-And use this longer form when adding to Claude Code:
-```bash
-claude mcp add projectvault -- python -m projectvault.server
-```
+### "No matching distribution found for projectvault"
+
+The package hasn't been published to PyPI yet. Use the developer install (Option C) instead, or install the `.plugin` file directly if you have access to the monorepo.
 
 ### "Permission denied" during install
 
-**Option 1: Use --user flag:**
+Use a virtual environment:
 ```bash
-pip install -e . --user
-```
-
-**Option 2: Use a virtual environment:**
-```bash
-python3 -m venv .venv
-source .venv/bin/activate       # Mac/Linux
-.venv\Scripts\activate          # Windows
-pip install -e .
-```
-
-If using a virtual environment, update the Claude Code MCP command to use the venv Python:
-```bash
-claude mcp add projectvault -- /path/to/projectvault/.venv/bin/python -m projectvault.server
-```
-
-### "No module named pdfplumber" (or similar)
-
-A dependency didn't install. Re-run:
-```bash
-pip install -e .
-```
-
-Or install the missing package directly:
-```bash
-pip install pdfplumber python-docx openpyxl python-pptx
+uv venv
+uv pip install -e .
 ```
 
 ### PDF/DOCX files aren't searchable
 
-Make sure the extraction libraries are installed:
+Make sure the extraction libraries are installed. They should come automatically, but if not:
 ```bash
-pip install pdfplumber python-docx openpyxl python-pptx
+uv pip install pdfplumber python-docx openpyxl python-pptx
 ```
 
-If a specific file still doesn't extract, the file may be image-only (scanned PDF) or password-protected. Text extraction works on files that contain actual text, not images of text.
+Text extraction works on files that contain actual text, not images of text (scanned PDFs).
 
 ### I want to start fresh
 
@@ -202,57 +171,87 @@ Delete the ProjectVault data directory:
 ```bash
 rm -rf ~/.projectvault
 ```
-
 The next time you use ProjectVault, it will create a new empty database.
 
 ---
 
 ## Uninstalling
 
+**If installed via uvx:** No uninstall needed -- uvx runs tools ephemerally.
+
+**If installed via pip:**
 ```bash
 pip uninstall projectvault
 ```
 
-Optionally, delete your data:
-```bash
-rm -rf ~/.projectvault
-```
-
-And remove from Claude Code:
+**Remove from Claude Code:**
 ```bash
 claude mcp remove projectvault
 ```
 
+**Optionally, delete your data:**
+```bash
+rm -rf ~/.projectvault
+```
+
 ---
 
-## Available Tools (32 total)
+## MCP Tools Reference (32 total)
 
-| Tool | What It Does |
-|------|-------------|
-| `vault_create` | Create a new knowledge vault |
-| `vault_list` | List all your vaults |
-| `vault_info` | Get details about a vault and its documents |
-| `vault_archive` | Hide a vault (soft delete) |
-| `vault_delete` | Permanently delete a vault |
-| `vault_link_project` | Associate a vault with a Claude Project |
-| `vault_add_doc` | Add a text document to a vault |
-| `vault_update_doc` | Update a document (auto-saves previous version) |
-| `vault_remove_doc` | Remove a document (soft delete) |
-| `vault_get_doc` | Read a document's content and metadata |
-| `vault_list_docs` | List documents with sort and filter |
-| `vault_search` | Full-text search across documents |
-| `vault_search_by_tag` | Find documents by tag |
-| `vault_tag_doc` | Add/remove tags on a document |
-| `vault_bulk_tag` | Tag multiple documents at once |
-| `vault_categorize` | Set a document's category |
-| `vault_set_priority` | Mark as authoritative/normal/draft/outdated |
-| `vault_add_note` | Attach a note to a document |
-| `vault_doc_history` | View version history |
-| `vault_doc_restore` | Restore a previous version |
-| `vault_copy_doc` | Copy a document to another vault |
-| `vault_move_doc` | Move a document to another vault |
-| `vault_inject` | Load documents into conversation |
-| `vault_inject_by_tag` | Load all documents with a tag |
-| `vault_inject_summary` | Get a vault overview |
-| `vault_import_dir` | Bulk import files from a folder |
-| `vault_export` | Export vault files to a folder |
+**Vault management**
+
+| Tool | What it does |
+|---|---|
+| `vault_create` | Create a new named vault for a project |
+| `vault_list` | List all vaults |
+| `vault_get` | Get vault details |
+| `vault_delete` | Delete a vault and its documents |
+| `vault_tier_status` | Check your current tier and limits |
+
+**Document operations**
+
+| Tool | What it does |
+|---|---|
+| `vault_add_doc` | Add a document to a vault (extracts text automatically) |
+| `vault_get_doc` | Retrieve a specific document |
+| `vault_list_docs` | List documents in a vault |
+| `vault_update_doc` | Update document content or metadata |
+| `vault_delete_doc` | Remove a document from the vault |
+| `vault_link_doc` | Link two related documents |
+| `vault_unlink_doc` | Remove a link between documents |
+| `vault_find_related` | Find documents related to a given doc |
+
+**Search and inject**
+
+| Tool | What it does |
+|---|---|
+| `vault_search` | Full-text search across all vaults or a specific one |
+| `vault_inject_summary` | Generate a context summary for Claude to load at session start |
+| `vault_export_manifest` | Export a vault manifest for sharing or versioning |
+| `vault_suggest` | Proactive suggestions on what context might be relevant |
+
+**Tagging and organization**
+
+| Tool | What it does |
+|---|---|
+| `vault_add_tag` | Tag a document |
+| `vault_remove_tag` | Remove a tag |
+| `vault_search_by_tag` | Find all documents with a given tag |
+| `vault_get_doc_history` | See version history for a document |
+| `vault_restore_doc_version` | Restore a previous version of a document |
+
+---
+
+## Supported Platforms
+
+| Platform | Support | Notes |
+|---|---|---|
+| **Claude Code** | Full | All 32 MCP tools available |
+| **Cowork** | Full | Use vault_inject_summary at session start for automatic context |
+| **Chat (web)** | Partial | Use vault_export_manifest and paste output into Chat |
+
+---
+
+## Companion Product
+
+**[ConvoVault](https://github.com/labyrinth-analytics/convovault)** -- Cross-surface persistent memory for Claude sessions. Where ProjectVault stores *documents*, ConvoVault remembers *conversations* -- decisions made, artifacts created, questions left open. They complement each other well.
