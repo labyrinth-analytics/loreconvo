@@ -13,6 +13,7 @@ Build and ship products that generate $8K/month passive income through Claude pl
 - ALWAYS commit your work to git with clear commit messages before ending a session.
 - ALWAYS push to origin after committing: `git push origin master`
 - ALWAYS update this CLAUDE.md when you complete a TODO (move it to Completed, add date/commit).
+- When changing installation methods, configuration, commands, or tool interfaces, ALWAYS update ALL user-facing docs to stay consistent. Check: INSTALL.md, README.md, plugin README, .mcp.json, and docs/ for each affected product.
 - ALWAYS follow the priority order in the TODOs list. Work on #1 first unless it's blocked, then #2, etc. Do NOT skip ahead to lower-priority or different-product work.
 - Use Python 3.10+ and SQLite for all products. No external database dependencies.
 - Use FastMCP for MCP servers, Pydantic v2 for validation.
@@ -38,10 +39,12 @@ Cross-surface persistent memory for Claude sessions.
 - Cowork plugin packaging (ron_skills/convovault-plugin/, ron_skills/convovault-v0.3.0.plugin, 2026-03-23) -- awaiting review
 - Marketplace publishing research + docs/PUBLISHING.md (2026-03-24) -- KEY FINDING: "knowledge-work-plugins" is RESERVED by Anthropic; must use self-hosted GitHub marketplace or official submission form
 
+**Completed (continued):**
+- Improved SessionStart hook context quality: auto_load.py now scores sessions by signal (open questions +3, decisions +2, artifacts +1, recency +1/+2), filters noise, caps output at 4000 chars. 23 tests added (2026-03-24)
+- Updated README.md with "How it works across surfaces" section -- persistence chain diagram + explanation for all 3 surfaces (2026-03-24)
+
 **Priority TODOs:**
-1. Clean up duplicate/test sessions in sessions.db (leftover "What is ProjectVault?" entries from debugging)
-4. Improve SessionStart hook context quality -- add smarter filtering to prioritize sessions with open questions or decisions over generic ones, reduce noise as session count grows
-5. Update README.md with "How it works across surfaces" section documenting the persistence chain: Code (SessionEnd hook) -> ConvoVault DB -> (SessionStart hook) -> Code loop, Cowork via MCP tools, Chat via export-to-chat.sh. This is also the core marketing story.
+1. Clean up duplicate/test sessions in sessions.db (leftover "What is ProjectVault?" entries from debugging) -- must run on Debbie's Mac, not Cowork VM
 
 ## Approvals / Review
 

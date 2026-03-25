@@ -6,6 +6,17 @@ working directory (project), then outputs a context summary to stdout.
 
 Claude Code injects stdout content into the session as system context.
 Designed to run within the hook timeout window.
+
+Scoring logic (higher = shown first):
+  +3  session has open questions (most actionable context)
+  +2  session has >= 2 decisions
+  +1  session has artifacts
+  +2  started within last 24 hours
+  +1  started within last 3 days
+  -2  no summary, no decisions, no open questions, no artifacts (noise)
+
+Sessions that score <= 0 and are not the only results are filtered out.
+Total formatted context is capped at MAX_CONTEXT_CHARS to avoid bloat.
 """
 
 import json
@@ -16,16 +27,79 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 
+MAX_CONTEXT_CHARS = 4000  # Soft cap on total output length
+
+
 def get_db_path():
     """Get database path, matching core/config.py logic."""
     return os.environ.get("CONVOVAULT_DB", os.path.expanduser("~/.convovault/sessions.db"))
 
 
-def query_recent_sessions(db_path, cwd, days_back=7, limit=5):
+def score_session(session, now):
+    """Compute a signal quality score for a session dict.
+
+    Higher scores = more actionable context for the incoming session.
+    """
+    score = 0
+
+    # Open questions are highest signal -- unanswered items the user may continue
+    open_q_raw = session.get("open_questions", "[]")
+    try:
+        open_questions = json.loads(open_q_raw) if isinstance(open_q_raw, str) else (open_q_raw or [])
+    except (json.JSONDecodeError, TypeError):
+        open_questions = []
+    if open_questions:
+        score += 3
+
+    # Decisions (>= 2 means a substantive work session)
+    decisions_raw = session.get("decisions", "[]")
+    try:
+        decisions = json.loads(decisions_raw) if isinstance(decisions_raw, str) else (decisions_raw or [])
+    except (json.JSONDecodeError, TypeError):
+        decisions = []
+    if len(decisions) >= 2:
+        score += 2
+    elif len(decisions) == 1:
+        score += 1
+
+    # Artifacts indicate something was produced
+    artifacts_raw = session.get("artifacts", "[]")
+    try:
+        artifacts = json.loads(artifacts_raw) if isinstance(artifacts_raw, str) else (artifacts_raw or [])
+    except (json.JSONDecodeError, TypeError):
+        artifacts = []
+    if artifacts:
+        score += 1
+
+    # Recency bonus
+    start_raw = session.get("start_date", "")
+    if start_raw:
+        try:
+            start_dt = datetime.fromisoformat(start_raw)
+            age = now - start_dt
+            if age <= timedelta(hours=24):
+                score += 2
+            elif age <= timedelta(days=3):
+                score += 1
+        except (ValueError, TypeError):
+            pass
+
+    # Noise penalty: short/empty sessions add clutter
+    summary = session.get("summary", "") or ""
+    if not summary and not decisions and not open_questions and not artifacts:
+        score -= 2
+
+    return score
+
+
+def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
     """Query ConvoVault for recent sessions, optionally filtered by project/cwd.
 
-    Returns a list of session dicts with id, title, summary, decisions,
-    start_date, end_date, and tags.
+    Fetches a wider window than the old hook (days_back=14, limit=10) so the
+    scoring pass has enough candidates to work with.  The caller then scores,
+    filters, and caps before formatting.
+
+    Returns a list of session dicts.
     """
     if not os.path.exists(db_path):
         return []
@@ -35,16 +109,12 @@ def query_recent_sessions(db_path, cwd, days_back=7, limit=5):
     try:
         cutoff = (datetime.now() - timedelta(days=days_back)).isoformat()
 
-        # Try project-filtered query first (match cwd against project field)
-        # ConvoVault stores project as the working directory path
         sessions = []
 
         if cwd:
-            # Match sessions from the same project directory
-            # Use LIKE for partial matching (subprojects, etc.)
             cursor = conn.execute(
-                """SELECT id, title, summary, decisions, artifacts, tags,
-                          start_date, end_date
+                """SELECT id, title, summary, decisions, artifacts,
+                          open_questions, tags, start_date, end_date
                    FROM sessions
                    WHERE project LIKE ?
                      AND start_date >= ?
@@ -54,11 +124,11 @@ def query_recent_sessions(db_path, cwd, days_back=7, limit=5):
             )
             sessions = [dict(row) for row in cursor.fetchall()]
 
-        # If no project-specific sessions, fall back to most recent across all projects
+        # Fall back to most recent across all projects if no project matches
         if not sessions:
             cursor = conn.execute(
-                """SELECT id, title, summary, decisions, artifacts, tags,
-                          start_date, end_date
+                """SELECT id, title, summary, decisions, artifacts,
+                          open_questions, tags, start_date, end_date
                    FROM sessions
                    ORDER BY start_date DESC
                    LIMIT ?""",
@@ -75,11 +145,32 @@ def query_recent_sessions(db_path, cwd, days_back=7, limit=5):
         conn.close()
 
 
+def select_sessions(sessions, max_count=5):
+    """Score, filter, and rank sessions. Returns up to max_count best ones."""
+    if not sessions:
+        return []
+
+    now = datetime.now()
+    scored = [(score_session(s, now), s) for s in sessions]
+
+    # Sort by score desc, then recency desc for ties
+    scored.sort(key=lambda x: (x[0], x[1].get("start_date", "")), reverse=True)
+
+    # Filter out noise sessions as long as we still have enough good ones
+    good = [(sc, s) for sc, s in scored if sc > 0]
+    if not good:
+        # All sessions scored <= 0 -- keep top few rather than returning nothing
+        good = scored[:max_count]
+
+    return [s for _, s in good[:max_count]]
+
+
 def format_context(sessions, cwd):
     """Format session data into a concise context block for Claude.
 
     Output is plain text that Claude Code injects into the session.
-    Keep it focused and scannable -- this goes into the system prompt area.
+    Includes open_questions (missing from old version) as they are highest-signal.
+    Enforces MAX_CONTEXT_CHARS soft cap to prevent system prompt bloat.
     """
     if not sessions:
         return ""
@@ -88,7 +179,6 @@ def format_context(sessions, cwd):
     lines.append("# ConvoVault: Recent Session Context")
     lines.append("")
 
-    # Indicate if results are project-specific or global
     if cwd:
         project_name = os.path.basename(cwd) if cwd else "unknown"
         lines.append(f"Recent sessions for project: {project_name}")
@@ -96,12 +186,13 @@ def format_context(sessions, cwd):
         lines.append("Recent sessions (no project filter):")
     lines.append("")
 
-    for i, session in enumerate(sessions, 1):
-        title = session.get("title", "Untitled")
-        start = session.get("start_date", "")
-        end = session.get("end_date", "")
+    total_chars = sum(len(l) for l in lines)
 
-        # Format date nicely
+    for i, session in enumerate(sessions, 1):
+        block = []
+        title = session.get("title") or "Untitled"
+        start = session.get("start_date", "")
+
         date_str = ""
         if start:
             try:
@@ -110,46 +201,62 @@ def format_context(sessions, cwd):
             except (ValueError, TypeError):
                 date_str = start[:19] if start else ""
 
-        lines.append(f"## Session {i}: {title}")
+        block.append(f"## Session {i}: {title}")
         if date_str:
-            lines.append(f"Date: {date_str}")
+            block.append(f"Date: {date_str}")
 
-        # Summary (truncated for context window efficiency)
-        summary = session.get("summary", "")
+        # Summary (truncated)
+        summary = session.get("summary") or ""
         if summary:
-            # Take first 500 chars of summary to keep context lean
-            truncated = summary[:500]
-            if len(summary) > 500:
+            truncated = summary[:400]
+            if len(summary) > 400:
                 truncated += "..."
-            lines.append(f"Summary: {truncated}")
+            block.append(f"Summary: {truncated}")
 
-        # Decisions are high-signal, always include
+        # Open questions -- highest signal, always include when present
+        open_q_raw = session.get("open_questions", "[]")
+        try:
+            open_questions = json.loads(open_q_raw) if isinstance(open_q_raw, str) else (open_q_raw or [])
+        except (json.JSONDecodeError, TypeError):
+            open_questions = []
+        if open_questions:
+            block.append("Open questions:")
+            for q in open_questions[:4]:
+                block.append(f"  ? {q}")
+
+        # Decisions
         decisions_raw = session.get("decisions", "[]")
         try:
-            decisions = json.loads(decisions_raw) if isinstance(decisions_raw, str) else decisions_raw
+            decisions = json.loads(decisions_raw) if isinstance(decisions_raw, str) else (decisions_raw or [])
         except (json.JSONDecodeError, TypeError):
             decisions = []
-
         if decisions:
-            lines.append("Key decisions:")
-            for d in decisions[:5]:  # Cap at 5 decisions per session
-                lines.append(f"  - {d}")
+            block.append("Key decisions:")
+            for d in decisions[:4]:
+                block.append(f"  - {d}")
 
-        # Artifacts (file paths created/modified)
+        # Artifacts
         artifacts_raw = session.get("artifacts", "[]")
         try:
-            artifacts = json.loads(artifacts_raw) if isinstance(artifacts_raw, str) else artifacts_raw
+            artifacts = json.loads(artifacts_raw) if isinstance(artifacts_raw, str) else (artifacts_raw or [])
         except (json.JSONDecodeError, TypeError):
             artifacts = []
-
         if artifacts:
-            lines.append("Artifacts: " + ", ".join(artifacts[:5]))
+            block.append("Artifacts: " + ", ".join(artifacts[:5]))
 
-        lines.append("")
+        block.append("")
+
+        block_chars = sum(len(l) for l in block)
+        if total_chars + block_chars > MAX_CONTEXT_CHARS and i > 1:
+            # Soft cap reached -- stop adding more sessions
+            break
+
+        lines.extend(block)
+        total_chars += block_chars
 
     lines.append("---")
     lines.append("Use this context to avoid re-asking questions or repeating work from prior sessions.")
-    lines.append("If a prior session is directly relevant, you can query ConvoVault MCP tools for full details.")
+    lines.append("If a prior session is directly relevant, query ConvoVault MCP tools for full details.")
 
     return "\n".join(lines)
 
@@ -157,7 +264,6 @@ def format_context(sessions, cwd):
 def main():
     """Main entry point for SessionStart hook."""
     try:
-        # Read hook input from stdin
         stdin_data = sys.stdin.read()
         if not stdin_data:
             sys.exit(0)
@@ -166,27 +272,28 @@ def main():
         session_id = hook_input.get("session_id", "unknown")
         cwd = hook_input.get("cwd", "")
 
-        # Query ConvoVault for recent sessions
         db_path = get_db_path()
 
-        # Configuration via environment variables
-        days_back = int(os.environ.get("CONVOVAULT_DAYS_BACK", "7"))
-        limit = int(os.environ.get("CONVOVAULT_LIMIT", "5"))
+        days_back = int(os.environ.get("CONVOVAULT_DAYS_BACK", "14"))
+        limit = int(os.environ.get("CONVOVAULT_LIMIT", "10"))
+        max_count = int(os.environ.get("CONVOVAULT_MAX_SESSIONS", "5"))
 
-        sessions = query_recent_sessions(db_path, cwd, days_back=days_back, limit=limit)
+        raw_sessions = query_recent_sessions(db_path, cwd, days_back=days_back, limit=limit)
 
-        if not sessions:
-            sys.stderr.write(f"ConvoVault auto-load: No recent sessions found for {cwd or 'any project'}\n")
+        if not raw_sessions:
+            sys.stderr.write(
+                f"ConvoVault auto-load: No recent sessions found for {cwd or 'any project'}\n"
+            )
             sys.exit(0)
 
-        # Format and output context to stdout
-        # Claude Code captures stdout from SessionStart hooks and injects it
+        sessions = select_sessions(raw_sessions, max_count=max_count)
+
         context = format_context(sessions, cwd)
         if context:
             print(context)
             sys.stderr.write(
-                f"ConvoVault auto-load: Injected context from {len(sessions)} recent session(s) "
-                f"for session {session_id}\n"
+                f"ConvoVault auto-load: Injected context from {len(sessions)} session(s) "
+                f"(scored from {len(raw_sessions)} candidates) for session {session_id}\n"
             )
 
     except json.JSONDecodeError:
