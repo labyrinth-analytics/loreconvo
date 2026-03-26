@@ -139,7 +139,7 @@ Both names are TESS-clean and Google-clean. Trademark registration recommended (
 24. [ ] Register copyright with new names
 
 ### Infrastructure
-25. [ ] Rename GitHub repos (from Mac) once public
+25. [x] Rename GitHub repos (done 2026-03-25 -- convovault->loreconvo, projectvault->loredocs, remotes reconfigured)
 26. [ ] Update ~/.claude/settings.json MCP server paths
 27. [ ] Update hook scripts (auto_load.py, auto_save.py) if they reference old names
 28. [ ] Rebuild .plugin files with new names (loreconvo-v0.3.0.plugin, loredocs-v0.1.0.plugin)
@@ -177,7 +177,7 @@ When ending a session:
 1. [ ] Fix side_hustle venv isolation (may be running under conda base instead of project .venv)
 2. [ ] Pin all dependencies: `pip freeze > requirements-lock.txt` for each product
 3. [ ] Run `pip-audit` across all product venvs and resolve any findings
-4. [ ] Push ConvoVault and ProjectVault repos to GitHub (from Mac -- Cowork VM can't push)
+4. [x] Push LoreConvo and LoreDocs repos to GitHub (done 2026-03-25 -- repos renamed, remotes configured: origin=side_hustle, loreconvo, loredocs)
 
 ## Known Issues / Gotchas
 - MCP SDK v1.26.0 renamed `lifespan_state` to `lifespan_context` (already fixed in ProjectVault)
