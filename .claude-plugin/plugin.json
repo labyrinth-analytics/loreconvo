@@ -1,0 +1,42 @@
+{
+  "name": "loreconvo",
+  "version": "0.3.0",
+  "description": "Vault your Claude conversations. Captures session decisions, artifacts, and context across Code, Cowork, and Chat. Organizes memory by project, skill, and persona. Never re-explain yourself again.",
+  "author": {
+    "name": "Labyrinth Analytics Consulting",
+    "url": "https://labyrinthanalyticsconsulting.com"
+  },
+  "keywords": [
+    "memory",
+    "session",
+    "context",
+    "vault",
+    "conversations",
+    "persistence",
+    "recall"
+  ],
+  "license": "MIT",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/setup.sh\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/on_session_end.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
