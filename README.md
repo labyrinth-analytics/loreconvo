@@ -1,4 +1,4 @@
-# LoreConvo
+# ConvoVault
 
 Vault your Claude conversations. Never re-explain yourself again.
 
@@ -14,46 +14,46 @@ bash install.sh
 
 This creates a virtual environment, installs dependencies, and verifies everything works. No system Python changes, no manual pip commands.
 
-## Using LoreConvo
+## Using ConvoVault
 
 ### Claude Code (Terminal)
 
 **Start a session with the plugin loaded:**
 
 ```bash
-claude --plugin-dir /path/to/loreconvo
+claude --plugin-dir /path/to/convovault
 ```
 
 **Or load it inside an existing session:**
 
 ```
-/plugin add /path/to/loreconvo
+/plugin add /path/to/convovault
 ```
 
-Replace `/path/to/loreconvo` with wherever you saved the source folder (e.g., `~/projects/side_hustle/ron_skills/loreconvo`).
+Replace `/path/to/convovault` with wherever you saved the source folder (e.g., `~/projects/side_hustle/ron_skills/convovault`).
 
 After making code changes, use `/reload-plugins` to refresh without restarting.
 
-Once loaded, Claude has access to all 12 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
+Once loaded, Claude has access to all 12 ConvoVault MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
 
 ### Cowork (Desktop App)
 
 1. Click the **+** button next to the prompt box
 2. Select **Plugins**
 3. Select **Add plugin**
-4. Browse to the `loreconvo` source folder
+4. Browse to the `convovault` source folder
 
 **Important: Shared Database Access**
 
 Cowork runs in a sandboxed VM and can't see your Mac's filesystem by default. To read sessions saved by Claude Code, ask Claude in Cowork:
 
-> "Mount my ~/.loreconvo folder"
+> "Mount my ~/.convovault folder"
 
 Once mounted, Cowork reads and writes to the same database as Claude Code. Sessions saved in Code appear instantly in Cowork.
 
 ### Claude Chat (Web)
 
-Chat doesn't support plugins, so LoreConvo provides a one-command bridge. Run this in your terminal:
+Chat doesn't support plugins, so ConvoVault provides a one-command bridge. Run this in your terminal:
 
 ```bash
 bash export-to-chat.sh
@@ -69,12 +69,12 @@ bash export-to-chat.sh "tax prep"
 
 ## How It Works Across Surfaces
 
-The core value of LoreConvo is that context persists across Claude surfaces automatically. Here is the full chain:
+The core value of ConvoVault is that context persists across Claude surfaces automatically. Here is the full chain:
 
 ```
 Claude Code (terminal)
-  |-- SessionEnd hook --> auto_save.py --> ~/.loreconvo/sessions.db
-  |-- SessionStart hook <-- auto_load.py <-- ~/.loreconvo/sessions.db
+  |-- SessionEnd hook --> auto_save.py --> ~/.convovault/sessions.db
+  |-- SessionStart hook <-- auto_load.py <-- ~/.convovault/sessions.db
                                                ^
 Cowork (desktop app) <--MCP tools-------------|
   save_session / get_recent_sessions / search_sessions
@@ -129,7 +129,7 @@ The result: when you switch surfaces mid-project, you never have to re-explain w
 
 ## MCP Tools
 
-LoreConvo provides 12 MCP tools that Claude calls automatically during sessions:
+ConvoVault provides 12 MCP tools that Claude calls automatically during sessions:
 
 | Tool | What it does |
 |------|-------------|
@@ -154,7 +154,7 @@ LoreConvo provides 12 MCP tools that Claude calls automatically during sessions:
 
 ## Data Storage
 
-Sessions are stored locally in SQLite at `~/.loreconvo/sessions.db`. Override with the `LORECONVO_DB` environment variable.
+Sessions are stored locally in SQLite at `~/.convovault/sessions.db`. Override with the `CONVOVAULT_DB` environment variable.
 
 ## Troubleshooting
 
@@ -165,7 +165,7 @@ Make sure you ran `bash install.sh` first. The `.venv` must exist with dependenc
 The `.mcp.json` points to `.venv/bin/python3` inside the plugin folder. If you moved the folder, re-run `bash install.sh`.
 
 **Cowork can't see sessions saved in Code?**
-Ask Claude to "mount my ~/.loreconvo folder" so Cowork can access the shared database.
+Ask Claude to "mount my ~/.convovault folder" so Cowork can access the shared database.
 
 ## License
 

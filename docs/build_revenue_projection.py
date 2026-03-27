@@ -1,8 +1,8 @@
 """
-LoreConvo Revenue Projection Builder
+ConvoVault Revenue Projection Builder
 Generates a public-facing Excel revenue model for Labyrinth Analytics Consulting.
 Usage: python build_revenue_projection.py
-Output: LoreConvo_Revenue_Projection.xlsx in the same directory
+Output: ConvoVault_Revenue_Projection.xlsx in the same directory
 """
 
 import openpyxl
@@ -82,7 +82,7 @@ def build_cover(wb):
     # Title block
     ws.merge_cells("B2:B2")
     c = ws["B2"]
-    c.value = "LoreConvo"
+    c.value = "ConvoVault"
     c.font = bold_font(size=36, color=COLOR_HIGHLIGHT)
     c.alignment = Alignment(horizontal="left", vertical="center")
 
@@ -114,7 +114,7 @@ def build_pricing(wb):
     ws.sheet_view.showGridLines = False
     set_col_widths(ws, [2, 28, 16, 16, 16, 2])
 
-    apply_header_row(ws, 1, 2, 5, "LoreConvo -- Pricing Tiers", COLOR_DARK_BG)
+    apply_header_row(ws, 1, 2, 5, "ConvoVault -- Pricing Tiers", COLOR_DARK_BG)
     ws.row_dimensions[1].height = 32
 
     headers = ["Feature", "Free", "Pro ($8/mo)", "Team ($19/mo)"]
@@ -194,7 +194,7 @@ def build_revenue_model(wb):
     team_price = 19
 
     set_col_widths(ws, [2, 18] + [12] * 12 + [2])
-    apply_header_row(ws, 1, 2, 14, "LoreConvo -- 12-Month Revenue Model", COLOR_DARK_BG)
+    apply_header_row(ws, 1, 2, 14, "ConvoVault -- 12-Month Revenue Model", COLOR_DARK_BG)
     ws.row_dimensions[1].height = 32
 
     # Column headers
@@ -394,7 +394,7 @@ def build_chart_sheet(wb, mrr_values):
 
     # Add line chart
     chart = LineChart()
-    chart.title = "LoreConvo MRR Growth Projection"
+    chart.title = "ConvoVault MRR Growth Projection"
     chart.style  = 10
     chart.y_axis.title = "Monthly Recurring Revenue ($)"
     chart.x_axis.title = "Month"
@@ -415,7 +415,7 @@ def build_chart_sheet(wb, mrr_values):
 
 def main():
     out_dir = os.path.dirname(os.path.abspath(__file__))
-    out_path = os.path.join(out_dir, "LoreConvo_Revenue_Projection.xlsx")
+    out_path = os.path.join(out_dir, "ConvoVault_Revenue_Projection.xlsx")
 
     wb = openpyxl.Workbook()
     # Remove default sheet

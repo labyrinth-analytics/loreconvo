@@ -1,5 +1,5 @@
 [project]
-name = "loreconvo"
+name = "convovault"
 version = "0.3.0"
 description = "Cross-surface persistent memory for Claude sessions. Vault conversations from Code, Cowork, and Chat -- recall decisions, artifacts, and context in any future session."
 readme = "README.md"
@@ -32,21 +32,21 @@ dev = [
 ]
 
 [project.scripts]
-loreconvo = "loreconvo.server:main"
+convovault = "convovault.server:main"
 
 [project.urls]
-Homepage = "https://github.com/labyrinth-analytics/loreconvo"
-Repository = "https://github.com/labyrinth-analytics/loreconvo"
-"Bug Tracker" = "https://github.com/labyrinth-analytics/loreconvo/issues"
+Homepage = "https://github.com/labyrinth-analytics/convovault"
+Repository = "https://github.com/labyrinth-analytics/convovault"
+"Bug Tracker" = "https://github.com/labyrinth-analytics/convovault/issues"
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-# src/ IS the loreconvo package (flat structure: src/server.py, src/core/, etc.)
-# This maps `loreconvo` -> src/ so that `loreconvo.server:main` resolves correctly.
+# src/ IS the convovault package (flat structure: src/server.py, src/core/, etc.)
+# This maps `convovault` -> src/ so that `convovault.server:main` resolves correctly.
 [tool.setuptools.packages]
 find = { where = ["."] }
 
 [tool.setuptools.package-dir]
-"loreconvo" = "src"
+"convovault" = "src"

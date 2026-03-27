@@ -15,8 +15,8 @@ class Config:
     def __post_init__(self):
         if not self.db_path:
             self.db_path = os.environ.get(
-                "LORECONVO_DB",
-                str(Path.home() / ".loreconvo" / "sessions.db")
+                "CONVOVAULT_DB",
+                str(Path.home() / ".convovault" / "sessions.db")
             )
 
     def ensure_db_dir(self):

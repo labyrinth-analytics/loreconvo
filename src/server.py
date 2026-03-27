@@ -12,9 +12,9 @@ from core.database import SessionDatabase
 from core.config import Config
 
 mcp = FastMCP(
-    "loreconvo",
+    "convovault",
     instructions=(
-        "LoreConvo provides persistent memory across Claude sessions. "
+        "ConvoVault provides persistent memory across Claude sessions. "
         "Use save_session to vault decisions and context. "
         "Use search_sessions or get_context_for to recall prior work. "
         "Use get_recent_sessions to see what was done recently. "
