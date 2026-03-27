@@ -1,4 +1,4 @@
-# ConvoVault -- Marketplace Listing Draft
+# LoreConvo -- Marketplace Listing Draft
 
 > STATUS: DRAFT -- Debbie must review and approve before publishing to any marketplace.
 
@@ -8,7 +8,7 @@
 
 | Field | Value |
 |---|---|
-| Plugin Name | ConvoVault |
+| Plugin Name | LoreConvo |
 | Tagline | Vault your Claude conversations. Never re-explain yourself again. |
 | Category | Memory & Context / Productivity |
 | Version | 0.3.0 |
@@ -31,16 +31,16 @@ Persistent cross-surface memory for Claude. Capture decisions, artifacts, and co
 
 Every Claude session starts from zero. You spend the first five minutes catching Claude up on your project, your decisions, your constraints -- the same five minutes, every single day.
 
-ConvoVault fixes that.
+LoreConvo fixes that.
 
-**ConvoVault is a persistent memory layer for Claude.** It captures what you built, what you decided, and what's still open -- and surfaces that context automatically at the start of your next session. Works across Claude Code, Cowork, and Chat.
+**LoreConvo is a persistent memory layer for Claude.** It captures what you built, what you decided, and what's still open -- and surfaces that context automatically at the start of your next session. Works across Claude Code, Cowork, and Chat.
 
 ---
 
 ### How It Works
 
 1. **Save** -- At the end of a session, Claude extracts the key context (decisions, artifacts, open questions) and vaults it. Takes 10 seconds.
-2. **Recall** -- At the start of your next session, ConvoVault surfaces the most relevant prior context automatically. Claude arrives ready to work.
+2. **Recall** -- At the start of your next session, LoreConvo surfaces the most relevant prior context automatically. Claude arrives ready to work.
 3. **Search** -- Need to find a decision from three weeks ago? Full-text search across all your vaulted sessions. Results in under a second.
 
 ---
@@ -51,10 +51,10 @@ ConvoVault fixes that.
 Sessions saved in Claude Code are readable in Cowork and Chat. One vault, all surfaces.
 
 **Structured context capture**
-ConvoVault doesn't just save chat logs. It captures structured data -- decisions made, files created, open questions, skills used, project associations. This structure makes recall dramatically more accurate than plain-text search.
+LoreConvo doesn't just save chat logs. It captures structured data -- decisions made, files created, open questions, skills used, project associations. This structure makes recall dramatically more accurate than plain-text search.
 
 **Project organization**
-Group sessions by project. Define expected skills. ConvoVault tracks which skills were used across your project and can flag when you're working on something without the right context loaded.
+Group sessions by project. Define expected skills. LoreConvo tracks which skills were used across your project and can flag when you're working on something without the right context loaded.
 
 **Persona tagging**
 Running multiple AI agents? Tag sessions by persona (e.g., `ron-bot:sql`, `debbie:tax`). Filter recall by persona so each agent gets only its relevant history.
@@ -92,20 +92,20 @@ Your data lives on your machine in a SQLite database. No API calls, no subscript
 
 ---
 
-### Companion Product: ProjectVault
+### Companion Product: LoreDocs
 
-ConvoVault remembers your *conversations*. **ProjectVault** remembers your *project artifacts*.
+LoreConvo remembers your *conversations*. **LoreDocs** remembers your *project artifacts*.
 
-If you work on complex projects across multiple Claude sessions, consider pairing ConvoVault with ProjectVault. ProjectVault stores documents, specs, and reference materials in named vaults -- and injects them into any Claude session on demand. The two products share a common local-first philosophy and complement each other naturally.
+If you work on complex projects across multiple Claude sessions, consider pairing LoreConvo with LoreDocs. LoreDocs stores documents, specs, and reference materials in named vaults -- and injects them into any Claude session on demand. The two products share a common local-first philosophy and complement each other naturally.
 
-- ConvoVault = "what did we decide last session?"
-- ProjectVault = "what does my project documentation say?"
+- LoreConvo = "what did we decide last session?"
+- LoreDocs = "what does my project documentation say?"
 
 ---
 
 ### Chat Support (No Plugin Required)
 
-Claude Chat does not support plugins natively, but ConvoVault works with Chat in two ways:
+Claude Chat does not support plugins natively, but LoreConvo works with Chat in two ways:
 
 **Option 1 -- Chat bridge script:**
 ```bash
@@ -140,12 +140,12 @@ Use `get_recent_sessions` or `get_context_for` in Claude Code or Cowork to retri
 
 ## Installation
 
-ConvoVault lives in the `side_hustle` monorepo. To install:
+LoreConvo lives in the `side_hustle` monorepo. To install:
 
 ```bash
 # Clone the full repo (or pull the latest if you already have it)
 git clone https://github.com/labyrinth-analytics/side_hustle.git
-cd side_hustle/ron_skills/convovault
+cd side_hustle/ron_skills/loreconvo
 
 # Run the installer
 bash install.sh
@@ -158,14 +158,14 @@ The install script creates a virtual environment, installs dependencies, and ver
 Add the plugin to your Claude Code config or load it in an existing session:
 
 ```bash
-/plugin add ~/projects/side_hustle/ron_skills/convovault
+/plugin add ~/projects/side_hustle/ron_skills/loreconvo
 ```
 
 ### Load in Cowork
 
 1. Click **+** next to the prompt box
 2. Select **Plugins** then **Add plugin**
-3. Browse to `~/projects/side_hustle/ron_skills/convovault`
+3. Browse to `~/projects/side_hustle/ron_skills/loreconvo`
 
 ### Use in Chat
 
@@ -175,7 +175,7 @@ No plugin install needed. Use the Chat bridge script or manual paste method desc
 
 ## What Users Say
 
-> "I was re-explaining the same project context every single day. ConvoVault eliminated that entirely. Claude just knows." -- Beta tester
+> "I was re-explaining the same project context every single day. LoreConvo eliminated that entirely. Claude just knows." -- Beta tester
 
 > "The structured decisions capture is the killer feature. Not just a chat log -- actual decisions with timestamps." -- Beta tester
 
@@ -184,13 +184,13 @@ No plugin install needed. Use the Chat bridge script or manual paste method desc
 ## Frequently Asked Questions
 
 **Is my data private?**
-Yes. ConvoVault stores everything locally in SQLite on your machine. Nothing is sent to any server. Labyrinth Analytics never sees your session data.
+Yes. LoreConvo stores everything locally in SQLite on your machine. Nothing is sent to any server. Labyrinth Analytics never sees your session data.
 
 **Does it work with Claude Chat (web)?**
 Yes, with a small workaround -- see the "Chat Support" section above. Use the export script or paste context manually. Full Chat plugin support is on the roadmap.
 
 **What happens if I uninstall it?**
-Your database remains at `~/.convovault/sessions.db`. Nothing is deleted. Reinstall anytime and your full history is still there.
+Your database remains at `~/.loreconvo/sessions.db`. Nothing is deleted. Reinstall anytime and your full history is still there.
 
 **Can I use it for multiple projects?**
 Yes. The project management tools let you create named projects, associate sessions, and track which skills were used across each project.
@@ -198,8 +198,8 @@ Yes. The project management tools let you create named projects, associate sessi
 **Does it slow down my Claude sessions?**
 No. The save and recall operations are synchronous SQLite queries that complete in under 100ms. The SessionEnd hook runs after the session closes.
 
-**What is ProjectVault and do I need it?**
-ProjectVault is a companion product for storing project documents and reference materials. ConvoVault and ProjectVault are independent -- you can use either or both. See the Companion Product section above.
+**What is LoreDocs and do I need it?**
+LoreDocs is a companion product for storing project documents and reference materials. LoreConvo and LoreDocs are independent -- you can use either or both. See the Companion Product section above.
 
 ---
 

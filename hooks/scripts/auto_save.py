@@ -1,4 +1,4 @@
-"""ConvoVault SessionEnd auto-save hook.
+"""LoreConvo SessionEnd auto-save hook.
 
 Receives session metadata via stdin JSON from Claude Code's SessionEnd hook.
 Parses the transcript JSONL to extract a summary, then saves directly to SQLite.
@@ -17,7 +17,7 @@ from pathlib import Path
 
 def get_db_path():
     """Get database path, matching core/config.py logic."""
-    return os.environ.get("CONVOVAULT_DB", os.path.expanduser("~/.convovault/sessions.db"))
+    return os.environ.get("LORECONVO_DB", os.path.expanduser("~/.loreconvo/sessions.db"))
 
 
 def parse_transcript(transcript_path):
@@ -245,7 +245,7 @@ def save_to_db(db_path, session_id, parsed):
         conn.commit()
         return True
     except Exception as e:
-        sys.stderr.write(f"ConvoVault auto-save DB error: {e}\n")
+        sys.stderr.write(f"LoreConvo auto-save DB error: {e}\n")
         return False
     finally:
         conn.close()
@@ -277,12 +277,12 @@ def main():
         saved = save_to_db(db_path, session_id, parsed)
 
         if saved:
-            sys.stderr.write(f"ConvoVault: Auto-saved session '{parsed['title']}'\n")
+            sys.stderr.write(f"LoreConvo: Auto-saved session '{parsed['title']}'\n")
 
     except json.JSONDecodeError:
         sys.exit(0)
     except Exception as e:
-        sys.stderr.write(f"ConvoVault auto-save error: {e}\n")
+        sys.stderr.write(f"LoreConvo auto-save error: {e}\n")
         sys.exit(0)
 
 

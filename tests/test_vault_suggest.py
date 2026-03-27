@@ -239,22 +239,22 @@ def test_skill_gaps():
     db.create_project(
         "project-ron",
         description="Ron's products",
-        expected_skills=["convovault", "sql-optimizer", "projectvault"],
+        expected_skills=["loreconvo", "sql-optimizer", "loredocs"],
     )
-    # Only use convovault in recent sessions
+    # Only use loreconvo in recent sessions
     s = make_session(
-        title="ConvoVault work",
+        title="LoreConvo work",
         days_ago=2,
         project="project-ron",
-        skills_used=["convovault"],
+        skills_used=["loreconvo"],
     )
     db.save_session(s)
 
     result = db.get_suggestions(project="project-ron")
     gap_skills = {g["skill"] for g in result["skill_gaps"]}
     assert "sql-optimizer" in gap_skills
-    assert "projectvault" in gap_skills
-    assert "convovault" not in gap_skills
+    assert "loredocs" in gap_skills
+    assert "loreconvo" not in gap_skills
     assert len(result["skill_gaps"]) == 2
     # Check reason text
     for gap in result["skill_gaps"]:

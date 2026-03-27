@@ -1,5 +1,5 @@
 ---
-name: convovault
+name: loreconvo
 description: >
   Vault your Claude conversations for cross-session recall. Use this skill when the user asks to
   "save this session", "vault this", "remember this", "what did we decide about", "load context for",
@@ -11,7 +11,7 @@ metadata:
   author: "Labyrinth Analytics Consulting"
 ---
 
-# ConvoVault
+# LoreConvo
 
 Vault your Claude conversations. Capture session context (decisions, artifacts, open questions) and recall it in future sessions across Code, Cowork, and Chat. Never re-explain yourself again.
 
@@ -27,7 +27,7 @@ Save a session when:
 
 Call the `save_session` MCP tool with structured data extracted from the conversation:
 
-1. **Title**: Short, descriptive (e.g., "ConvoVault PRD and architecture design")
+1. **Title**: Short, descriptive (e.g., "LoreConvo PRD and architecture design")
 2. **Surface**: Where this ran - `cowork`, `code`, or `chat`
 3. **Summary**: 2-3 paragraphs covering what was done, why, and what matters for future sessions
 4. **Decisions**: List every decision made, even small ones. These are the most searchable items.
@@ -79,7 +79,7 @@ When the user needs to continue in Chat (which cannot run MCP tools):
 2. Format the result as a markdown summary with a "Context for Claude" preamble
 3. The user pastes this into Chat to prime the new conversation
 
-CLI equivalent: `convovault export --last --format markdown`
+CLI equivalent: `loreconvo export --last --format markdown`
 
 ## Reference Files
 

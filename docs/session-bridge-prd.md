@@ -1,4 +1,4 @@
-# ConvoVault: Product Requirements Document
+# LoreConvo: Product Requirements Document
 *Vault your Claude conversations. Never re-explain yourself again.*
 
 **Author:** Debbie / Labyrinth Analytics Consulting
@@ -23,7 +23,7 @@ Claude users who work across multiple surfaces — Cowork, Code, and Chat — lo
 
 - **Real-time session sharing between concurrent sessions.** This is a collaboration feature, not a memory feature. Out of scope for v1.
 - **Full Chat integration via API.** Claude Chat has no programmatic access to conversation history. We'll provide a paste-friendly export format, but bidirectional sync is not possible until Anthropic builds that.
-- **Replacing CLAUDE.md.** ConvoVault complements manual context files — it captures what CLAUDE.md can't (the full history of decisions and artifacts across sessions).
+- **Replacing CLAUDE.md.** LoreConvo complements manual context files — it captures what CLAUDE.md can't (the full history of decisions and artifacts across sessions).
 - **Multi-user/team memory.** v1 is single-user, local-first. Team features are a v2 consideration.
 - **Audio/video transcript ingestion.** Text-based session memory only for now.
 
@@ -31,7 +31,7 @@ Claude users who work across multiple surfaces — Cowork, Code, and Chat — lo
 
 ## Competitive Landscape
 
-The AI memory space is active but fragmented. As of March 2026, ~10+ MCP memory servers exist, but all are scoped to a single tool or surface. Nobody is building what ConvoVault targets: cross-product memory with project awareness, skill tracking, and persona support.
+The AI memory space is active but fragmented. As of March 2026, ~10+ MCP memory servers exist, but all are scoped to a single tool or surface. Nobody is building what LoreConvo targets: cross-product memory with project awareness, skill tracking, and persona support.
 
 ### Direct Competitors
 
@@ -68,11 +68,11 @@ The AI memory space is active but fragmented. As of March 2026, ~10+ MCP memory 
 
 **CLAUDE.md / Manual Context Files** — The DIY approach. Power users maintain hand-curated context files that persist across sessions.
 
-- *This is what ConvoVault replaces.* Manual curation works but doesn't scale, isn't searchable, and requires discipline to maintain.
+- *This is what LoreConvo replaces.* Manual curation works but doesn't scale, isn't searchable, and requires discipline to maintain.
 
 ### Competitive Positioning Matrix
 
-| Capability                        | ConvoVault | OpenMemory | ContextStream | MCP Backpack | Built-in Memory |
+| Capability                        | LoreConvo | OpenMemory | ContextStream | MCP Backpack | Built-in Memory |
 |-----------------------------------|:-:|:-:|:-:|:-:|:-:|
 | Cross-product (Code+Cowork+Chat)  | Y | - | - | - | - |
 | Structured sessions (not just KV) | Y | - | Y | - | - |
@@ -89,15 +89,15 @@ The AI memory space is active but fragmented. As of March 2026, ~10+ MCP memory 
 
 ### Competitive Strategy
 
-**Positioning:** ConvoVault is not "another memory MCP server." It's the first cross-surface memory layer for the Claude ecosystem, purpose-built for users who work across Code, Cowork, and Chat — and for autonomous agents that need persistent customer context.
+**Positioning:** LoreConvo is not "another memory MCP server." It's the first cross-surface memory layer for the Claude ecosystem, purpose-built for users who work across Code, Cowork, and Chat — and for autonomous agents that need persistent customer context.
 
 **Differentiation levers:**
 1. *Cross-product bridging* — the only tool that unifies memory across Claude Code, Cowork, and Chat. Nobody else does this.
 2. *Persona-tagged memory* — designed for the emerging "AI business agent" use case (Ron, customer-facing bots). No competitor supports this.
-3. *Skill and project tracking* — sessions organized by what tools were used, not just keywords. Unique to ConvoVault.
+3. *Skill and project tracking* — sessions organized by what tools were used, not just keywords. Unique to LoreConvo.
 4. *Price advantage* — $8/mo vs Mem0's $19/mo Starter or $249/mo Pro. Undercut the funded competitor on the features that matter most to Claude users.
 
-**Anthropic risk mitigation:** If Anthropic builds native cross-product memory, ConvoVault's persona/project/skill features become the moat. Anthropic will build generic memory; we build memory organized around your business.
+**Anthropic risk mitigation:** If Anthropic builds native cross-product memory, LoreConvo's persona/project/skill features become the moat. Anthropic will build generic memory; we build memory organized around your business.
 
 ---
 
@@ -145,11 +145,11 @@ The AI memory space is active but fragmented. As of March 2026, ~10+ MCP memory 
   - [ ] Search returns results in under 500ms for databases with 1000+ sessions
 
 **3. Session Export (CLI)**
-- `convovault export [session_id]` — export a session summary as markdown (paste-friendly for Chat)
-- `convovault list` — list recent sessions in terminal
-- `convovault search <query>` — search from command line
+- `loreconvo export [session_id]` — export a session summary as markdown (paste-friendly for Chat)
+- `loreconvo list` — list recent sessions in terminal
+- `loreconvo search <query>` — search from command line
 - Acceptance criteria:
-  - [ ] `convovault export` produces clean markdown that can be pasted into Chat
+  - [ ] `loreconvo export` produces clean markdown that can be pasted into Chat
   - [ ] Output includes a "Context for Claude" preamble that primes a new session
 
 **4. SQLite Schema**
@@ -214,11 +214,11 @@ The AI memory space is active but fragmented. As of March 2026, ~10+ MCP memory 
 ### Plugin Structure
 
 ```
-convovault/
+loreconvo/
   .claude-plugin/
     plugin.json
   skills/
-    convovault/
+    loreconvo/
       SKILL.md                    # Main skill: triggers, instructions
       references/
         schema.md                 # SQLite schema reference
@@ -239,7 +239,7 @@ convovault/
 ```
                    [Human]                    [LLM]
                       |                          |
-              convovault CLI          MCP Tools (FastMCP)
+              loreconvo CLI          MCP Tools (FastMCP)
                       |                          |
                       +--- core/ library ---------+
                               |
@@ -348,11 +348,11 @@ CREATE TABLE session_links (
 
 ## Ron Bot Integration Points
 
-ConvoVault isn't just a standalone product — it's a critical piece of infrastructure for Project Ron (the autonomous AI agent business targeting $8K/month). Here's how they fit together:
+LoreConvo isn't just a standalone product — it's a critical piece of infrastructure for Project Ron (the autonomous AI agent business targeting $8K/month). Here's how they fit together:
 
-### ConvoVault as Ron's Memory Layer
+### LoreConvo as Ron's Memory Layer
 
-Ron's biggest limitation as an autonomous agent is context loss between sessions. Whether Ron is handling customer support for ClawHub skills, generating financial reports, or processing CSV transformations, he needs to remember what happened in previous interactions. ConvoVault gives Ron a persistent memory without requiring a custom database for each skill.
+Ron's biggest limitation as an autonomous agent is context loss between sessions. Whether Ron is handling customer support for ClawHub skills, generating financial reports, or processing CSV transformations, he needs to remember what happened in previous interactions. LoreConvo gives Ron a persistent memory without requiring a custom database for each skill.
 
 **Concrete integration for Ron's Phase 1 skills:**
 
@@ -362,17 +362,17 @@ Ron's biggest limitation as an autonomous agent is context loss between sessions
 
 3. **CSV/Excel Data Transformer** — Ron remembers column mappings, transformation rules, and data quality issues from previous uploads for each customer. "Clean this file the same way as last month" just works.
 
-### ConvoVault as a Revenue Multiplier
+### LoreConvo as a Revenue Multiplier
 
-ConvoVault fits into Project Ron's revenue model in two ways:
+LoreConvo fits into Project Ron's revenue model in two ways:
 
-**Direct revenue (Model C — Claude Plugin):** ConvoVault itself is a sellable Claude plugin. At $8/month Pro tier, it's one of the 2-3 plugins in Ron's Phase 1 portfolio. It targets power users who already feel the cross-session pain — exactly the audience who also buys Ron's other skills.
+**Direct revenue (Model C — Claude Plugin):** LoreConvo itself is a sellable Claude plugin. At $8/month Pro tier, it's one of the 2-3 plugins in Ron's Phase 1 portfolio. It targets power users who already feel the cross-session pain — exactly the audience who also buys Ron's other skills.
 
-**Indirect revenue (competitive moat):** Any Ron skill backed by ConvoVault memory has a retention advantage. Customers who've built up session history with Ron's tools have switching costs. Their context, preferences, and patterns are stored locally — they lose all of that if they switch to a competitor's agent. This is the kind of lock-in that doesn't feel exploitative because users genuinely benefit from the accumulated context.
+**Indirect revenue (competitive moat):** Any Ron skill backed by LoreConvo memory has a retention advantage. Customers who've built up session history with Ron's tools have switching costs. Their context, preferences, and patterns are stored locally — they lose all of that if they switch to a competitor's agent. This is the kind of lock-in that doesn't feel exploitative because users genuinely benefit from the accumulated context.
 
 ### Architecture Alignment with Ron's Hybrid Platform Strategy
 
-Per the Project Ron plan, the recommended architecture is Claude for quality/reliability + NemoClaw for always-on execution. ConvoVault's SQLite-first design supports this perfectly:
+Per the Project Ron plan, the recommended architecture is Claude for quality/reliability + NemoClaw for always-on execution. LoreConvo's SQLite-first design supports this perfectly:
 
 - **Claude sessions** write to the same SQLite DB as **NemoClaw sessions**
 - Ron running locally on NemoClaw can read context from earlier Claude Code sessions
@@ -460,44 +460,44 @@ This hierarchical tagging means Ron can load broad context (`persona:ron-bot`) o
 
 ## Timeline (Aligned with Project Ron Phases)
 
-### ConvoVault Phase 1: MVP — aligns with Ron Phase 1, Weeks 1-3
+### LoreConvo Phase 1: MVP — aligns with Ron Phase 1, Weeks 1-3
 - SQLite schema + core library (Python, dataclasses)
 - CLI via Click (save, list, search, export)
 - MCP server via FastMCP (4 core tools: save, get_recent, search, get_context_for)
 - Plugin packaging (.plugin file for Cowork/Code)
 - Manual save only (no hooks yet)
 - **Milestone:** Debbie uses it daily across her own Code/Cowork sessions
-- **Milestone:** ConvoVault is one of Ron's first Claude plugin listings
+- **Milestone:** LoreConvo is one of Ron's first Claude plugin listings
 
-### ConvoVault Phase 2: Personas + Auto-Capture — aligns with Ron Phase 2, Weeks 4-8
+### LoreConvo Phase 2: Personas + Auto-Capture — aligns with Ron Phase 2, Weeks 4-8
 - Hook-based auto-capture on session end
 - Persona tagging and filtering (ron-bot, tax-prep, labyrinth hierarchies)
 - Session linking and chains
-- Ron's skills (SQL Optimizer, Financial Report Gen, CSV Transformer) call ConvoVault for customer memory
+- Ron's skills (SQL Optimizer, Financial Report Gen, CSV Transformer) call LoreConvo for customer memory
 - **Milestone:** Ron's skills demonstrate returning-customer memory in demos
 
-### ConvoVault Phase 3: Monetization — aligns with Ron Phase 3, Weeks 9-16
+### LoreConvo Phase 3: Monetization — aligns with Ron Phase 3, Weeks 9-16
 - Feature gating (free: 100 sessions, manual save, 1 persona | pro: unlimited)
 - Salable billing integration (same platform Ron uses for other skills)
 - Export formats (markdown for Chat paste, JSON for programmatic use)
-- ConvoVault listed on Claude Marketplace + promoted alongside Ron's skills
+- LoreConvo listed on Claude Marketplace + promoted alongside Ron's skills
 - **Milestone:** First paying customers on Pro tier
 
-### ConvoVault Phase 4: Cloud + Scale — aligns with Ron Phase 4, Month 5+
+### LoreConvo Phase 4: Cloud + Scale — aligns with Ron Phase 4, Month 5+
 - Cloud sync via Turso (SQLite-compatible, edge-distributed)
 - Semantic search (embedding-based, uses local model on NemoClaw or Claude API)
 - Analytics dashboard (session frequency, topic heatmap, persona usage)
 - Team memory (shared session context for teams — Business tier)
 - API access for custom integrations
-- **Milestone:** Business tier customers, $200+/month from ConvoVault alone
+- **Milestone:** Business tier customers, $200+/month from LoreConvo alone
 
 ---
 
 ## Appendix: Relationship to Other Debbie Projects
 
-| Project | How ConvoVault Helps |
+| Project | How LoreConvo Helps |
 |---------|------------------------|
-| **Project Ron** | Ron's memory layer. Every Ron skill gets persistent customer context. ConvoVault is also a sellable plugin in Ron's portfolio. |
+| **Project Ron** | Ron's memory layer. Every Ron skill gets persistent customer context. LoreConvo is also a sellable plugin in Ron's portfolio. |
 | **Secret Agent Man (Tax Prep)** | Tax pipeline decisions, config choices, and year-over-year patterns persist across sessions. No more re-explaining depreciation schedules. |
 | **Labyrinth Analytics Consulting** | Client session history, project decisions, and deliverable tracking. Could evolve into a client-facing feature. |
 | **Portfolio Management** | Investment decisions, rebalance rationale, and bucket strategy changes are searchable across sessions. |
