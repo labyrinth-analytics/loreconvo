@@ -1,6 +1,6 @@
-# ProjectVault Installation Guide
+# LoreDocs Installation Guide
 
-**ProjectVault** gives you a searchable, organized, version-tracked knowledge base for your AI projects. Works with Claude Code and Cowork.
+**LoreDocs** gives you a searchable, organized, version-tracked knowledge base for your AI projects. Works with Claude Code and Cowork.
 
 ---
 
@@ -22,35 +22,35 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 If you use Claude's Cowork mode, install the plugin directly:
 
 ```bash
-/plugin install projectvault@labyrinth-analytics-claude-plugins
+/plugin install loredocs@labyrinth-analytics-claude-plugins
 ```
 
-That's it -- restart Cowork and ProjectVault is available.
+That's it -- restart Cowork and LoreDocs is available.
 
 ---
 
 ## Option B: Install as a Claude Code MCP Server
 
-Add ProjectVault to your Claude Code configuration:
+Add LoreDocs to your Claude Code configuration:
 
 ```bash
-claude mcp add projectvault -- uvx projectvault
+claude mcp add loredocs -- uvx loredocs
 ```
 
 **Verify it's connected:**
 ```bash
 claude mcp list
 ```
-You should see `projectvault` in the list.
+You should see `loredocs` in the list.
 
 Or add it manually to `~/.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
-    "projectvault": {
+    "loredocs": {
       "command": "uvx",
-      "args": ["projectvault"]
+      "args": ["loredocs"]
     }
   }
 }
@@ -62,11 +62,11 @@ Restart Claude Code after editing the file.
 
 ## Option C: Developer Install (Build from Source)
 
-If you want to modify ProjectVault or contribute:
+If you want to modify LoreDocs or contribute:
 
 ```bash
-git clone https://github.com/labyrinth-analytics/projectvault.git
-cd projectvault
+git clone https://github.com/labyrinth-analytics/loredocs.git
+cd loredocs
 uv venv
 uv pip install -e .
 ```
@@ -74,7 +74,7 @@ uv pip install -e .
 Then add to Claude Code using the venv Python:
 
 ```bash
-claude mcp add projectvault -- /path/to/projectvault/.venv/bin/python -m projectvault.server
+claude mcp add loredocs -- /path/to/loredocs/.venv/bin/python -m loredocs.server
 ```
 
 Or in `~/.claude/settings.json`:
@@ -82,9 +82,9 @@ Or in `~/.claude/settings.json`:
 ```json
 {
   "mcpServers": {
-    "projectvault": {
-      "command": "/path/to/projectvault/.venv/bin/python",
-      "args": ["-m", "projectvault.server"]
+    "loredocs": {
+      "command": "/path/to/loredocs/.venv/bin/python",
+      "args": ["-m", "loredocs.server"]
     }
   }
 }
@@ -115,11 +115,11 @@ Once connected, try these commands in a Claude conversation:
 
 ## Where Are My Files Stored?
 
-ProjectVault stores everything locally on your computer at:
+LoreDocs stores everything locally on your computer at:
 
 ```
-~/.projectvault/
-    projectvault.db         (search index and metadata)
+~/.loredocs/
+    loredocs.db         (search index and metadata)
     vaults/
         {vault-id}/
             docs/
@@ -130,7 +130,7 @@ ProjectVault stores everything locally on your computer at:
                     history/            (previous versions)
 ```
 
-Your documents are plain files on disk. You can back them up with any backup tool, version control them with git, open and edit them with any text editor, or copy the entire `~/.projectvault/` folder to another computer.
+Your documents are plain files on disk. You can back them up with any backup tool, version control them with git, open and edit them with any text editor, or copy the entire `~/.loredocs/` folder to another computer.
 
 ---
 
@@ -144,7 +144,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 Then restart your terminal.
 
-### "No matching distribution found for projectvault"
+### "No matching distribution found for loredocs"
 
 The package hasn't been published to PyPI yet. Use the developer install (Option C) instead, or install the `.plugin` file directly if you have access to the monorepo.
 
@@ -167,11 +167,11 @@ Text extraction works on files that contain actual text, not images of text (sca
 
 ### I want to start fresh
 
-Delete the ProjectVault data directory:
+Delete the LoreDocs data directory:
 ```bash
-rm -rf ~/.projectvault
+rm -rf ~/.loredocs
 ```
-The next time you use ProjectVault, it will create a new empty database.
+The next time you use LoreDocs, it will create a new empty database.
 
 ---
 
@@ -181,17 +181,17 @@ The next time you use ProjectVault, it will create a new empty database.
 
 **If installed via pip:**
 ```bash
-pip uninstall projectvault
+pip uninstall loredocs
 ```
 
 **Remove from Claude Code:**
 ```bash
-claude mcp remove projectvault
+claude mcp remove loredocs
 ```
 
 **Optionally, delete your data:**
 ```bash
-rm -rf ~/.projectvault
+rm -rf ~/.loredocs
 ```
 
 ---
@@ -276,4 +276,4 @@ rm -rf ~/.projectvault
 
 ## Companion Product
 
-**[ConvoVault](https://github.com/labyrinth-analytics/convovault)** -- Cross-surface persistent memory for Claude sessions. Where ProjectVault stores *documents*, ConvoVault remembers *conversations* -- decisions made, artifacts created, questions left open. They complement each other well.
+**[LoreConvo](https://github.com/labyrinth-analytics/loreconvo)** -- Cross-surface persistent memory for Claude sessions. Where LoreDocs stores *documents*, LoreConvo remembers *conversations* -- decisions made, artifacts created, questions left open. They complement each other well.

@@ -43,8 +43,8 @@ debbie-shapiro (your personal account) owns:
 
 labyrinth-analytics (your business account) owns (all public):
  
-* convovault
-* projectvault
+* loreconvo
+* loreproject
 * claude-plugins 
 
 debbie-shapiro is a collaborator on the labyrinth-analytics repos, so you can push to all of them from one terminal session. 

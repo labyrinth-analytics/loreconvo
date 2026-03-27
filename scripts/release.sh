@@ -5,17 +5,17 @@
 # Usage:
 #   ./scripts/release.sh <product> <version>
 #
-#   <product>  : convovault | projectvault
+#   <product>  : loreconvo | loredocs
 #   <version>  : version tag, e.g. 0.3.1
 #
 # Examples:
-#   ./scripts/release.sh convovault 0.3.1
-#   ./scripts/release.sh projectvault 0.2.0
+#   ./scripts/release.sh loreconvo 0.3.1
+#   ./scripts/release.sh loredocs 0.2.0
 #
 # Prerequisites (one-time setup):
-#   1. Create public GitHub repos:
-#        github.com/labyrinth-analytics/convovault
-#        github.com/labyrinth-analytics/projectvault
+#   1. Public GitHub repos already exist:
+#        github.com/labyrinth-analytics/loreconvo
+#        github.com/labyrinth-analytics/loredocs
 #   2. Create a PyPI account at pypi.org
 #   3. Install build tools:  pip install build twine
 #   4. Configure PyPI token:  ~/.pypirc  (or use TWINE_PASSWORD env var)
@@ -38,13 +38,13 @@ MONOREPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # ---- Validate inputs ----
 if [ -z "$PRODUCT" ] || [ -z "$VERSION" ]; then
     echo "Usage: $0 <product> <version>"
-    echo "       $0 convovault 0.3.1"
-    echo "       $0 projectvault 0.2.0"
+    echo "       $0 loreconvo 0.3.1"
+    echo "       $0 loredocs 0.2.0"
     exit 1
 fi
 
-if [ "$PRODUCT" != "convovault" ] && [ "$PRODUCT" != "projectvault" ]; then
-    echo "ERROR: product must be 'convovault' or 'projectvault'"
+if [ "$PRODUCT" != "loreconvo" ] && [ "$PRODUCT" != "loredocs" ]; then
+    echo "ERROR: product must be 'loreconvo' or 'loredocs'"
     exit 1
 fi
 

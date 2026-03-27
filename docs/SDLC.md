@@ -1,6 +1,6 @@
 # Repository Strategy and Release Workflow
 
-This document describes how ConvoVault and ProjectVault are developed, released,
+This document describes how LoreConvo and LoreDocs are developed, released,
 and distributed as public Claude plugins.
 
 ---
@@ -14,15 +14,15 @@ and distributed as public Claude plugins.
   revenue projections, skills, scripts. Never made public.
 
   ron_skills/
-  |-- convovault/          Source code (Python package + CLI)
-  |-- convovault-plugin/   Distributable plugin files (plugin.json, .mcp.json, skills/)
-  |-- projectvault/        Source code (Python package)
-  |-- projectvault-plugin/ Distributable plugin files
+  |-- loreconvo/          Source code (Python package + CLI)
+  |-- loreconvo-plugin/   Distributable plugin files (plugin.json, .mcp.json, skills/)
+  |-- loredocs/        Source code (Python package)
+  |-- loredocs-plugin/ Distributable plugin files
   |-- sql_query_optimizer/ Coming soon
 
 ### Public (distribution)
-  labyrinth-analytics/convovault    (PUBLIC -- plugin + installable package)
-  labyrinth-analytics/projectvault  (PUBLIC -- plugin + installable package)
+  labyrinth-analytics/loreconvo    (PUBLIC -- plugin + installable package)
+  labyrinth-analytics/loredocs  (PUBLIC -- plugin + installable package)
   labyrinth-analytics/claude-plugins (PUBLIC -- marketplace catalog)
 
 The public repos contain only what users need to install and use the products.
@@ -39,13 +39,13 @@ Tier 1: Direct MCP (power users)
 
 Tier 2: Self-hosted marketplace (primary public launch)
   User runs: /plugin marketplace add labyrinth-analytics/claude-plugins
-  Then:      /plugin install convovault@labyrinth-analytics-claude-plugins
+  Then:      /plugin install loreconvo@labyrinth-analytics-claude-plugins
   Requires:  Claude Code or Cowork with plugin support.
   This is the target for Phase 1.
 
 Tier 3: Official Anthropic marketplace (future)
   Submit via https://clau.de/plugin-directory-submission
-  After approval, install with: /plugin install convovault@claude-plugins-official
+  After approval, install with: /plugin install loreconvo@claude-plugins-official
   This is the target for Phase 2 (post-feedback).
 
 ---
@@ -65,12 +65,12 @@ Or use your personal account (github.com/debbie-wonderkitty) -- just replace
 
 Create three new repositories (public, no auto-generated README):
 
-  github.com/labyrinth-analytics/convovault
+  github.com/labyrinth-analytics/loreconvo
     Description:  Cross-surface persistent memory for Claude sessions
     Topics:       mcp, claude, claude-plugin, memory, ai-tools, mcp-server
     Website:      https://labyrinthanalyticsconsulting.com
 
-  github.com/labyrinth-analytics/projectvault
+  github.com/labyrinth-analytics/loredocs
     Description:  Searchable knowledge base for your AI projects
     Topics:       mcp, claude, claude-plugin, knowledge-management, ai-tools
     Website:      https://labyrinthanalyticsconsulting.com
@@ -92,35 +92,35 @@ Content:
       "email": "debbie.wonderkitty@gmail.com"
     },
     "metadata": {
-      "description": "Claude plugins from Labyrinth Analytics Consulting -- ConvoVault, ProjectVault, and more."
+      "description": "Claude plugins from Labyrinth Analytics Consulting -- LoreConvo, LoreDocs, and more."
     },
     "plugins": [
       {
-        "name": "convovault",
+        "name": "loreconvo",
         "source": {
           "source": "github",
-          "repo": "labyrinth-analytics/convovault",
+          "repo": "labyrinth-analytics/loreconvo",
           "ref": "v0.3.0"
         },
         "description": "Cross-surface persistent memory for Claude sessions.",
         "version": "0.3.0",
         "author": { "name": "Labyrinth Analytics Consulting" },
-        "homepage": "https://github.com/labyrinth-analytics/convovault",
+        "homepage": "https://github.com/labyrinth-analytics/loreconvo",
         "license": "MIT",
         "category": "productivity",
         "keywords": ["memory", "sessions", "context", "recall", "cross-surface"]
       },
       {
-        "name": "projectvault",
+        "name": "loredocs",
         "source": {
           "source": "github",
-          "repo": "labyrinth-analytics/projectvault",
+          "repo": "labyrinth-analytics/loredocs",
           "ref": "v0.1.0"
         },
         "description": "Searchable knowledge base for your AI projects.",
         "version": "0.1.0",
         "author": { "name": "Labyrinth Analytics Consulting" },
-        "homepage": "https://github.com/labyrinth-analytics/projectvault",
+        "homepage": "https://github.com/labyrinth-analytics/loredocs",
         "license": "MIT",
         "category": "productivity",
         "keywords": ["knowledge-management", "documents", "search", "ai-projects"]
@@ -157,8 +157,8 @@ pip install build twine
 
 1. Do all development in the private monorepo (this repo)
 2. Run tests locally:
-     cd ron_skills/convovault && python -m pytest tests/
-     cd ron_skills/projectvault && python -m pytest tests/
+     cd ron_skills/loreconvo && python -m pytest tests/
+     cd ron_skills/loredocs && python -m pytest tests/
 3. Commit to private monorepo as usual
 4. When ready to release, run the release script (see below)
 
@@ -173,30 +173,30 @@ Step 1: Decide the version number
     Major (0.3.0 -> 1.0.0): breaking change or major milestone
 
 Step 2: Make sure all tests pass
-  cd ron_skills/convovault && python -m pytest tests/ -v
-  cd ron_skills/projectvault && python -m pytest tests/ -v
+  cd ron_skills/loreconvo && python -m pytest tests/ -v
+  cd ron_skills/loredocs && python -m pytest tests/ -v
 
 Step 3: Run the release script
   cd ~/projects/side_hustle
-  ./scripts/release.sh convovault 0.3.1
+  ./scripts/release.sh loreconvo 0.3.1
 
   The script will:
     a. Run tests
     b. Update version in plugin.json and pyproject.toml
     c. Commit the version bump to the private repo
-    d. Push the plugin files to the public GitHub repo (labyrinth-analytics/convovault)
+    d. Push the plugin files to the public GitHub repo (labyrinth-analytics/loreconvo)
     e. Create a git tag v0.3.1 in the public repo
     f. Build the Python package
     g. Upload to PyPI (you will enter your token)
 
 Step 4: Update the marketplace catalog
   Edit labyrinth-analytics/claude-plugins/.claude-plugin/marketplace.json
-  Change "ref": "v0.3.1" for the convovault entry
+  Change "ref": "v0.3.1" for the loreconvo entry
   Commit and push to the catalog repo
 
 Step 5: Test the install from scratch
-  uvx convovault@0.3.1     (tests PyPI install)
-  /plugin install convovault@labyrinth-analytics-claude-plugins  (tests marketplace)
+  uvx loreconvo@0.3.1     (tests PyPI install)
+  /plugin install loreconvo@labyrinth-analytics-claude-plugins  (tests marketplace)
 
 Step 6: Announce (when you're ready)
   -- Update labyrinthanalyticsconsulting.com
@@ -207,7 +207,7 @@ Step 6: Announce (when you're ready)
 
 ## GitHub Repo Settings (recommended)
 
-For both labyrinth-analytics/convovault and labyrinth-analytics/projectvault:
+For both labyrinth-analytics/loreconvo and labyrinth-analytics/loredocs:
 
   Settings -> General:
     - Enable Issues: YES (for user bug reports)
@@ -232,7 +232,7 @@ For both labyrinth-analytics/convovault and labyrinth-analytics/projectvault:
 
 ## What the Public Repos Contain
 
-Each public repo (convovault, projectvault) will have:
+Each public repo (loreconvo, loredocs) will have:
 
   .claude-plugin/
   |-- plugin.json          (plugin metadata -- name, version, description)
@@ -258,4 +258,4 @@ The public repos do NOT contain:
 - NEVER run the release script -- releases require Debbie's review and PyPI credentials.
 - DO update CHANGELOG.md as features are completed.
 - DO keep pyproject.toml version in sync with plugin.json version.
-- Tests live in the private monorepo (ron_skills/convovault/tests/ etc.) and stay there.
+- Tests live in the private monorepo (ron_skills/loreconvo/tests/ etc.) and stay there.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MCP tool-layer tests for ProjectVault.
+"""MCP tool-layer tests for LoreDocs.
 
 These tests call the async tool functions directly, bypassing the MCP transport
 layer, to verify that each tool correctly delegates to storage and returns the
@@ -18,8 +18,8 @@ from unittest.mock import MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from projectvault.storage import VaultStorage
-from projectvault.server import (
+from loredocs.storage import VaultStorage
+from loredocs.server import (
     # Vault management
     vault_create, VaultCreateInput,
     vault_list, VaultListInput,
@@ -89,7 +89,7 @@ def assert_ok(condition: bool, label: str, detail: str = ""):
 def test_vault_lifecycle(tmpdir: Path):
     """Test create, list, info, link_project, archive, delete."""
     print("\n[vault lifecycle]")
-    root = tmpdir / ".projectvault"
+    root = tmpdir / ".loredocs"
     storage = VaultStorage(root=root)
     ctx = make_ctx(storage)
 
@@ -154,7 +154,7 @@ def test_vault_lifecycle(tmpdir: Path):
 def test_document_management(tmpdir: Path):
     """Test add, get, update, list, tag, categorize, prioritize, remove documents."""
     print("\n[document management]")
-    root = tmpdir / ".projectvault"
+    root = tmpdir / ".loredocs"
     storage = VaultStorage(root=root)
     ctx = make_ctx(storage)
 
@@ -234,7 +234,7 @@ def test_document_management(tmpdir: Path):
 def test_search(tmpdir: Path):
     """Test full-text search and tag search."""
     print("\n[search]")
-    root = tmpdir / ".projectvault"
+    root = tmpdir / ".loredocs"
     storage = VaultStorage(root=root)
     ctx = make_ctx(storage)
 
@@ -286,7 +286,7 @@ def test_search(tmpdir: Path):
 def test_inject(tmpdir: Path):
     """Test context injection tools."""
     print("\n[inject]")
-    root = tmpdir / ".projectvault"
+    root = tmpdir / ".loredocs"
     storage = VaultStorage(root=root)
     ctx = make_ctx(storage)
 
@@ -326,7 +326,7 @@ def test_inject(tmpdir: Path):
 def test_tier_management(tmpdir: Path):
     """Test tier status and switching."""
     print("\n[tier management]")
-    root = tmpdir / ".projectvault"
+    root = tmpdir / ".loredocs"
     storage = VaultStorage(root=root)
     ctx = make_ctx(storage)
 
@@ -351,7 +351,7 @@ def test_tier_management(tmpdir: Path):
 def test_tier_limits(tmpdir: Path):
     """Test that free tier limits are enforced at the tool layer."""
     print("\n[tier limits]")
-    root = tmpdir / ".projectvault"
+    root = tmpdir / ".loredocs"
     storage = VaultStorage(root=root)
     ctx = make_ctx(storage)
 
@@ -377,7 +377,7 @@ def test_tier_limits(tmpdir: Path):
 
 def main():
     print("=" * 60)
-    print("ProjectVault MCP Tool-Layer Tests")
+    print("LoreDocs MCP Tool-Layer Tests")
     print("=" * 60)
 
     with tempfile.TemporaryDirectory() as tmpdir:

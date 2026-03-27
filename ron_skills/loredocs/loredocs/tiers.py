@@ -1,8 +1,8 @@
 """
-ProjectVault Tier System
+LoreDocs Tier System
 
 Defines Free and Pro tier limits and enforces them through TierEnforcer.
-Tier is stored in ~/.projectvault/config.json as {"tier": "free"|"pro"}.
+Tier is stored in ~/.loredocs/config.json as {"tier": "free"|"pro"}.
 
 Free tier limits (enforced):
   - Max 3 vaults

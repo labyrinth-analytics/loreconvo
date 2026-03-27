@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-ProjectVault MCP Server
+LoreDocs MCP Server
 
 Knowledge management for AI projects -- search, tag, version, and organize
 your project knowledge across Claude Code and Cowork.
 
 Usage:
-    python -m projectvault.server          # stdio transport (default)
-    projectvault                           # via installed entry point
+    python -m loredocs.server          # stdio transport (default)
+    loredocs                           # via installed entry point
 """
 
 import json
@@ -32,13 +32,13 @@ from .tiers import TierLimitError, get_tier, set_tier, TIER_LIMITS
 @asynccontextmanager
 async def app_lifespan(app):
     """Initialize the VaultStorage instance for the server lifetime."""
-    root_override = os.environ.get("PROJECTVAULT_ROOT")
+    root_override = os.environ.get("LOREDOCS_ROOT")
     root = Path(root_override) if root_override else None
     storage = VaultStorage(root=root)
     yield {"storage": storage}
 
 
-mcp = FastMCP("projectvault_mcp", lifespan=app_lifespan)
+mcp = FastMCP("loredocs_mcp", lifespan=app_lifespan)
 
 
 def _get_storage(ctx: Context) -> VaultStorage:
@@ -1326,7 +1326,7 @@ async def vault_tier_status(params: VaultTierStatusInput, ctx: Context) -> str:
 
     tier_label = "Pro (unlimited)" if status["is_pro"] else "Free"
     lines = [
-        "# ProjectVault Tier Status",
+        "# LoreDocs Tier Status",
         "",
         f"**Tier:** {tier_label}",
         "",
@@ -1388,7 +1388,7 @@ class VaultSetTierInput(BaseModel):
     annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
 )
 async def vault_set_tier(params: VaultSetTierInput, ctx: Context) -> str:
-    """Activate a tier (free or pro) for ProjectVault.
+    """Activate a tier (free or pro) for LoreDocs.
 
     Pro tier removes all vault, document, storage, and version limits.
     After purchasing a Pro license, call this tool with tier='pro' to unlock
@@ -1423,7 +1423,7 @@ async def vault_set_tier(params: VaultSetTierInput, ctx: Context) -> str:
 # ---------------------------------------------------------------------------
 
 def main():
-    """Run the ProjectVault MCP server."""
+    """Run the LoreDocs MCP server."""
     mcp.run()
 
 

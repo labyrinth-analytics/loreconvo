@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Knowledge Tools: Obsidian vs ConvoVault vs ProjectVault</title>
+<title>Knowledge Tools: Obsidian vs LoreConvo vs LoreDocs</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -98,28 +98,28 @@
     border-color: rgba(139, 92, 246, 0.9);
   }
 
-  /* ConvoVault - teal */
-  .convovault {
+  /* LoreConvo - teal */
+  .loreconvo {
     width: 320px; height: 320px;
     right: 60px; top: 20px;
     background: radial-gradient(circle at 60% 40%, rgba(45, 212, 191, 0.35), rgba(45, 212, 191, 0.12));
     border: 2px solid rgba(45, 212, 191, 0.6);
     box-shadow: 0 0 30px rgba(45, 212, 191, 0.15);
   }
-  .convovault:hover, .convovault.active {
+  .loreconvo:hover, .loreconvo.active {
     box-shadow: 0 0 50px rgba(45, 212, 191, 0.35);
     border-color: rgba(45, 212, 191, 0.9);
   }
 
-  /* ProjectVault - amber */
-  .projectvault {
+  /* LoreDocs - amber */
+  .loredocs {
     width: 320px; height: 320px;
     left: 190px; top: 180px;
     background: radial-gradient(circle at 50% 60%, rgba(251, 191, 36, 0.35), rgba(251, 191, 36, 0.12));
     border: 2px solid rgba(251, 191, 36, 0.6);
     box-shadow: 0 0 30px rgba(251, 191, 36, 0.15);
   }
-  .projectvault:hover, .projectvault.active {
+  .loredocs:hover, .loredocs.active {
     box-shadow: 0 0 50px rgba(251, 191, 36, 0.35);
     border-color: rgba(251, 191, 36, 0.9);
   }
@@ -167,8 +167,8 @@
     transition: all 0.3s ease;
   }
   .detail-panel.highlight-obsidian { border-color: rgba(139, 92, 246, 0.5); }
-  .detail-panel.highlight-convovault { border-color: rgba(45, 212, 191, 0.5); }
-  .detail-panel.highlight-projectvault { border-color: rgba(251, 191, 36, 0.5); }
+  .detail-panel.highlight-loreconvo { border-color: rgba(45, 212, 191, 0.5); }
+  .detail-panel.highlight-loredocs { border-color: rgba(251, 191, 36, 0.5); }
   .detail-panel.highlight-obs-cv { border-color: rgba(92, 152, 218, 0.5); }
   .detail-panel.highlight-obs-pv { border-color: rgba(195, 142, 141, 0.5); }
   .detail-panel.highlight-cv-pv { border-color: rgba(148, 202, 114, 0.5); }
@@ -441,11 +441,11 @@
     <div class="venn-circle obsidian" data-zone="obsidian" onclick="showZone('obsidian')">
       <div class="circle-label">Obsidian<span class="circle-sublabel">Human Knowledge Base</span></div>
     </div>
-    <div class="venn-circle convovault" data-zone="convovault" onclick="showZone('convovault')">
-      <div class="circle-label">ConvoVault<span class="circle-sublabel">AI Session Memory</span></div>
+    <div class="venn-circle loreconvo" data-zone="loreconvo" onclick="showZone('loreconvo')">
+      <div class="circle-label">LoreConvo<span class="circle-sublabel">AI Session Memory</span></div>
     </div>
-    <div class="venn-circle projectvault" data-zone="projectvault" onclick="showZone('projectvault')">
-      <div class="circle-label">ProjectVault<span class="circle-sublabel">AI Project Knowledge</span></div>
+    <div class="venn-circle loredocs" data-zone="loredocs" onclick="showZone('loredocs')">
+      <div class="circle-label">LoreDocs<span class="circle-sublabel">AI Project Knowledge</span></div>
     </div>
 
     <div class="overlap-zone overlap-obs-cv" onclick="showZone('obs-cv')"></div>
@@ -458,20 +458,20 @@
     <div class="legend-item" onclick="showZone('obsidian')">
       <div class="legend-dot" style="background: #8b5cf6;"></div> Obsidian Only
     </div>
-    <div class="legend-item" onclick="showZone('convovault')">
-      <div class="legend-dot" style="background: #2dd4bf;"></div> ConvoVault Only
+    <div class="legend-item" onclick="showZone('loreconvo')">
+      <div class="legend-dot" style="background: #2dd4bf;"></div> LoreConvo Only
     </div>
-    <div class="legend-item" onclick="showZone('projectvault')">
-      <div class="legend-dot" style="background: #fbbf24;"></div> ProjectVault Only
+    <div class="legend-item" onclick="showZone('loredocs')">
+      <div class="legend-dot" style="background: #fbbf24;"></div> LoreDocs Only
     </div>
     <div class="legend-item" onclick="showZone('obs-cv')">
-      <div class="legend-dot" style="background: linear-gradient(135deg, #8b5cf6, #2dd4bf);"></div> Obsidian + ConvoVault
+      <div class="legend-dot" style="background: linear-gradient(135deg, #8b5cf6, #2dd4bf);"></div> Obsidian + LoreConvo
     </div>
     <div class="legend-item" onclick="showZone('obs-pv')">
-      <div class="legend-dot" style="background: linear-gradient(135deg, #8b5cf6, #fbbf24);"></div> Obsidian + ProjectVault
+      <div class="legend-dot" style="background: linear-gradient(135deg, #8b5cf6, #fbbf24);"></div> Obsidian + LoreDocs
     </div>
     <div class="legend-item" onclick="showZone('cv-pv')">
-      <div class="legend-dot" style="background: linear-gradient(135deg, #2dd4bf, #fbbf24);"></div> ConvoVault + ProjectVault
+      <div class="legend-dot" style="background: linear-gradient(135deg, #2dd4bf, #fbbf24);"></div> LoreConvo + LoreDocs
     </div>
     <div class="legend-item" onclick="showZone('all')">
       <div class="legend-dot" style="background: linear-gradient(135deg, #8b5cf6, #2dd4bf, #fbbf24);"></div> All Three
@@ -492,11 +492,11 @@
   </div>
 
   <div class="insight-box">
-    <strong>The short version:</strong> Obsidian is where <em>you</em> think and write. ConvoVault remembers what <em>Claude</em> did across sessions. ProjectVault organizes what Claude <em>knows</em> about your projects. They complement each other -- Obsidian for your brain, the Vaults for your AI agents' brains. A future integration could let Ron read your Obsidian notes for richer context, or write session summaries back as Obsidian pages you can browse.
+    <strong>The short version:</strong> Obsidian is where <em>you</em> think and write. LoreConvo remembers what <em>Claude</em> did across sessions. LoreDocs organizes what Claude <em>knows</em> about your projects. They complement each other -- Obsidian for your brain, the Vaults for your AI agents' brains. A future integration could let Ron read your Obsidian notes for richer context, or write session summaries back as Obsidian pages you can browse.
   </div>
 
   <div class="token-section">
-    <h2 class="token-title">How ConvoVault + ProjectVault Save Tokens</h2>
+    <h2 class="token-title">How LoreConvo + LoreDocs Save Tokens</h2>
     <p class="token-subtitle">Every Claude session starts from zero. Without persistent memory, you (or your agent) burn tokens re-explaining context. Here is how the Vaults fix that.</p>
 
     <div class="token-grid">
@@ -517,11 +517,11 @@
       <div class="token-card">
         <div class="token-card-header">
           <div class="token-icon good">+</div>
-          <span>With ConvoVault + ProjectVault</span>
+          <span>With LoreConvo + LoreDocs</span>
         </div>
         <div class="token-card-body">
-          <div class="token-row"><span class="token-label">Session start</span><span class="token-val good-text">ConvoVault auto-loads top-scored recent sessions (~800 tokens, pre-filtered)</span></div>
-          <div class="token-row"><span class="token-label">Project context</span><span class="token-val good-text">ProjectVault injects a compact summary of project knowledge (~500 tokens)</span></div>
+          <div class="token-row"><span class="token-label">Session start</span><span class="token-val good-text">LoreConvo auto-loads top-scored recent sessions (~800 tokens, pre-filtered)</span></div>
+          <div class="token-row"><span class="token-label">Project context</span><span class="token-val good-text">LoreDocs injects a compact summary of project knowledge (~500 tokens)</span></div>
           <div class="token-row"><span class="token-label">No repetition</span><span class="token-val good-text">Prior decisions, open questions, artifacts already in context -- zero re-asking</span></div>
           <div class="token-row"><span class="token-label">Context window</span><span class="token-val good-text">Lean context leaves room for longer, more productive work sessions</span></div>
           <div class="token-row highlight-row good-row"><span class="token-label">Estimated savings</span><span class="token-val good-text">~2,000-6,000 tokens/session, compounding across daily use</span></div>
@@ -559,19 +559,19 @@
       <div class="scenario-grid">
         <div class="scenario">
           <div class="scenario-name">Ron's daily session</div>
-          <div class="scenario-desc">Without ConvoVault, Ron would need the full CLAUDE.md re-read + a manual summary of yesterday's work pasted in. With it, auto_load.py scores and injects the most relevant sessions, filtered to ~4,000 chars, in zero human effort.</div>
+          <div class="scenario-desc">Without LoreConvo, Ron would need the full CLAUDE.md re-read + a manual summary of yesterday's work pasted in. With it, auto_load.py scores and injects the most relevant sessions, filtered to ~4,000 chars, in zero human effort.</div>
         </div>
         <div class="scenario">
           <div class="scenario-name">LiteLLM audit today</div>
-          <div class="scenario-desc">Three separate sessions across two projects needed to know the audit result. ConvoVault lets each session find "litellm audit clean" via search instead of you re-explaining the outcome in each one.</div>
+          <div class="scenario-desc">Three separate sessions across two projects needed to know the audit result. LoreConvo lets each session find "litellm audit clean" via search instead of you re-explaining the outcome in each one.</div>
         </div>
         <div class="scenario">
           <div class="scenario-name">Tax pipeline context</div>
-          <div class="scenario-desc">ProjectVault stores SAM's architecture docs, pipeline state, and form mappings. Instead of Claude re-discovering which nodes exist every session, vault_inject_summary provides the full map in ~500 tokens.</div>
+          <div class="scenario-desc">LoreDocs stores SAM's architecture docs, pipeline state, and form mappings. Instead of Claude re-discovering which nodes exist every session, vault_inject_summary provides the full map in ~500 tokens.</div>
         </div>
         <div class="scenario">
           <div class="scenario-name">Multi-surface continuity</div>
-          <div class="scenario-desc">Start work in Claude Code on your Mac, continue in Cowork on a different machine. ConvoVault persists across all three surfaces (Code, Cowork, Chat) so nothing gets lost in the transition.</div>
+          <div class="scenario-desc">Start work in Claude Code on your Mac, continue in Cowork on a different machine. LoreConvo persists across all three surfaces (Code, Cowork, Chat) so nothing gets lost in the transition.</div>
         </div>
       </div>
     </div>
@@ -596,12 +596,12 @@ const zones = {
       'Publish to web (Obsidian Publish)',
       'Sync across devices (Obsidian Sync or iCloud)',
     ],
-    note: 'Obsidian excels as a thinking tool for humans. It is designed around how people naturally connect ideas, with a GUI and plugin ecosystem built for human interaction. None of this is relevant to AI agents, which is why ConvoVault and ProjectVault exist.'
+    note: 'Obsidian excels as a thinking tool for humans. It is designed around how people naturally connect ideas, with a GUI and plugin ecosystem built for human interaction. None of this is relevant to AI agents, which is why LoreConvo and LoreDocs exist.'
   },
-  convovault: {
-    title: 'ConvoVault Only',
+  loreconvo: {
+    title: 'LoreConvo Only',
     color: '#2dd4bf',
-    highlight: 'highlight-convovault',
+    highlight: 'highlight-loreconvo',
     items: [
       'Auto-saves sessions via Claude Code hooks',
       'Auto-loads relevant context on session start',
@@ -614,12 +614,12 @@ const zones = {
       'Built for ephemeral conversation memory',
       'Free/Pro tier gating for monetization',
     ],
-    note: 'ConvoVault is purpose-built for the problem Obsidian cannot solve: giving AI agents memory across sessions. When Ron starts a new Cowork session, ConvoVault auto-loads the most relevant recent context so he picks up where he left off. No human has to curate or organize anything.'
+    note: 'LoreConvo is purpose-built for the problem Obsidian cannot solve: giving AI agents memory across sessions. When Ron starts a new Cowork session, LoreConvo auto-loads the most relevant recent context so he picks up where he left off. No human has to curate or organize anything.'
   },
-  projectvault: {
-    title: 'ProjectVault Only',
+  loredocs: {
+    title: 'LoreDocs Only',
     color: '#fbbf24',
-    highlight: 'highlight-projectvault',
+    highlight: 'highlight-loredocs',
     items: [
       'Multi-vault architecture (one vault per project)',
       'Document versioning with history tracking',
@@ -632,10 +632,10 @@ const zones = {
       'Designed for long-lived project knowledge (not sessions)',
       'MCP-native: 34 tools, all callable by AI agents',
     ],
-    note: 'ProjectVault is the "institutional memory" for AI projects. While ConvoVault remembers conversations, ProjectVault stores the durable knowledge: architecture decisions, API contracts, domain rules, style guides. It is the AI equivalent of a team wiki.'
+    note: 'LoreDocs is the "institutional memory" for AI projects. While LoreConvo remembers conversations, LoreDocs stores the durable knowledge: architecture decisions, API contracts, domain rules, style guides. It is the AI equivalent of a team wiki.'
   },
   'obs-cv': {
-    title: 'Obsidian + ConvoVault',
+    title: 'Obsidian + LoreConvo',
     color: 'linear-gradient(135deg, #8b5cf6, #2dd4bf)',
     highlight: 'highlight-obs-cv',
     items: [
@@ -646,10 +646,10 @@ const zones = {
       'Full-text search across all content',
       'Both serve as "what happened" journals',
     ],
-    note: 'The overlap here is the "daily log" use case. Obsidian daily notes and ConvoVault session records both capture "what happened today." The difference is audience: Obsidian for you to read, ConvoVault for Claude to read. A bridge could auto-create Obsidian notes from ConvoVault sessions.'
+    note: 'The overlap here is the "daily log" use case. Obsidian daily notes and LoreConvo session records both capture "what happened today." The difference is audience: Obsidian for you to read, LoreConvo for Claude to read. A bridge could auto-create Obsidian notes from LoreConvo sessions.'
   },
   'obs-pv': {
-    title: 'Obsidian + ProjectVault',
+    title: 'Obsidian + LoreDocs',
     color: 'linear-gradient(135deg, #8b5cf6, #fbbf24)',
     highlight: 'highlight-obs-pv',
     items: [
@@ -660,10 +660,10 @@ const zones = {
       'Both can store architecture docs and design decisions',
       'Both support hierarchical organization',
     ],
-    note: 'This is the biggest overlap zone. Both are "project wikis" at heart. Obsidian organizes knowledge for humans to browse, ProjectVault organizes knowledge for AI to query. An MCP server that reads your Obsidian vault would let Claude tap into all your existing notes.'
+    note: 'This is the biggest overlap zone. Both are "project wikis" at heart. Obsidian organizes knowledge for humans to browse, LoreDocs organizes knowledge for AI to query. An MCP server that reads your Obsidian vault would let Claude tap into all your existing notes.'
   },
   'cv-pv': {
-    title: 'ConvoVault + ProjectVault',
+    title: 'LoreConvo + LoreDocs',
     color: 'linear-gradient(135deg, #2dd4bf, #fbbf24)',
     highlight: 'highlight-cv-pv',
     items: [
@@ -674,7 +674,7 @@ const zones = {
       'Both run as stdio MCP servers (Code + Cowork)',
       'Both use the same local-first, no-cloud architecture',
     ],
-    note: 'These two were designed as companions. ConvoVault handles the "what did we discuss" (session memory), while ProjectVault handles "what do we know" (project knowledge). Together, they give an AI agent both working memory and long-term reference -- the two things Obsidian gives a human.'
+    note: 'These two were designed as companions. LoreConvo handles the "what did we discuss" (session memory), while LoreDocs handles "what do we know" (project knowledge). Together, they give an AI agent both working memory and long-term reference -- the two things Obsidian gives a human.'
   },
   all: {
     title: 'All Three Share',
@@ -721,12 +721,12 @@ function showZone(zone) {
 
   const related = {
     'obsidian': ['obsidian'],
-    'convovault': ['convovault'],
-    'projectvault': ['projectvault'],
-    'obs-cv': ['obsidian', 'convovault'],
-    'obs-pv': ['obsidian', 'projectvault'],
-    'cv-pv': ['convovault', 'projectvault'],
-    'all': ['obsidian', 'convovault', 'projectvault'],
+    'loreconvo': ['loreconvo'],
+    'loredocs': ['loredocs'],
+    'obs-cv': ['obsidian', 'loreconvo'],
+    'obs-pv': ['obsidian', 'loredocs'],
+    'cv-pv': ['loreconvo', 'loredocs'],
+    'all': ['obsidian', 'loreconvo', 'loredocs'],
   };
 
   const activeCircles = related[zone] || [];

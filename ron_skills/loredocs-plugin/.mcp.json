@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "projectvault": {
+    "loredocs": {
       "command": "uvx",
-      "args": ["projectvault"],
+      "args": ["loredocs"],
       "env": {}
     }
   }

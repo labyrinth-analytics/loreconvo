@@ -1,10 +1,10 @@
-# ProjectVault Plugin Publishing Guide
+# LoreDocs Plugin Publishing Guide
 
-How to publish ProjectVault to the Claude plugin marketplace.
+How to publish LoreDocs to the Claude plugin marketplace.
 
 ## Current Status
 
-Plugin packaging is done (ron_skills/projectvault-plugin/ and projectvault-v0.1.0.plugin).
+Plugin packaging is done (ron_skills/loredocs-plugin/ and loredocs-v0.1.0.plugin).
 This document covers what is needed to go from "packaged" to "publicly installable."
 
 ---
@@ -17,7 +17,7 @@ be used as a marketplace name. Reserved names include:
   anthropic-marketplace, anthropic-plugins, agent-skills, knowledge-work-plugins,
   life-sciences
 
-This means ProjectVault cannot be submitted *to* `knowledge-work-plugins` -- it is
+This means LoreDocs cannot be submitted *to* `knowledge-work-plugins` -- it is
 Anthropic-internal. The options are:
 
   Option A: Submit to the official Anthropic marketplace (claude-plugins-official)
@@ -29,12 +29,12 @@ See "Submission Options" below.
 
 ## MCP Server Path Assessment
 
-ProjectVault's current projectvault-plugin/.mcp.json:
+LoreDocs's current loredocs-plugin/.mcp.json:
 
   "command": "python3",
-  "args": ["-m", "projectvault.server"]
+  "args": ["-m", "loredocs.server"]
 
-This is better than ConvoVault's hardcoded path, but still requires the `projectvault`
+This is better than LoreConvo's hardcoded path, but still requires the `loredocs`
 Python package to be installed in the user's system Python. A fresh plugin install will
 NOT auto-install the package.
 
@@ -48,7 +48,7 @@ This is a distribution blocker. See "Pre-Submission Work Required" below.
 
 Highest-visibility path. Plugins appear in the built-in Discover tab.
 Install command after approval:
-  /plugin install projectvault@claude-plugins-official
+  /plugin install loredocs@claude-plugins-official
 
 Submission forms:
   - Claude.ai:  https://claude.ai/settings/plugins/submit
@@ -62,33 +62,33 @@ Review process:
 
 ### Option B: Self-Hosted GitHub Marketplace (recommended first step)
 
-Create a shared Labyrinth Analytics marketplace repo on GitHub. ConvoVault and
-ProjectVault can share the same marketplace file.
+Create a shared Labyrinth Analytics marketplace repo on GitHub. LoreConvo and
+LoreDocs can share the same marketplace file.
 
 Users add it once:
   /plugin marketplace add labyrinth-analytics/claude-plugins
 
 Then install:
-  /plugin install projectvault@labyrinth-analytics-claude-plugins
+  /plugin install loredocs@labyrinth-analytics-claude-plugins
 
 This path is self-controlled with no Anthropic review required. Ideal for
 early-access users and validating the product before official submission.
 
-See the shared marketplace file format in ConvoVault's docs/PUBLISHING.md --
+See the shared marketplace file format in LoreConvo's docs/PUBLISHING.md --
 both plugins should be listed in the same marketplace.json.
 
-ProjectVault entry for marketplace.json:
+LoreDocs entry for marketplace.json:
   {
-    "name": "projectvault",
+    "name": "loredocs",
     "source": {
       "source": "github",
-      "repo": "labyrinth-analytics/projectvault",
+      "repo": "labyrinth-analytics/loredocs",
       "ref": "v0.1.0"
     },
     "description": "Searchable knowledge base for your AI projects. Store, tag, search, and inject documents into any Claude conversation.",
     "version": "0.1.0",
     "author": { "name": "Labyrinth Analytics Consulting" },
-    "homepage": "https://github.com/labyrinth-analytics/projectvault",
+    "homepage": "https://github.com/labyrinth-analytics/loredocs",
     "license": "MIT",
     "keywords": ["knowledge-management", "documents", "search", "ai-projects"]
   }
@@ -99,33 +99,33 @@ ProjectVault entry for marketplace.json:
 
 ### 1. Fix MCP Server Installation (BLOCKER)
 
-Current state: .mcp.json runs `python3 -m projectvault.server`, which requires
-the projectvault package to be pip-installed in the user's Python environment.
+Current state: .mcp.json runs `python3 -m loredocs.server`, which requires
+the loredocs package to be pip-installed in the user's Python environment.
 Plugin installation does NOT run pip install automatically.
 
 Option 1 -- npm wrapper with Python bundling (recommended):
-  - Create package.json in projectvault-plugin/
-  - Add postinstall script that runs: pip install projectvault
+  - Create package.json in loredocs-plugin/
+  - Add postinstall script that runs: pip install loredocs
   - This is the most common pattern for Python-backed MCP plugins
 
 Option 2 -- setup hook:
   - Add a .claude-plugin/hooks.json with a PostInstall hook
-  - Hook runs: pip install --user projectvault (or installs from bundled wheel)
+  - Hook runs: pip install --user loredocs (or installs from bundled wheel)
   - More native to the plugin system
 
 Option 3 -- standalone binary:
   - Use PyInstaller to build a single-file executable
-  - Bundle inside the plugin: ${CLAUDE_PLUGIN_ROOT}/bin/projectvault-server
+  - Bundle inside the plugin: ${CLAUDE_PLUGIN_ROOT}/bin/loredocs-server
   - Most portable, highest build complexity
 
 Correct .mcp.json after fix (Option 3 example):
   {
     "mcpServers": {
-      "projectvault": {
-        "command": "${CLAUDE_PLUGIN_ROOT}/bin/projectvault-server",
+      "loredocs": {
+        "command": "${CLAUDE_PLUGIN_ROOT}/bin/loredocs-server",
         "args": [],
         "env": {
-          "PROJECTVAULT_DATA": "${HOME}/.projectvault"
+          "LOREDOCS_DATA": "${HOME}/.loredocs"
         }
       }
     }
@@ -134,11 +134,11 @@ Correct .mcp.json after fix (Option 3 example):
 ### 2. Publish to PyPI (required for Option 1/2 above)
 
 If using pip install:
-  - Create pyproject.toml (or setup.py) for projectvault package
+  - Create pyproject.toml (or setup.py) for loredocs package
   - Register on PyPI: https://pypi.org/account/register/
   - Build: python -m build
   - Upload: python -m twine upload dist/*
-  - Package name: projectvault (or labyrinth-projectvault to avoid conflicts)
+  - Package name: loredocs (or labyrinth-loredocs to avoid conflicts)
 
 ### 3. Create a Public GitHub Repo for the Plugin
 
@@ -146,8 +146,8 @@ Current state: plugin lives inside the side_hustle monorepo.
 For marketplace distribution:
 
 Option A (standalone repo -- recommended):
-  - Create github.com/labyrinth-analytics/projectvault (public)
-  - Move projectvault-plugin/ contents there
+  - Create github.com/labyrinth-analytics/loredocs (public)
+  - Move loredocs-plugin/ contents there
   - Tag releases: git tag v0.1.0 && git push --tags
 
 Option B (monorepo git-subdir source):
@@ -157,15 +157,15 @@ Option B (monorepo git-subdir source):
 ### 4. Add homepage and repository Fields to plugin.json
 
 Current plugin.json is missing:
-  "homepage": "https://github.com/labyrinth-analytics/projectvault",
-  "repository": "https://github.com/labyrinth-analytics/projectvault"
+  "homepage": "https://github.com/labyrinth-analytics/loredocs",
+  "repository": "https://github.com/labyrinth-analytics/loredocs"
 
 Add these before submission.
 
 ### 5. Validate the Plugin
 
 Before submission, run:
-  cd ron_skills/projectvault-plugin
+  cd ron_skills/loredocs-plugin
   claude plugin validate .
 
 Or from within Claude Code:
@@ -176,7 +176,7 @@ Or from within Claude Code:
 ## Plugin Structure Checklist
 
   [OK] .claude-plugin/plugin.json
-        - name: "projectvault" (kebab-case)
+        - name: "loredocs" (kebab-case)
         - version: "0.1.0"
         - description: present
         - author.name: present
@@ -196,7 +196,7 @@ Or from within Claude Code:
 
 ## Tier/Billing Integration Notes
 
-ProjectVault has Free/Pro/Team tier gating in tiers.py, but the billing integration
+LoreDocs has Free/Pro/Team tier gating in tiers.py, but the billing integration
 (Stripe webhooks -> vault_set_tier) is not wired up yet. Before official marketplace
 submission:
 
@@ -217,10 +217,10 @@ Key unknown (still open from CLAUDE.md):
 
 Phase 1 (self-hosted, no Anthropic review):
   1. Fix MCP server auto-install (pip install or binary)
-  2. Create public GitHub repo: labyrinth-analytics/projectvault
+  2. Create public GitHub repo: labyrinth-analytics/loredocs
   3. Create/update shared marketplace repo: labyrinth-analytics/claude-plugins
-  4. Add ProjectVault to marketplace.json (alongside ConvoVault)
-  5. Test: /plugin install projectvault@labyrinth-analytics-claude-plugins
+  4. Add LoreDocs to marketplace.json (alongside LoreConvo)
+  5. Test: /plugin install loredocs@labyrinth-analytics-claude-plugins
   6. Share with early adopters
   7. Update marketplace_listing.md with install command
 

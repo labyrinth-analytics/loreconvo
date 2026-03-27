@@ -10,9 +10,9 @@ metadata:
   author: "Labyrinth Analytics Consulting"
 ---
 
-# ConvoVault -- Recall Context
+# LoreConvo -- Recall Context
 
-Search and retrieve context from past Claude sessions stored in ConvoVault.
+Search and retrieve context from past Claude sessions stored in LoreConvo.
 
 ## When to Use
 

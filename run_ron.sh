@@ -10,8 +10,8 @@ TASK=${2:-"Work on your highest priority TODO from CLAUDE.md. Commit when done."
 
 cd ~/projects/side_hustle || exit 1
 
-echo "[$(date)] Ron session starting: max_turns=$MAX_TURNS task='$TASK'" >> ~/.convovault/ron.log
+echo "[$(date)] Ron session starting: max_turns=$MAX_TURNS task='$TASK'" >> ~/.loreconvo/ron.log
 
 claude -p "$TASK" --max-turns "$MAX_TURNS"
 
-echo "[$(date)] Ron session finished" >> ~/.convovault/ron.log
+echo "[$(date)] Ron session finished" >> ~/.loreconvo/ron.log

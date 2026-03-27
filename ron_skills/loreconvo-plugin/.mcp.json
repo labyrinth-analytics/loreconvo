@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "convovault": {
+    "loreconvo": {
       "command": "uvx",
-      "args": ["convovault"],
+      "args": ["loreconvo"],
       "env": {}
     }
   }

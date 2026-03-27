@@ -1,4 +1,4 @@
-# ConvoVault
+# LoreConvo
 
 > Cross-surface persistent memory for Claude sessions. Vault your conversations from Code, Cowork, and Chat -- recall decisions, artifacts, and context in any future session. Never re-explain yourself again.
 
@@ -15,7 +15,7 @@
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install via the Labyrinth Analytics marketplace
-/plugin install convovault@labyrinth-analytics-claude-plugins
+/plugin install loreconvo@labyrinth-analytics-claude-plugins
 ```
 
 Or add directly as an MCP server in Claude Code's `.claude/settings.json`:
@@ -23,9 +23,9 @@ Or add directly as an MCP server in Claude Code's `.claude/settings.json`:
 ```json
 {
   "mcpServers": {
-    "convovault": {
+    "loreconvo": {
       "command": "uvx",
-      "args": ["convovault"]
+      "args": ["loreconvo"]
     }
   }
 }
@@ -37,7 +37,7 @@ Or add directly as an MCP server in Claude Code's `.claude/settings.json`:
 
 Claude users who work across Code, Cowork, and Chat lose all context every time they switch tools or start a new session. You end up re-explaining your project architecture, re-describing your tech stack, re-litigating decisions you made two weeks ago.
 
-ConvoVault fixes this.
+LoreConvo fixes this.
 
 ---
 
@@ -45,7 +45,7 @@ ConvoVault fixes this.
 
 ```mermaid
 graph LR
-    A[Claude Code\nSession Ends] -->|SessionEnd hook\nauto-saves| B[(ConvoVault DB\n~/.convovault/\nsessions.db)]
+    A[Claude Code\nSession Ends] -->|SessionEnd hook\nauto-saves| B[(LoreConvo DB\n~/.loreconvo/\nsessions.db)]
     B -->|SessionStart hook\nauto-loads context| C[Claude Code\nNext Session]
 
     D[Cowork Session] -->|vault_save\nvault_recall| B
@@ -120,16 +120,16 @@ Pro upgrade: [labyrinthanalyticsconsulting.com](https://labyrinthanalyticsconsul
 
 ## Companion Product
 
-**[ProjectVault](https://github.com/labyrinth-analytics/projectvault)** -- Searchable, structured knowledge base for your AI projects. Where ConvoVault remembers *conversations*, ProjectVault stores *documents* -- specs, configs, guides, and reference material. They work well together.
+**[LoreDocs](https://github.com/labyrinth-analytics/loredocs)** -- Searchable, structured knowledge base for your AI projects. Where LoreConvo remembers *conversations*, LoreDocs stores *documents* -- specs, configs, guides, and reference material. They work well together.
 
 ---
 
 ## Data and Privacy
 
-ConvoVault is **local-first**. All data lives in `~/.convovault/sessions.db` on your machine. Nothing is sent to any external server. You own your data.
+LoreConvo is **local-first**. All data lives in `~/.loreconvo/sessions.db` on your machine. Nothing is sent to any external server. You own your data.
 
 ---
 
 ## Issues and Feedback
 
-[github.com/labyrinth-analytics/convovault/issues](https://github.com/labyrinth-analytics/convovault/issues)
+[github.com/labyrinth-analytics/loreconvo/issues](https://github.com/labyrinth-analytics/loreconvo/issues)
