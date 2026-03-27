@@ -1,5 +1,5 @@
 #!/bin/bash
-# LoreConvo SessionEnd hook - auto-saves session transcript to vault
+# ConvoVault SessionEnd hook - auto-saves session transcript to vault
 # Receives JSON via stdin with session_id and transcript_path
 #
 # Production version: slim logging, errors visible in hook.log
@@ -15,8 +15,8 @@ fi
 
 # Read stdin, log session ID, pipe to Python parser
 INPUT=$(cat)
-echo "[$(date)] Session save: $(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('session_id','?'))" 2>/dev/null)" >> ~/.loreconvo/hook.log 2>/dev/null
+echo "[$(date)] Session save: $(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('session_id','?'))" 2>/dev/null)" >> ~/.convovault/hook.log 2>/dev/null
 
-echo "$INPUT" | PYTHONPATH="$PLUGIN_ROOT/src" "$PYTHON" "$PLUGIN_ROOT/hooks/scripts/auto_save.py" >> ~/.loreconvo/hook.log 2>&1
+echo "$INPUT" | PYTHONPATH="$PLUGIN_ROOT/src" "$PYTHON" "$PLUGIN_ROOT/hooks/scripts/auto_save.py" >> ~/.convovault/hook.log 2>&1
 
 exit 0

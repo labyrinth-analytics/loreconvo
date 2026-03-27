@@ -1,7 +1,7 @@
-"""LoreConvo SessionStart auto-load hook.
+"""ConvoVault SessionStart auto-load hook.
 
 Receives session metadata via stdin JSON from Claude Code's SessionStart hook.
-Queries the LoreConvo SQLite database for recent sessions matching the current
+Queries the ConvoVault SQLite database for recent sessions matching the current
 working directory (project), then outputs a context summary to stdout.
 
 Claude Code injects stdout content into the session as system context.
@@ -32,7 +32,7 @@ MAX_CONTEXT_CHARS = 4000  # Soft cap on total output length
 
 def get_db_path():
     """Get database path, matching core/config.py logic."""
-    return os.environ.get("LORECONVO_DB", os.path.expanduser("~/.loreconvo/sessions.db"))
+    return os.environ.get("CONVOVAULT_DB", os.path.expanduser("~/.convovault/sessions.db"))
 
 
 def score_session(session, now):
@@ -93,7 +93,7 @@ def score_session(session, now):
 
 
 def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
-    """Query LoreConvo for recent sessions, optionally filtered by project/cwd.
+    """Query ConvoVault for recent sessions, optionally filtered by project/cwd.
 
     Fetches a wider window than the old hook (days_back=14, limit=10) so the
     scoring pass has enough candidates to work with.  The caller then scores,
@@ -139,7 +139,7 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
         return sessions
 
     except Exception as e:
-        sys.stderr.write(f"LoreConvo auto-load query error: {e}\n")
+        sys.stderr.write(f"ConvoVault auto-load query error: {e}\n")
         return []
     finally:
         conn.close()
@@ -176,7 +176,7 @@ def format_context(sessions, cwd):
         return ""
 
     lines = []
-    lines.append("# LoreConvo: Recent Session Context")
+    lines.append("# ConvoVault: Recent Session Context")
     lines.append("")
 
     if cwd:
@@ -256,7 +256,7 @@ def format_context(sessions, cwd):
 
     lines.append("---")
     lines.append("Use this context to avoid re-asking questions or repeating work from prior sessions.")
-    lines.append("If a prior session is directly relevant, query LoreConvo MCP tools for full details.")
+    lines.append("If a prior session is directly relevant, query ConvoVault MCP tools for full details.")
 
     return "\n".join(lines)
 
@@ -274,15 +274,15 @@ def main():
 
         db_path = get_db_path()
 
-        days_back = int(os.environ.get("LORECONVO_DAYS_BACK", "14"))
-        limit = int(os.environ.get("LORECONVO_LIMIT", "10"))
-        max_count = int(os.environ.get("LORECONVO_MAX_SESSIONS", "5"))
+        days_back = int(os.environ.get("CONVOVAULT_DAYS_BACK", "14"))
+        limit = int(os.environ.get("CONVOVAULT_LIMIT", "10"))
+        max_count = int(os.environ.get("CONVOVAULT_MAX_SESSIONS", "5"))
 
         raw_sessions = query_recent_sessions(db_path, cwd, days_back=days_back, limit=limit)
 
         if not raw_sessions:
             sys.stderr.write(
-                f"LoreConvo auto-load: No recent sessions found for {cwd or 'any project'}\n"
+                f"ConvoVault auto-load: No recent sessions found for {cwd or 'any project'}\n"
             )
             sys.exit(0)
 
@@ -292,14 +292,14 @@ def main():
         if context:
             print(context)
             sys.stderr.write(
-                f"LoreConvo auto-load: Injected context from {len(sessions)} session(s) "
+                f"ConvoVault auto-load: Injected context from {len(sessions)} session(s) "
                 f"(scored from {len(raw_sessions)} candidates) for session {session_id}\n"
             )
 
     except json.JSONDecodeError:
         sys.exit(0)
     except Exception as e:
-        sys.stderr.write(f"LoreConvo auto-load error: {e}\n")
+        sys.stderr.write(f"ConvoVault auto-load error: {e}\n")
         sys.exit(0)
 
 

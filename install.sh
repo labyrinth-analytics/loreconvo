@@ -1,5 +1,5 @@
 #!/bin/bash
-# LoreConvo - One-command installation
+# ConvoVault - One-command installation
 # Usage: bash install.sh
 
 set -e
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/.venv"
 
 echo "============================================"
-echo "  LoreConvo Installer"
+echo "  ConvoVault Installer"
 echo "  Vault your Claude conversations."
 echo "============================================"
 echo ""
@@ -38,8 +38,8 @@ echo "[..] Installing dependencies..."
 echo "[OK] Dependencies installed (mcp, click)"
 
 # Create database directory
-mkdir -p "$HOME/.loreconvo"
-echo "[OK] Database directory ready at ~/.loreconvo/"
+mkdir -p "$HOME/.convovault"
+echo "[OK] Database directory ready at ~/.convovault/"
 
 # Verify server starts
 echo "[..] Testing MCP server..."
