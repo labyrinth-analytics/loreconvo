@@ -1,10 +1,10 @@
-# ConvoVault Plugin Publishing Guide
+# LoreConvo Plugin Publishing Guide
 
-How to publish ConvoVault to the Claude plugin marketplace.
+How to publish LoreConvo to the Claude plugin marketplace.
 
 ## Current Status
 
-Plugin packaging is done (ron_skills/convovault-plugin/ and convovault-v0.3.0.plugin).
+Plugin packaging is done (ron_skills/loreconvo-plugin/ and loreconvo-v0.3.0.plugin).
 This document covers what is needed to go from "packaged" to "publicly installable."
 
 ---
@@ -17,7 +17,7 @@ be used as a marketplace name. Reserved names include:
   anthropic-marketplace, anthropic-plugins, agent-skills, knowledge-work-plugins,
   life-sciences
 
-This means ConvoVault cannot be submitted *to* `knowledge-work-plugins` -- it is an
+This means LoreConvo cannot be submitted *to* `knowledge-work-plugins` -- it is an
 Anthropic-internal marketplace, not a third-party one. The options are:
 
   Option A: Submit to the official Anthropic marketplace (claude-plugins-official)
@@ -29,10 +29,10 @@ See "Submission Options" below.
 
 ## CRITICAL BUG: MCP Server Paths Are Hardcoded
 
-The current convovault-plugin/.mcp.json contains:
+The current loreconvo-plugin/.mcp.json contains:
 
-  "command": "${HOME}/projects/side_hustle/ron_skills/convovault/.venv/bin/python3"
-  "args":    ["${HOME}/projects/side_hustle/ron_skills/convovault/src/server.py"]
+  "command": "${HOME}/projects/side_hustle/ron_skills/loreconvo/.venv/bin/python3"
+  "args":    ["${HOME}/projects/side_hustle/ron_skills/loreconvo/src/server.py"]
 
 These paths only work on Debbie's Mac. No other user can install this plugin
 without manually editing paths.
@@ -47,7 +47,7 @@ to reference files. See "Pre-Submission Work Required" below.
 ### Option A: Official Anthropic Marketplace (claude-plugins-official)
 
 This is the highest-visibility path. Plugins appear in the built-in Discover tab and
-can be installed with `/plugin install convovault@claude-plugins-official`.
+can be installed with `/plugin install loreconvo@claude-plugins-official`.
 
 Submission forms:
   - Claude.ai:  https://claude.ai/settings/plugins/submit
@@ -62,19 +62,19 @@ Review process:
 Requirements (inferred from docs and structure):
   - .claude-plugin/plugin.json with name, version, description, author
   - README.md with clear documentation
-  - plugin name must be kebab-case (convovault = [OK])
+  - plugin name must be kebab-case (loreconvo = [OK])
   - No hardcoded paths; MCP server must be self-contained
 
 ### Option B: Self-Hosted GitHub Marketplace
 
 Create a GitHub repo (e.g., labyrinth-analytics/claude-plugins) with a
-.claude-plugin/marketplace.json listing ConvoVault and ProjectVault.
+.claude-plugin/marketplace.json listing LoreConvo and LoreDocs.
 
 Users add it once:
   /plugin marketplace add labyrinth-analytics/claude-plugins
 
 Then install:
-  /plugin install convovault@labyrinth-analytics-claude-plugins
+  /plugin install loreconvo@labyrinth-analytics-claude-plugins
 
 This path is:
   - Self-controlled (publish on your own timeline)
@@ -95,16 +95,16 @@ Marketplace file format (.claude-plugin/marketplace.json):
     },
     "plugins": [
       {
-        "name": "convovault",
+        "name": "loreconvo",
         "source": {
           "source": "github",
-          "repo": "labyrinth-analytics/convovault",
+          "repo": "labyrinth-analytics/loreconvo",
           "ref": "v0.3.0"
         },
         "description": "Cross-surface persistent memory for Claude sessions.",
         "version": "0.3.0",
         "author": { "name": "Labyrinth Analytics Consulting" },
-        "homepage": "https://github.com/labyrinth-analytics/convovault",
+        "homepage": "https://github.com/labyrinth-analytics/loreconvo",
         "license": "MIT",
         "keywords": ["memory", "sessions", "context", "recall"]
       }
@@ -123,18 +123,18 @@ pursue Option A once the product is polished and has some user feedback.
 The Python server must be distributable without a pre-existing venv at a specific path.
 
 Option 1 -- npm wrapper (recommended for plugin distribution):
-  - Create package.json in convovault-plugin/ that installs convovault as an npm package
+  - Create package.json in loreconvo-plugin/ that installs loreconvo as an npm package
   - Change .mcp.json to use npx or a bundled node script
   - This is how most distributed MCP plugins work
 
 Option 2 -- setup hook:
-  - Add a PostInstall hook to convovault-plugin/hooks/ that runs pip install
-  - Change .mcp.json to use: python3 -m convovault.server (installed globally)
+  - Add a PostInstall hook to loreconvo-plugin/hooks/ that runs pip install
+  - Change .mcp.json to use: python3 -m loreconvo.server (installed globally)
   - Less reliable (depends on user's system Python)
 
 Option 3 -- standalone binary (future):
   - Use PyInstaller to bundle Python server into a single executable
-  - Reference ${CLAUDE_PLUGIN_ROOT}/bin/convovault-server in .mcp.json
+  - Reference ${CLAUDE_PLUGIN_ROOT}/bin/loreconvo-server in .mcp.json
   - Most portable, but adds build complexity
 
 For now: write the .mcp.json as it would look after fixing, document it here,
@@ -143,11 +143,11 @@ and block the official submission until this is resolved.
 Correct .mcp.json template (using CLAUDE_PLUGIN_ROOT):
   {
     "mcpServers": {
-      "convovault": {
-        "command": "${CLAUDE_PLUGIN_ROOT}/bin/convovault-server",
+      "loreconvo": {
+        "command": "${CLAUDE_PLUGIN_ROOT}/bin/loreconvo-server",
         "args": [],
         "env": {
-          "CONVOVAULT_DB": "${HOME}/.convovault/sessions.db"
+          "LORECONVO_DB": "${HOME}/.loreconvo/sessions.db"
         }
       }
     }
@@ -156,12 +156,12 @@ Correct .mcp.json template (using CLAUDE_PLUGIN_ROOT):
 ### 2. Create a Public GitHub Repo for the Plugin
 
 Current state: the plugin lives inside the side_hustle monorepo.
-For marketplace distribution, ConvoVault needs its own public GitHub repo, or
+For marketplace distribution, LoreConvo needs its own public GitHub repo, or
 the monorepo needs to be public with the plugin as a git-subdir source.
 
 Option A (standalone repo -- cleaner):
-  - Create github.com/labyrinth-analytics/convovault (public)
-  - Move convovault-plugin/ contents there
+  - Create github.com/labyrinth-analytics/loreconvo (public)
+  - Move loreconvo-plugin/ contents there
   - Tag releases (v0.3.0)
 
 Option B (monorepo with git-subdir source):
@@ -172,15 +172,15 @@ Option B (monorepo with git-subdir source):
 ### 3. Add homepage and repository Fields to plugin.json
 
 Current plugin.json is missing:
-  "homepage": "https://github.com/labyrinth-analytics/convovault",
-  "repository": "https://github.com/labyrinth-analytics/convovault"
+  "homepage": "https://github.com/labyrinth-analytics/loreconvo",
+  "repository": "https://github.com/labyrinth-analytics/loreconvo"
 
 These are optional but strongly recommended for marketplace credibility.
 
 ### 4. Validate the Plugin
 
 Before submission, run:
-  cd ron_skills/convovault-plugin
+  cd ron_skills/loreconvo-plugin
   claude plugin validate .
 
 Or from within Claude Code:
@@ -193,7 +193,7 @@ Fix any errors before submitting.
 ## Plugin Structure Checklist
 
   [OK] .claude-plugin/plugin.json
-        - name: "convovault" (kebab-case)
+        - name: "loreconvo" (kebab-case)
         - version: "0.3.0"
         - description: present
         - author.name: present
@@ -214,9 +214,9 @@ Fix any errors before submitting.
 
 Phase 1 (self-hosted, no Anthropic review needed):
   1. Fix MCP server bundling
-  2. Create public GitHub repo: labyrinth-analytics/convovault
+  2. Create public GitHub repo: labyrinth-analytics/loreconvo
   3. Create marketplace repo: labyrinth-analytics/claude-plugins
-  4. Add marketplace.json listing ConvoVault (and ProjectVault when ready)
+  4. Add marketplace.json listing LoreConvo (and LoreDocs when ready)
   5. Test: /plugin marketplace add labyrinth-analytics/claude-plugins
   6. Share with early adopters via GitHub README / social media
   7. Update marketplace_listing.md with the install command

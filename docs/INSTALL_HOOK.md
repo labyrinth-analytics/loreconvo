@@ -1,6 +1,6 @@
-# ConvoVault SessionEnd Hook - Installation
+# LoreConvo SessionEnd Hook - Installation
 
-This hook automatically saves every Claude Code session to ConvoVault when the session ends. No manual `/vault save` needed.
+This hook automatically saves every Claude Code session to LoreConvo when the session ends. No manual `/vault save` needed.
 
 ## What it does
 
@@ -9,8 +9,8 @@ When a Claude Code session ends (for any reason except "resume"), the hook:
 1. Reads the transcript JSONL file
 2. Extracts user messages, assistant messages, tools used, and files modified
 3. Generates a summary of the session
-4. Saves everything to ConvoVault's SQLite database at `~/.convovault/convovault.db`
-5. Logs activity to `~/.convovault/hook.log`
+4. Saves everything to LoreConvo's SQLite database at `~/.loreconvo/loreconvo.db`
+5. Logs activity to `~/.loreconvo/hook.log`
 
 The heavy parsing runs in the background so it never slows down session exit.
 
@@ -18,12 +18,12 @@ The heavy parsing runs in the background so it never slows down session exit.
 
 ### Step 1: Copy the hook scripts
 
-Copy both files into your ConvoVault installation:
+Copy both files into your LoreConvo installation:
 
 ```bash
-cp hooks/scripts/session-end-save.sh ~/projects/side_hustle/ron_skills/convovault/hooks/scripts/
-cp hooks/scripts/parse_transcript.py ~/projects/side_hustle/ron_skills/convovault/hooks/scripts/
-chmod +x ~/projects/side_hustle/ron_skills/convovault/hooks/scripts/session-end-save.sh
+cp hooks/scripts/session-end-save.sh ~/projects/side_hustle/ron_skills/loreconvo/hooks/scripts/
+cp hooks/scripts/parse_transcript.py ~/projects/side_hustle/ron_skills/loreconvo/hooks/scripts/
+chmod +x ~/projects/side_hustle/ron_skills/loreconvo/hooks/scripts/session-end-save.sh
 ```
 
 ### Step 2: Register the hook globally
@@ -39,7 +39,7 @@ Add the SessionEnd hook to your global Claude Code settings. Edit `~/.claude/set
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/projects/side_hustle/ron_skills/convovault/hooks/scripts/session-end-save.sh"
+            "command": "$HOME/projects/side_hustle/ron_skills/loreconvo/hooks/scripts/session-end-save.sh"
           }
         ]
       }
@@ -56,18 +56,18 @@ Start and end a Claude Code session, then check:
 
 ```bash
 # Check the hook log
-cat ~/.convovault/hook.log
+cat ~/.loreconvo/hook.log
 
 # Query saved sessions
-sqlite3 ~/.convovault/convovault.db "SELECT session_id, project, user_message_count, ended_at FROM sessions ORDER BY ended_at DESC LIMIT 5;"
+sqlite3 ~/.loreconvo/loreconvo.db "SELECT session_id, project, user_message_count, ended_at FROM sessions ORDER BY ended_at DESC LIMIT 5;"
 ```
 
 ## Configuration
 
-**Custom ConvoVault location:** If ConvoVault is not at `~/projects/side_hustle/ron_skills/convovault/`, set the environment variable:
+**Custom LoreConvo location:** If LoreConvo is not at `~/projects/side_hustle/ron_skills/loreconvo/`, set the environment variable:
 
 ```bash
-export CONVOVAULT_DIR="/your/custom/path"
+export LORECONVO_DIR="/your/custom/path"
 ```
 
 **Increase hook timeout:** If you have very large transcripts (1000+ messages), increase the SessionEnd timeout:
@@ -84,7 +84,7 @@ The hook automatically skips saving when:
 
 - `reason` is `resume` (session is being resumed, not ended)
 - Transcript file is missing or empty
-- ConvoVault venv is not found
+- LoreConvo venv is not found
 - `session_id` or `transcript_path` is missing from the hook input
 
 ## Database schema

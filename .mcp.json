@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "convovault": {
+    "loreconvo": {
       "command": "${CLAUDE_PLUGIN_ROOT}/.venv/bin/python3",
       "args": ["${CLAUDE_PLUGIN_ROOT}/src/server.py"],
       "env": {
