@@ -1,7 +1,7 @@
 ---
 name: save
 description: >
-  Save the current session to LoreConvo. Use when the user asks to "save this session",
+  Save the current session to ConvoVault. Use when the user asks to "save this session",
   "vault this", "remember this session", "/vault save", or when a significant decision was made
   and the session is ending. Also triggers on "tag as persona", "link sessions", or when the
   user switches topics and the current context should be preserved.
@@ -10,9 +10,9 @@ metadata:
   author: "Labyrinth Analytics Consulting"
 ---
 
-# LoreConvo -- Save Session
+# ConvoVault -- Save Session
 
-Capture session context (decisions, artifacts, open questions) into LoreConvo for future recall.
+Capture session context (decisions, artifacts, open questions) into ConvoVault for future recall.
 
 ## When to Save
 
@@ -25,7 +25,7 @@ Capture session context (decisions, artifacts, open questions) into LoreConvo fo
 
 Call the `save_session` MCP tool with structured data extracted from the conversation:
 
-1. **Title**: Short, descriptive (e.g., "LoreConvo plugin packaging")
+1. **Title**: Short, descriptive (e.g., "ConvoVault plugin packaging")
 2. **Surface**: Where this ran -- `cowork`, `code`, or `chat`
 3. **Summary**: 2-3 paragraphs covering what was done, why, and what matters for future sessions
 4. **Decisions**: List every decision made, even small ones. These are the most searchable items.

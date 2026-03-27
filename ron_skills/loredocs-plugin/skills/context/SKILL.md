@@ -1,11 +1,11 @@
 ---
 name: context
 description: >
-  Load vault knowledge into the current Claude conversation. Injects documents, summaries, or tagged sets from LoreDocs as context so Claude can answer questions using stored knowledge.
+  Load vault knowledge into the current Claude conversation. Injects documents, summaries, or tagged sets from ProjectVault as context so Claude can answer questions using stored knowledge.
   Use when the user says "load my vault", "inject context from", "bring in my [project] docs", "load everything tagged", "give me a summary of my vault", "use my saved knowledge about", "load context for this project", or when starting a session where relevant vault knowledge should be active.
 ---
 
-# LoreDocs: Context Injection
+# ProjectVault: Context Injection
 
 Context injection pulls stored documents into the active conversation so Claude can reference them without the user pasting content manually.
 

@@ -1,4 +1,4 @@
-# LoreDocs - Product Specification
+# ProjectVault - Product Specification
 
 ## The Problem
 
@@ -18,11 +18,11 @@ The underlying API (Files API) exists for programmatic file management, but ther
 
 The "Knowledge & Memory" category is the largest MCP category with 283+ servers, but virtually all of them focus on **memory** (entity graphs, conversation history, key-value stores). Almost none address **structured document/artifact management** — the "file manager for AI projects" gap.
 
-LoreDocs fills this gap.
+ProjectVault fills this gap.
 
 ## Product Vision
 
-LoreDocs is an MCP server + Cowork plugin that gives Claude users a proper knowledge management system for their AI projects. Think of it as **"Git + file manager + search engine" for AI project knowledge**.
+ProjectVault is an MCP server + Cowork plugin that gives Claude users a proper knowledge management system for their AI projects. Think of it as **"Git + file manager + search engine" for AI project knowledge**.
 
 ---
 
@@ -100,9 +100,9 @@ Get data in and out easily.
 
 ### Storage Layer
 ```
-~/.loredocs/
+~/.projectvault/
     config.json              # Global config (default vault, preferences)
-    loredocs.db          # SQLite database (FTS5 index, metadata, links)
+    projectvault.db          # SQLite database (FTS5 index, metadata, links)
     vaults/
         {vault-id}/
             manifest.json    # Vault metadata, linked_projects[], document index
@@ -142,7 +142,7 @@ Vaults are **independent of Claude Projects** by design. A vault can be linked t
 
 ## Differentiation from Existing Tools
 
-| Feature | Claude Projects | Memory MCP Servers | LoreDocs |
+| Feature | Claude Projects | Memory MCP Servers | ProjectVault |
 |---|---|---|---|
 | Document storage | Yes (cloud) | No (entity graphs) | Yes (local) |
 | Full-text search | No | No | Yes (FTS5) |
@@ -238,7 +238,7 @@ Vaults are **independent of Claude Projects** by design. A vault can be linked t
 - **Margin: 93-96%**
 
 #### Contribution to Project Ron
-At moderate scenario, LoreDocs contributes ~$8,580/month to the $8K/month Project Ron target by month 24. Combined with LoreConvo ($3.2K target) and other portfolio products, this gives comfortable headroom even if individual products underperform.
+At moderate scenario, ProjectVault contributes ~$8,580/month to the $8K/month Project Ron target by month 24. Combined with ConvoVault ($3.2K target) and other portfolio products, this gives comfortable headroom even if individual products underperform.
 
 ---
 
@@ -330,7 +330,7 @@ At moderate scenario, LoreDocs contributes ~$8,580/month to the $8K/month Projec
 ## Resolved Design Decisions (March 22, 2026)
 
 ### 1. Claude Projects Sync — YES, plan for it
-When/if Anthropic exposes a Projects API, LoreDocs will offer bidirectional sync as a Pro feature. For now, the `vault_link_project` tool records the association as metadata so the sync mapping is ready when the API becomes available. This is a potential first-mover advantage — being ready to integrate before competitors.
+When/if Anthropic exposes a Projects API, ProjectVault will offer bidirectional sync as a Pro feature. For now, the `vault_link_project` tool records the association as metadata so the sync mapping is ready when the API becomes available. This is a potential first-mover advantage — being ready to integrate before competitors.
 
 ### 2. Embedding-Based Semantic Search — YES, Pro tier (Year 2)
 FTS5 keyword search ships in Phase 1. Semantic search via embeddings launches in Year 2 as a major Pro tier differentiator. Implementation options to evaluate:
@@ -349,7 +349,7 @@ Team tier shared vaults will use **git as the sync layer**:
 This keeps the architecture local-first while enabling collaboration. Cloud sync (S3, etc.) can be evaluated later if git proves too technical for non-developer teams.
 
 ### 4. File Format Support — Match Claude Projects from Day 1
-LoreDocs will support all file formats currently accepted by Claude Projects:
+ProjectVault will support all file formats currently accepted by Claude Projects:
 
 **Documents:** PDF, DOCX, XLSX, CSV, TXT, MD, HTML, PPTX
 **Images:** JPEG, PNG, GIF, WEBP
@@ -371,7 +371,7 @@ The key insight: we store the **original file** untouched but maintain a **text 
 
 Claude Projects allow **30MB per file** and the total extracted text must fit within ~200K tokens (~150K words, roughly **600KB-1MB of extracted text**).
 
-LoreDocs tier limits based on these reference points:
+ProjectVault tier limits based on these reference points:
 
 | Limit | Free | Pro ($9) | Team ($19) |
 |---|---|---|---|
@@ -386,7 +386,7 @@ LoreDocs tier limits based on these reference points:
 | Shared vaults | No | No | Yes (git-based) |
 | Claude Projects sync | No | Yes (when available) | Yes (when available) |
 
-**Rationale:** The free tier gives enough room to manage ~3 small-to-medium Claude Projects worth of knowledge (500MB total). Power users who manage 5+ projects or keep large reference documents will naturally hit the limit and upgrade. The 30MB per-file cap matches Claude's own limit, so there's no friction when moving files between LoreDocs and Claude Projects.
+**Rationale:** The free tier gives enough room to manage ~3 small-to-medium Claude Projects worth of knowledge (500MB total). Power users who manage 5+ projects or keep large reference documents will naturally hit the limit and upgrade. The 30MB per-file cap matches Claude's own limit, so there's no friction when moving files between ProjectVault and Claude Projects.
 
 ---
 

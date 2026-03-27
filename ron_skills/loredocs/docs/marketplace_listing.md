@@ -1,4 +1,4 @@
-# LoreDocs -- Marketplace Listing Draft
+# ProjectVault -- Marketplace Listing Draft
 
 > STATUS: DRAFT -- Debbie must review and approve before publishing to any marketplace.
 
@@ -8,7 +8,7 @@
 
 | Field | Value |
 |---|---|
-| Plugin Name | LoreDocs |
+| Plugin Name | ProjectVault |
 | Tagline | Your AI project's second brain. Search, organize, and inject knowledge -- in any Claude session. |
 | Category | Knowledge Management / Productivity |
 | Version | 0.1.0 |
@@ -27,11 +27,11 @@ A searchable, versioned knowledge base for your AI projects. Organize docs, tag 
 
 ## Long Description
 
-### Your Project Knowledge Is a Mess. LoreDocs Fixes That.
+### Your Project Knowledge Is a Mess. ProjectVault Fixes That.
 
 You've got specs in one folder, reference docs in another, config files scattered everywhere, and half your project's decisions living only in your head (or buried in old chat logs). Every new Claude session starts from scratch -- you re-paste the same documents, re-explain the same constraints, re-orient Claude to your project all over again.
 
-**LoreDocs is a structured knowledge base designed for AI projects.** It's the missing file manager for Claude -- create named vaults, add and tag your documents, search across everything, and inject exactly the right context into any Claude session with a single command.
+**ProjectVault is a structured knowledge base designed for AI projects.** It's the missing file manager for Claude -- create named vaults, add and tag your documents, search across everything, and inject exactly the right context into any Claude session with a single command.
 
 ---
 
@@ -186,14 +186,14 @@ python3 --version
 
 ```bash
 git clone https://github.com/labyrinth-analytics/side_hustle.git
-cd side_hustle/ron_skills/loredocs
+cd side_hustle/ron_skills/projectvault
 pip install -e .
 ```
 
 ### Add to Claude Code
 
 ```bash
-claude mcp add loredocs -- python -m loredocs.server
+claude mcp add projectvault -- python -m projectvault.server
 ```
 
 ### Add to Cowork
@@ -203,9 +203,9 @@ Add to `~/.claude/settings.json`:
 ```json
 {
   "mcpServers": {
-    "loredocs": {
+    "projectvault": {
       "command": "python",
-      "args": ["-m", "loredocs.server"]
+      "args": ["-m", "projectvault.server"]
     }
   }
 }
@@ -238,8 +238,8 @@ Once connected, try these in a Claude conversation:
 Everything is stored locally at:
 
 ```
-~/.loredocs/
-    loredocs.db          (search index and metadata)
+~/.projectvault/
+    projectvault.db          (search index and metadata)
     config.json              (tier setting)
     vaults/
         {vault-id}/
@@ -251,43 +251,43 @@ Everything is stored locally at:
                     history/         (previous versions)
 ```
 
-Your documents are plain files. Back them up with any tool. Version-control them with git. Move the entire `~/.loredocs/` folder to another computer and everything works.
+Your documents are plain files. Back them up with any tool. Version-control them with git. Move the entire `~/.projectvault/` folder to another computer and everything works.
 
 ---
 
-## Companion Product: LoreConvo
+## Companion Product: ConvoVault
 
-LoreDocs remembers your *project documents*. **LoreConvo** remembers your *conversations*.
+ProjectVault remembers your *project documents*. **ConvoVault** remembers your *conversations*.
 
-If you work on ongoing projects across multiple Claude sessions, consider pairing LoreDocs with LoreConvo. LoreConvo captures decisions, artifacts, and open questions from each session and surfaces them automatically at the start of the next one. The two products share a local-first philosophy and complement each other naturally.
+If you work on ongoing projects across multiple Claude sessions, consider pairing ProjectVault with ConvoVault. ConvoVault captures decisions, artifacts, and open questions from each session and surfaces them automatically at the start of the next one. The two products share a local-first philosophy and complement each other naturally.
 
-- LoreDocs = "what does my project documentation say?"
-- LoreConvo = "what did we decide last session?"
+- ProjectVault = "what does my project documentation say?"
+- ConvoVault = "what did we decide last session?"
 
 ---
 
 ## Frequently Asked Questions
 
 **Is my data private?**
-Yes. LoreDocs stores everything locally in SQLite and plain files on your machine. Nothing is ever sent to any server. Labyrinth Analytics never sees your documents.
+Yes. ProjectVault stores everything locally in SQLite and plain files on your machine. Nothing is ever sent to any server. Labyrinth Analytics never sees your documents.
 
 **What file types can I import?**
 PDF, DOCX (Word), XLSX (Excel), PPTX (PowerPoint), TXT, and Markdown. Text is extracted automatically for full-text search. Image-only (scanned) PDFs are stored but not searchable.
 
 **How is this different from Claude Projects' built-in knowledge base?**
-Claude Projects lets you upload files, but there's no search, no tagging, no version history, no bulk operations, and no cross-project visibility. LoreDocs adds all of that, and works across Code and Cowork -- not just in a single Project.
+Claude Projects lets you upload files, but there's no search, no tagging, no version history, no bulk operations, and no cross-project visibility. ProjectVault adds all of that, and works across Code and Cowork -- not just in a single Project.
 
 **Does it work with Claude Chat (web)?**
 Not yet -- Chat does not support plugins. Claude Code and Cowork are the primary platforms. Chat support is on the roadmap.
 
 **What happens if I uninstall it?**
-Your database and files stay at `~/.loredocs/`. Reinstall anytime and your full history is there.
+Your database and files stay at `~/.projectvault/`. Reinstall anytime and your full history is there.
 
 **Can I have separate vaults for separate clients or projects?**
 Yes. Each vault is independent. Create as many as you like (up to 3 on Free, unlimited on Pro).
 
-**What is LoreConvo and do I need it?**
-LoreConvo is a companion product for persistent conversation memory. It's independent -- use either or both. See the Companion Product section above.
+**What is ConvoVault and do I need it?**
+ConvoVault is a companion product for persistent conversation memory. It's independent -- use either or both. See the Companion Product section above.
 
 ---
 
@@ -296,7 +296,7 @@ LoreConvo is a companion product for persistent conversation memory. It's indepe
 - GitHub Issues: [github link TBD]
 - Email: info@labyrinthanalyticsconsulting.com
 - Installation guide: `INSTALL.md` in the plugin directory
-- Product spec: `docs/LoreDocs_Product_Spec.md`
+- Product spec: `docs/ProjectVault_Product_Spec.md`
 
 ---
 

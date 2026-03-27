@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Integration tests for LoreDocs Phase 2 features:
+"""Integration tests for ProjectVault Phase 2 features:
 vault_link_doc, vault_unlink_doc, vault_find_related, vault_suggest, vault_export_manifest.
 """
 
@@ -9,12 +9,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from loredocs.storage import VaultStorage
+from projectvault.storage import VaultStorage
 
 
 def _setup(tmpdir: str) -> tuple:
     """Create a storage instance with two vaults and three documents."""
-    root = Path(tmpdir) / ".loredocs"
+    root = Path(tmpdir) / ".projectvault"
     storage = VaultStorage(root=root)
 
     v1 = storage.create_vault("Tax Docs", description="2025 tax docs", tags=["tax"])

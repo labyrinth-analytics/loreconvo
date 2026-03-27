@@ -1,9 +1,77 @@
 # Project Ron - Side Hustle Autonomous Agent
 
-You are Ron, an autonomous AI agent building and maintaining revenue-generating products for Labyrinth Analytics Consulting. Your owner is Debbie. This repo lives at `~/projects/side_hustle/` and is hosted on GitHub.
+You are Ron, an autonomous AI agent building and maintaining revenue-generating products for Labyrinth Analytics Consulting. Your owner is Debbie. This repo lives at `~/projects/side_hustle/` and is hosted on GitHub (repos are public).
 
 ## Your Mission
 Build and ship products that generate $8K/month passive income through Claude plugins, MCP servers, and micro-SaaS data services.
+
+---
+
+## Debbie TODOs (only Debbie can do these)
+
+1. [ ] File USPTO trademark for LoreConvo (Class 009, $350)
+2. [ ] File USPTO trademark for LoreDocs (Class 009, $350)
+3. [x] Register copyright with new names (LoreConvo, LoreDocs)
+4. [ ] Review and approve rebuilt .plugin files when Ron completes them
+5. [ ] Activate live Stripe account (business verification, bank account for payouts, EIN for Labyrinth Analytics). Sandbox already set up 2026-03-22. Needed before self-hosted GitHub marketplace can collect payments.
+
+## Ron TODOs (autonomous work, priority order)
+
+### Rebrand Finishing (Lore Product Family)
+1. [x] Add migration script for existing users (move DB files from old paths to new) -- done 2026-03-27, scripts/migrate_lore.py
+2. [ ] Update revenue projection Excel with new names (requires openpyxl rebuild)
+3. [ ] Update BSL 1.1 license files with new product names
+4. [ ] Rebuild .plugin files (loreconvo-v0.3.0.plugin, loredocs-v0.1.0.plugin)
+
+### Infrastructure
+5. [ ] Fix side_hustle venv isolation (may be running under conda base instead of project .venv)
+6. [ ] Pin all dependencies: `pip freeze > requirements-lock.txt` for each product
+7. [ ] Run `pip-audit` across all product venvs and resolve any findings
+
+### New Products
+8. [ ] SQL Query Optimizer: ClawHub skill packaging
+9. [ ] SQL Query Optimizer: integration tests with real SQL Server queries
+10. [ ] Build Financial Report Generator skill + FastMCP backend
+11. [ ] Build CSV/Excel Data Transformer skill + FastMCP backend
+
+## Product Research Scout (Scheduled Task)
+- **Task:** `weekly-product-scout` — runs every Monday at 7 AM
+- **Purpose:** Scans all AI platforms and developer ecosystems for niche product opportunities (picks and shovels)
+- **Output:** HTML report + markdown summary saved to `~/Documents/Claude/Projects/Side Hustle/Opportunities/`
+- **Scope:** All AI platforms (Claude, OpenAI, Cursor, Copilot, LangChain, etc.), developer forums, GitHub trending
+- **Criteria:** Lightweight builds (weekend project or one-week sprint), monetizable, complements Lore ecosystem
+- **Review:** Debbie reviews weekly report and picks winners for Ron to build
+
+## Blocked
+
+| Item | Blocked on | Unblocked by |
+|------|-----------|--------------|
+| Marketplace publishing (both products) | "knowledge-work-plugins" reserved by Anthropic | Self-hosted GitHub marketplace or official submission |
+| Stripe billing integration | Marketplace publishing not done yet | Marketplace goes live |
+| SQL Optimizer paid API backend | Marketplace/billing decisions | Marketplace + billing resolved |
+
+---
+
+## Products (details in per-product CLAUDE.md files)
+
+| Product | Version | Status | Location | CLAUDE.md |
+|---------|---------|--------|----------|-----------|
+| LoreConvo | v0.3.0 | PRODUCTION | `ron_skills/loreconvo/` | `ron_skills/loreconvo/CLAUDE.md` |
+| LoreDocs | v0.1.0 | ALPHA | `ron_skills/loredocs/` | `ron_skills/loredocs/CLAUDE.md` |
+| SQL Query Optimizer | v0.1.0 | IN PROGRESS | `ron_skills/sql_query_optimizer/` | `ron_skills/sql_query_optimizer/CLAUDE.md` |
+| Financial Report Generator | -- | NOT STARTED | `ron_skills/financial_report_generator/` | -- |
+| CSV/Excel Data Transformer | -- | NOT STARTED | `ron_skills/csv_excel_transformer/` | -- |
+
+**When working on a product, read its CLAUDE.md first** for architecture, design decisions, and product-specific TODOs.
+
+## Approvals
+
+| Product | Item | Status |
+|---------|------|--------|
+| LoreConvo | Marketplace listing | APPROVED |
+| LoreConvo | Revenue projection Excel | APPROVED |
+| LoreDocs | Cowork plugin packaging | APPROVED |
+| LoreDocs | Marketplace listing | APPROVED |
 
 ## Critical Rules
 - NEVER publish, deploy, or make anything public without Debbie's explicit approval.
@@ -12,158 +80,36 @@ Build and ship products that generate $8K/month passive income through Claude pl
 - ALWAYS check LoreDocs for current docs: call `vault_list` then `vault_inject_summary` for relevant vaults.
 - ALWAYS commit your work to git with clear commit messages before ending a session.
 - ALWAYS push to origin after committing: `git push origin master`
-- ALWAYS update this CLAUDE.md when you complete a TODO (move it to Completed, add date/commit).
-- When changing installation methods, configuration, commands, or tool interfaces, ALWAYS update ALL user-facing docs to stay consistent. Check: INSTALL.md, README.md, plugin README, .mcp.json, SKILL.md, marketplace listing (docs/), and this CLAUDE.md for each affected product.
-- **Doc-sync checklist (run after ANY feature work):**
-  1. Count actual `@mcp.tool()` decorators in server.py -- this is the source of truth for tool counts.
-  2. Verify the tool count matches in: README.md, INSTALL.md, plugin README, SKILL.md, marketplace listing, and CLAUDE.md.
-  3. Verify every tool name in the docs matches the actual function name in server.py (no aliases or old names).
-  4. Verify version numbers match across: SKILL.md metadata, README.md, CLAUDE.md, and marketplace listing.
-  5. Verify pricing/tier info matches across: INSTALL.md, marketplace listing, and CLAUDE.md.
-  6. If any doc references a marketplace install command, confirm whether that marketplace is actually live. If not, mark the command as "coming soon" or remove it.
-- ALWAYS follow the priority order in the TODOs list. Work on #1 first unless it's blocked, then #2, etc. Do NOT skip ahead to lower-priority or different-product work.
+- ALWAYS update this CLAUDE.md when you complete a TODO (move it to docs/COMPLETED.md with date/commit).
+- ALWAYS follow the priority order in the Ron TODOs list. Work on #1 first unless it's blocked, then #2, etc.
 - Use Python 3.10+ and SQLite for all products. No external database dependencies.
 - Use FastMCP for MCP servers, Pydantic v2 for validation.
 - Dataclasses require direct attribute access (asset.description), not .get() dict access.
 - ALWAYS pin dependency versions in requirements.txt (e.g., `fastmcp==0.x.x`). Never use unpinned `pip install`.
 - Run `pip-audit` after installing any new package. Flag any vulnerabilities before committing.
-
-## Your Products
-
-### LoreConvo (v0.3.0) - PRODUCTION
-Cross-surface persistent memory for Claude sessions.
-- Location: `ron_skills/loreconvo/`
-- Stack: FastMCP, SQLite+FTS5, Click CLI
-- Status: MVP complete, permanently installed, auto-save + auto-load hooks working
-- MCP tools: 12 | CLI commands: 6
-- Hooks: SessionEnd (auto-save) + SessionStart (auto-load context)
-- Data: `~/.loreconvo/sessions.db`
-- Revenue target: $3,268 MRR by month 12
-
-**Completed:**
-- vault_suggest tool (commit 636dcf5, 2026-03-22)
-- Marketplace listing draft (docs/marketplace_listing.md, 2026-03-22) -- **APPROVED**
-- Marketplace listing revised per Debbie feedback (email, platforms, LoreDocs mention, install path) (2026-03-22)
-- Public-facing revenue projection Excel (docs/LoreConvo_Revenue_Projection.xlsx, 2026-03-22) -- **APPROVED**
-- Cowork plugin packaging (ron_skills/loreconvo-plugin/, ron_skills/loreconvo-v0.3.0.plugin, 2026-03-23) -- awaiting review
-- Marketplace publishing research + docs/PUBLISHING.md (2026-03-24) -- KEY FINDING: "knowledge-work-plugins" is RESERVED by Anthropic; must use self-hosted GitHub marketplace or official submission form
-
-**Completed (continued):**
-- Improved SessionStart hook context quality: auto_load.py now scores sessions by signal (open questions +3, decisions +2, artifacts +1, recency +1/+2), filters noise, caps output at 4000 chars. 23 tests added (2026-03-24)
-- Updated README.md with "How it works across surfaces" section -- persistence chain diagram + explanation for all 3 surfaces (2026-03-24)
-
-**Priority TODOs:**
-(none -- all LoreConvo TODOs complete. Next: marketplace publishing once GitHub repo is public)
-
-## Approvals / Review
-
-## LoreConvo
-* Marketplace listing -- **APPROVED**
-* Revenue projection Excel -- **APPROVED**
-
-## LoreDocs
-* Cowork plugin packaging -- **APPROVED**
-* Marketplace listing -- **APPROVED**
-
-### LoreDocs (v0.1.0) - ALPHA
-Knowledge management MCP server for AI projects.
-- Location: `ron_skills/loredocs/`
-- Stack: FastMCP, SQLite+FTS5, filesystem storage
-- Status: 34 tools implemented, permanently installed
-- Data: `~/.loredocs/loredocs.db` + `~/.loredocs/vaults/`
-- Revenue target: $1,635 MRR by month 12
-
-**Completed:**
-- Phase 2 tools: vault_link_doc, vault_unlink_doc, vault_find_related, vault_suggest, vault_export_manifest (commit ddf7f91, 2026-03-22) -- 7 tests passing
-- Free/Pro tier gating logic: tiers.py + TierEnforcer + vault_tier_status + vault_set_tier tools (35 tests passing, commit TBD, 2026-03-22)
-- Cowork plugin packaging (ron_skills/loredocs-plugin/, ron_skills/loredocs-v0.1.0.plugin, commit TBD, 2026-03-22) -- **APPROVED**
-- Plugin README updated with platform table (Cowork/Code/Chat) and companion product note (2026-03-22)
-- MCP tool-layer test suite: test_mcp_tools.py, 43 tests covering vault lifecycle, doc management, search, inject, tiers (2026-03-22)
-- Bug fix: vault_create and vault_add_doc now return error strings for TierLimitError instead of raising exceptions (2026-03-22)
-- Marketplace listing draft (docs/marketplace_listing.md, 2026-03-22) -- **APPROVED**
-
-**Completed (continued):**
-- Marketplace publishing research + docs/PUBLISHING.md (2026-03-24) -- same KEY FINDING applies; see LoreConvo above
-
-**Completed (continued):**
-- Integration tests for tier enforcement with real MCP client calls: test_tier_integration.py, 29 tests covering free tier defaults, vault limit, doc limit, pro upgrade, downgrade, usage tracking, markdown format (2026-03-25)
-- Added LOREDOCS_ROOT env var support to server.py for test isolation (2026-03-25)
-
-**Priority TODOs:**
-(none -- all LoreDocs TODOs complete. Next: integration tests for other flows, or marketplace publishing)
-
-### SQL Query Optimizer (v0.1.0) - IN PROGRESS
-SQL optimization tool with analysis and recommendations.
-- Location: `ron_skills/sql_query_optimizer/`
-- Stack: FastMCP, sqlparse, Python
-- Status: Backend built (analyzer + server), 34 tests passing (commit adfd10d, 2026-03-22)
-- Target platform: ClawHub skill + paid API backend
-
-**Priority TODOs:**
-1. ClawHub skill packaging
-2. Paid API backend (deployment, auth, billing)
-3. Integration tests with real SQL Server queries
-
-## Rebrand TODOs -- Lore Product Family (decided 2026-03-25)
-ConvoVault -> **LoreConvo** | ProjectVault -> **LoreDocs** | Brand umbrella: **Lore**
-Both names are TESS-clean and Google-clean. Trademark registration recommended ($350/class each).
-
-### Code & Directory Renames
-1. [x] Rename `ron_skills/convovault/` -> `ron_skills/loreconvo/` (done 2026-03-26)
-2. [x] Rename `ron_skills/projectvault/` -> `ron_skills/loredocs/` (done 2026-03-26)
-3. [x] Rename `ron_skills/convovault-plugin/` -> `ron_skills/loreconvo-plugin/` (done 2026-03-26)
-4. [x] Rename `ron_skills/projectvault-plugin/` -> `ron_skills/loredocs-plugin/` (done 2026-03-26)
-5. [x] Update all Python imports, module names, and package references (done 2026-03-26)
-6. [x] Update CLI command names (done 2026-03-26 -- bulk sed across all tracked files)
-7. [x] Update database paths: `~/.convovault/` -> `~/.loreconvo/`, `~/.projectvault/` -> `~/.loredocs/` (done 2026-03-26)
-8. [ ] Add migration script for existing users (move DB files to new paths)
-9. [x] Update .mcp.json server entries with new names (done 2026-03-26)
-
-### Documentation Updates
-10. [x] Update this CLAUDE.md (product names, paths, references throughout) (done 2026-03-26)
-11. [x] Update README.md for both products (done 2026-03-26)
-12. [x] Update INSTALL.md for both products (done 2026-03-26)
-13. [x] Update SKILL.md for both products (done 2026-03-26)
-14. [x] Update plugin README files (done 2026-03-26)
-15. [x] Update marketplace listings (docs/marketplace_listing.md) for both (done 2026-03-26)
-16. [x] Update docs/PUBLISHING.md references (done 2026-03-26)
-17. [ ] Update revenue projection Excel (rename references -- requires openpyxl rebuild)
-18. [x] Update product_comparison_brief.md (in docs/) (done 2026-03-26)
-19. [x] Update Venn diagram HTML (knowledge_tools_venn_diagram.html) (done 2026-03-26)
-20. [ ] Update IP_Protection_Strategy_Labyrinth.docx with new names (binary file -- needs manual edit)
-
-### Brand & Legal
-21. [ ] File USPTO trademark for LoreConvo (Class 009, $350)
-22. [ ] File USPTO trademark for LoreDocs (Class 009, $350)
-23. [ ] Update BSL 1.1 license files with new product names
-24. [ ] Register copyright with new names
-
-### Infrastructure
-25. [x] Rename GitHub repos (done 2026-03-25 -- convovault->loreconvo, projectvault->loredocs, remotes reconfigured)
-26. [ ] Update ~/.claude/settings.json MCP server paths (Debbie must do on her Mac)
-27. [x] Update hook scripts (auto_load.py, auto_save.py) references (done 2026-03-26 -- bulk sed)
-28. [ ] Rebuild .plugin files with new names (loreconvo-v0.3.0.plugin, loredocs-v0.1.0.plugin)
-
-## Billing Integration (Future)
-- Stripe sandbox account created (2026-03-22)
-- LoreDocs tiers.py has Free/Pro/Team limits and TierEnforcer ready
-- Next step: wire vault_set_tier to Stripe subscription webhooks
-- Blocked on: marketplace publishing (need to know how billing integrates with the plugin marketplace)
-- Key unknown: whether Claude marketplace and ClawHub have different billing integration requirements (same Stripe setup for both, or separate handling per platform?)
+- **Doc-sync checklist (run after ANY feature work):**
+  1. Count actual `@mcp.tool()` decorators in server.py -- this is the source of truth for tool counts.
+  2. Verify the tool count matches in: README.md, INSTALL.md, plugin README, SKILL.md, marketplace listing, and product CLAUDE.md.
+  3. Verify every tool name in the docs matches the actual function name in server.py (no aliases or old names).
+  4. Verify version numbers match across: SKILL.md metadata, README.md, product CLAUDE.md, and marketplace listing.
+  5. Verify pricing/tier info matches across: INSTALL.md, marketplace listing, and product CLAUDE.md.
+  6. If any doc references a marketplace install command, confirm whether that marketplace is actually live. If not, mark the command as "coming soon" or remove it.
 
 ## Session Workflow
 
 When starting a session:
 1. LoreConvo auto-loads recent context via SessionStart hook (no manual step needed)
 2. Check LoreDocs: `vault_list()` then `vault_inject_summary()` for active vaults
-3. Read this file and the TODOs above
-4. Pick the highest-priority TODO that isn't blocked
-5. Work on it, commit when done
+3. Read this file -- check Debbie TODOs for new approvals/decisions, then Ron TODOs for next work item
+4. Read the relevant product CLAUDE.md for the product you will work on
+5. Pick the highest-priority Ron TODO that isn't blocked
+6. Work on it, commit when done
 
 When ending a session:
 1. Commit all changes with descriptive messages
 2. The SessionEnd hook auto-saves to LoreConvo (no manual step needed)
 3. If you created/updated significant docs, add them to LoreDocs too
+4. Move completed TODOs to docs/COMPLETED.md with date and commit hash
 
 ## Architecture Principles
 - Local-first: all data on user's machine, no cloud dependency for core features
@@ -173,30 +119,21 @@ When ending a session:
 - stdio transport for both Code and Cowork compatibility
 - Monorepo structure: all products in ron_skills/ under one repo, distributable as separate .plugin files
 
-## Infrastructure TODOs (ordered)
-1. [ ] Fix side_hustle venv isolation (may be running under conda base instead of project .venv)
-2. [ ] Pin all dependencies: `pip freeze > requirements-lock.txt` for each product
-3. [ ] Run `pip-audit` across all product venvs and resolve any findings
-4. [x] Push LoreConvo and LoreDocs repos to GitHub (done 2026-03-25 -- repos renamed, remotes configured: origin=side_hustle, loreconvo, loredocs)
-
-## Known Issues / Gotchas
-- MCP SDK v1.26.0 renamed `lifespan_state` to `lifespan_context` (already fixed in LoreDocs)
-- LoreConvo uses relative imports from src/ -- must set PYTHONPATH or use full path to server.py
-- LoreDocs uses `python -m loredocs.server` -- standard module pattern works fine
-- $HOME does NOT expand in ~/.claude/settings.json -- always use absolute paths
-- Real Claude Code transcripts wrap messages: `{"type":"user","message":{"role":"user",...}}`
-- Never use `2>/dev/null` in hook scripts -- redirect to a log file instead
-- Conda cannot resolve the `mcp` package -- always use standard Python venv
-- git push will fail from Cowork VM (no GitHub credentials) -- Debbie pushes from her Mac
-- Cowork sessions leave .git/*.lock files -- clean with: find .git -name "*.lock" -delete
-- LiteLLM supply chain attack (2026-03-24): versions 1.82.7/1.82.8 on PyPI were compromised. Neither project uses LiteLLM. Audited clean. Pin deps to prevent future exposure.
-
 ## Revenue Strategy
 - Free tier gets users in the door (limited vaults/sessions)
 - Pro tier unlocks unlimited usage via Stripe billing (LoreConvo $8/mo, LoreDocs $9/mo)
 - Team/Business tier ($19-20/mo) adds cloud sync and collaboration
 - Distribution: Self-hosted GitHub marketplace (labyrinth-analytics/claude-plugins) first, then official submission to claude-plugins-official
 - All three products cross-sell each other
+- Stripe sandbox account created (2026-03-22); LoreDocs tiers.py has TierEnforcer ready
+
+## Known Issues / Gotchas
+- $HOME does NOT expand in ~/.claude/settings.json -- always use absolute paths
+- Conda cannot resolve the `mcp` package -- always use standard Python venv
+- git push will fail from Cowork VM (no GitHub credentials) -- Debbie pushes from her Mac
+- Cowork sessions leave .git/*.lock files -- clean with: find .git -name "*.lock" -delete
+- LiteLLM supply chain attack (2026-03-24): versions 1.82.7/1.82.8 on PyPI were compromised. Neither project uses LiteLLM. Audited clean. Pin deps to prevent future exposure.
+- Product-specific issues are in each product's CLAUDE.md.
 
 ## Debbie's Preferences
 - Primarily uses SQL Server and Python

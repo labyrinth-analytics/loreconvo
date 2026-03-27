@@ -2,12 +2,12 @@
 name: manage
 description: >
   Manage project knowledge vaults -- create vaults, add and update documents, tag and categorize content, search across vaults, and organize knowledge for AI projects.
-  Use when the user says "create a vault", "add this to my vault", "store this document", "save this to LoreDocs", "tag this document", "search my vault for", "show my vaults", "list my documents", "update the document", "archive this vault", "import files into", "move this doc to", or any request to store, organize, or retrieve project knowledge.
+  Use when the user says "create a vault", "add this to my vault", "store this document", "save this to ProjectVault", "tag this document", "search my vault for", "show my vaults", "list my documents", "update the document", "archive this vault", "import files into", "move this doc to", or any request to store, organize, or retrieve project knowledge.
 ---
 
-# LoreDocs: Knowledge Management
+# ProjectVault: Knowledge Management
 
-LoreDocs stores documents in named vaults. Each vault is a collection of related documents with tags, categories, version history, and full-text search.
+ProjectVault stores documents in named vaults. Each vault is a collection of related documents with tags, categories, version history, and full-text search.
 
 ## Core Concepts
 
@@ -32,7 +32,7 @@ vault_add_doc(vault_id=..., name="Depreciation Schedule", content="...", tags=["
 
 ## Workflow: Adding a Single Document
 
-When the user says "save this to my [vault name] vault" or "add this document to LoreDocs":
+When the user says "save this to my [vault name] vault" or "add this document to ProjectVault":
 
 1. Call `vault_list` to find the target vault by name (match case-insensitively)
 2. If no match, ask the user which vault or offer to create one
@@ -81,7 +81,7 @@ When the user asks "what's in my vault" or "show my vaults":
 
 ## Tier Awareness
 
-LoreDocs has free and Pro tiers:
+ProjectVault has free and Pro tiers:
 
 - Free tier: up to 3 vaults, 25 documents per vault
 - Pro tier: unlimited vaults and documents

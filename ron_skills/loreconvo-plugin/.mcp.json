@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "convovault": {
+      "command": "uvx",
+      "args": ["convovault"],
+      "env": {}
+    }
+  }
+}

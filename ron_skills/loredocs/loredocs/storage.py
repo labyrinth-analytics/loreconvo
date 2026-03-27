@@ -1,12 +1,12 @@
 """
-LoreDocs Storage Layer
+ProjectVault Storage Layer
 
 Manages the local filesystem and SQLite database that back all vault operations.
 Storage is organized as:
 
-    ~/.loredocs/
+    ~/.projectvault/
         config.json
-        loredocs.db        (SQLite with FTS5)
+        projectvault.db        (SQLite with FTS5)
         vaults/
             {vault_id}/
                 docs/
@@ -36,9 +36,9 @@ from .tiers import TierEnforcer, TierLimitError  # noqa: F401 (re-exported for c
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_ROOT = Path.home() / ".loredocs"
+DEFAULT_ROOT = Path.home() / ".projectvault"
 CONFIG_FILE = "config.json"
-DB_FILE = "loredocs.db"
+DB_FILE = "projectvault.db"
 VAULTS_DIR = "vaults"
 
 # File size limits (bytes)
@@ -229,7 +229,7 @@ def _migrate_db(db_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 class VaultStorage:
-    """Manages the local filesystem and SQLite database for LoreDocs."""
+    """Manages the local filesystem and SQLite database for ProjectVault."""
 
     def __init__(self, root: Optional[Path] = None):
         self.root = root or DEFAULT_ROOT

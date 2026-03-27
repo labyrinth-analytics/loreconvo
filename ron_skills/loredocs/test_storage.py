@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quick integration test for LoreDocs storage layer."""
+"""Quick integration test for ProjectVault storage layer."""
 
 import tempfile
 import sys
@@ -8,13 +8,13 @@ from pathlib import Path
 # Add project to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from loredocs.storage import VaultStorage
+from projectvault.storage import VaultStorage
 
 
 def test_full_workflow():
     """Test the complete vault lifecycle: create, add docs, search, tag, version, export."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        root = Path(tmpdir) / ".loredocs"
+        root = Path(tmpdir) / ".projectvault"
         storage = VaultStorage(root=root)
 
         print("[1] Creating vaults...")

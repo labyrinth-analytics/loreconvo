@@ -1,4 +1,4 @@
-# LoreDocs
+# ProjectVault
 
 > A searchable, organized knowledge base for your AI projects. Store documents, tag them, search across them, and inject context into any Claude conversation.
 
@@ -15,7 +15,7 @@
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install via the Labyrinth Analytics marketplace
-/plugin install loredocs@labyrinth-analytics-claude-plugins
+/plugin install projectvault@labyrinth-analytics-claude-plugins
 ```
 
 Or add directly as an MCP server in Claude Code's `.claude/settings.json`:
@@ -23,9 +23,9 @@ Or add directly as an MCP server in Claude Code's `.claude/settings.json`:
 ```json
 {
   "mcpServers": {
-    "loredocs": {
+    "projectvault": {
       "command": "uvx",
-      "args": ["loredocs"]
+      "args": ["projectvault"]
     }
   }
 }
@@ -37,7 +37,7 @@ Or add directly as an MCP server in Claude Code's `.claude/settings.json`:
 
 AI projects accumulate knowledge fast -- architecture decisions, API specs, configuration guides, meeting notes, runbooks. That knowledge lives in scattered files, chat histories, and people's heads. When you start a new Claude session, you're starting from scratch.
 
-LoreDocs gives your AI projects a persistent, searchable brain.
+ProjectVault gives your AI projects a persistent, searchable brain.
 
 ---
 
@@ -45,7 +45,7 @@ LoreDocs gives your AI projects a persistent, searchable brain.
 
 ```mermaid
 graph TD
-    A[Your Documents\nspecs, configs, guides\nnotes, runbooks] -->|vault_add_doc| B[(LoreDocs DB\n~/.loredocs/\nloredocs.db)]
+    A[Your Documents\nspecs, configs, guides\nnotes, runbooks] -->|vault_add_doc| B[(ProjectVault DB\n~/.projectvault/\nprojectvault.db)]
 
     B -->|vault_search| C[Search Results\nwith relevance ranking]
     B -->|vault_inject_summary| D[Claude Context\ninjects relevant docs\nat session start]
@@ -64,7 +64,7 @@ graph TD
 
 ## What You Can Store
 
-LoreDocs handles text extraction from all common document types:
+ProjectVault handles text extraction from all common document types:
 
 - Markdown and plain text (`.md`, `.txt`)
 - Word documents (`.docx`)
@@ -148,16 +148,16 @@ Pro upgrade: [labyrinthanalyticsconsulting.com](https://labyrinthanalyticsconsul
 
 ## Companion Product
 
-**[LoreConvo](https://github.com/labyrinth-analytics/loreconvo)** -- Cross-surface persistent memory for Claude sessions. Where LoreDocs stores *documents*, LoreConvo remembers *conversations* -- decisions made, artifacts created, questions left open. They complement each other well.
+**[ConvoVault](https://github.com/labyrinth-analytics/convovault)** -- Cross-surface persistent memory for Claude sessions. Where ProjectVault stores *documents*, ConvoVault remembers *conversations* -- decisions made, artifacts created, questions left open. They complement each other well.
 
 ---
 
 ## Data and Privacy
 
-LoreDocs is **local-first**. All data lives in `~/.loredocs/` on your machine. Nothing is sent to any external server. You own your data.
+ProjectVault is **local-first**. All data lives in `~/.projectvault/` on your machine. Nothing is sent to any external server. You own your data.
 
 ---
 
 ## Issues and Feedback
 
-[github.com/labyrinth-analytics/loredocs/issues](https://github.com/labyrinth-analytics/loredocs/issues)
+[github.com/labyrinth-analytics/projectvault/issues](https://github.com/labyrinth-analytics/projectvault/issues)

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Integration tests for LoreDocs tier enforcement via real MCP client calls.
+Integration tests for ProjectVault tier enforcement via real MCP client calls.
 
-These tests start the LoreDocs MCP server as a subprocess, connect a real
+These tests start the ProjectVault MCP server as a subprocess, connect a real
 MCP client over stdio transport, and verify that tier limits are enforced
 end-to-end through the full MCP protocol stack.
 
 Run with:
-    cd ron_skills/loredocs
+    cd ron_skills/projectvault
     PYTHONPATH=. python test_tier_integration.py
 
-Requires: mcp, loredocs (installed or PYTHONPATH=.)
+Requires: mcp, projectvault (installed or PYTHONPATH=.)
 """
 
 import asyncio
@@ -230,15 +230,15 @@ async def test_tier_status_markdown_format(session):
 # ---------------------------------------------------------------------------
 
 async def run_all_tests():
-    """Start LoreDocs server, connect client, run tier integration tests."""
-    # Use a temp directory as the LoreDocs root so tests are isolated
+    """Start ProjectVault server, connect client, run tier integration tests."""
+    # Use a temp directory as the ProjectVault root so tests are isolated
     tmpdir = tempfile.mkdtemp(prefix="pv_tier_integ_")
     env = os.environ.copy()
-    env["LOREDOCS_ROOT"] = tmpdir
+    env["PROJECTVAULT_ROOT"] = tmpdir
 
     server_params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "loredocs.server"],
+        args=["-m", "projectvault.server"],
         env=env,
     )
 
@@ -273,7 +273,7 @@ async def run_all_tests():
 
 def main():
     print("=" * 60)
-    print("LoreDocs Tier Integration Tests (real MCP client)")
+    print("ProjectVault Tier Integration Tests (real MCP client)")
     print("=" * 60)
 
     try:

@@ -1,5 +1,5 @@
 """
-Tests for LoreDocs tier gating logic.
+Tests for ProjectVault tier gating logic.
 
 Covers:
 - TierEnforcer.check_vault_count (free limit = 3)
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from loredocs.tiers import (
+from projectvault.tiers import (
     FREE_LIMITS,
     PRO_LIMITS,
     TierEnforcer,
@@ -28,7 +28,7 @@ from loredocs.tiers import (
     TIER_FREE,
     TIER_PRO,
 )
-from loredocs.storage import VaultStorage
+from projectvault.storage import VaultStorage
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ from loredocs.storage import VaultStorage
 
 @pytest.fixture
 def tmp_root(tmp_path):
-    """Provide a fresh temp directory as the loredocs root."""
+    """Provide a fresh temp directory as the projectvault root."""
     return tmp_path
 
 

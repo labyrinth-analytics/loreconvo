@@ -1,5 +1,5 @@
 {
-  "name": "loredocs",
+  "name": "projectvault",
   "version": "0.1.0",
   "description": "Searchable, organized, version-tracked knowledge base for your AI projects. Store documents, tag them, search across them, and inject context into any Claude conversation.",
   "author": {
