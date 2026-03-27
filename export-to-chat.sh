@@ -1,5 +1,5 @@
 #!/bin/bash
-# ConvoVault - Export last session to clipboard for pasting into Claude Chat
+# LoreConvo - Export last session to clipboard for pasting into Claude Chat
 # Usage: bash export-to-chat.sh [search term]
 #
 # Examples:
