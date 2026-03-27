@@ -20,7 +20,7 @@ Formerly "ConvoVault" -- renamed 2026-03-25.
 - `hooks/scripts/on_session_start.sh`, `on_session_end.sh` -- shell wrappers
 - `skills/SKILL.md` -- OpenClaw skill definition
 - `docs/marketplace_listing.md` -- marketplace listing (APPROVED)
-- `docs/ConvoVault_Revenue_Projection.xlsx` -- revenue projection (APPROVED, needs rename)
+- `docs/LoreConvo_Revenue_Projection.xlsx` -- revenue projection (APPROVED, updated 2026-03-27)
 - `docs/PUBLISHING.md` -- marketplace publishing research
 
 ## Design Decisions
