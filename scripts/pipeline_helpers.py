@@ -403,6 +403,34 @@ class PipelineDB:
         )
         self.conn.commit()
 
+    def set_hold_reason(self, opp_id, reason):
+        """Put a pipeline item on hold with a reason.
+
+        Sets status to 'on-hold', adds a hold-reason:<text> tag (replacing any
+        existing hold-reason tag), and appends a dated note to open_questions.
+        Matches the tag pattern used by reject().
+        """
+        item = self.get_opportunity(opp_id)
+        if item is None:
+            raise ValueError(f'Opportunity {opp_id} not found')
+
+        self.update_status(opp_id, 'on-hold')
+
+        # Reload after status update
+        item = self.get_opportunity(opp_id)
+        tags = item['_tags']
+        tags = [t for t in tags if not t.startswith('hold-reason:')]
+        tags.append(f'hold-reason:{reason}')
+
+        existing_questions = item['open_questions'] or ''
+        hold_note = f'\n\n--- ON HOLD ({datetime.now().strftime("%Y-%m-%d")}) ---\nReason: {reason}'
+
+        self.conn.execute(
+            "UPDATE sessions SET tags = ?, open_questions = ? WHERE id = ?",
+            (json.dumps(tags), existing_questions + hold_note, opp_id)
+        )
+        self.conn.commit()
+
     def link_persona(self, opp_id, persona_name, note=None):
         """Link an agent persona (Scout, Gina, Ron) to a pipeline item."""
         self.conn.execute(

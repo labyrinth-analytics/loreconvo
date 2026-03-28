@@ -174,6 +174,24 @@ def skill_history(skill_name, days):
     click.echo(f"\n{len(sessions)} session(s) used '{skill_name}'")
 
 
+@cli.group()
+def skills():
+    """Commands for browsing skill usage history."""
+    pass
+
+
+@skills.command(name="list")
+def skills_list():
+    """List all distinct skills recorded in session memory, sorted by usage count."""
+    all_skills = db.list_all_skills()
+    if not all_skills:
+        click.echo("No skills recorded yet.")
+        return
+    for entry in all_skills:
+        click.echo(f"  {entry['session_count']:4d}  {entry['skill_name']}")
+    click.echo(f"\n{len(all_skills)} distinct skill(s)")
+
+
 @cli.command()
 def stats():
     """Show session memory statistics."""

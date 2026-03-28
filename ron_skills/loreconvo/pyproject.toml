@@ -33,6 +33,7 @@ dev = [
 
 [project.scripts]
 loreconvo = "loreconvo.server:main"
+loreconvo-cli = "loreconvo.cli:cli"
 
 [project.urls]
 Homepage = "https://github.com/labyrinth-analytics/loreconvo"

@@ -211,6 +211,16 @@ class SessionDatabase:
     def get_context_for(self, topic: str, max_results: int = 5) -> List[SearchResult]:
         return self.search_sessions(query=topic, limit=max_results)
 
+    def list_all_skills(self) -> List[dict]:
+        """Return all distinct skill names with session counts, sorted by use count desc."""
+        rows = self.conn.execute(
+            """SELECT skill_name, COUNT(*) as session_count
+               FROM session_skills
+               GROUP BY skill_name
+               ORDER BY session_count DESC, skill_name ASC"""
+        ).fetchall()
+        return [{"skill_name": r["skill_name"], "session_count": r["session_count"]} for r in rows]
+
     def get_skill_history(
         self, skill_name: str, days_back: int = 90
     ) -> List[Session]:

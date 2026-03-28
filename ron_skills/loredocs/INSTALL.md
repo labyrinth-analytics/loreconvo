@@ -17,31 +17,27 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ---
 
-## Option A: Install as a Cowork Plugin (Recommended)
+## Option A: Install as a Cowork Plugin (Coming Soon)
 
-If you use Claude's Cowork mode, install the plugin directly:
+> **Note:** The Cowork plugin marketplace is not yet live. This option will be available when the marketplace launches. Use Option C (developer install) in the meantime.
 
-```bash
+Once the marketplace is live, install with:
+
+```
 /plugin install loredocs@labyrinth-analytics-claude-plugins
 ```
 
-That's it -- restart Cowork and LoreDocs is available.
-
 ---
 
-## Option B: Install as a Claude Code MCP Server
+## Option B: Install as a Claude Code MCP Server (Coming Soon)
 
-Add LoreDocs to your Claude Code configuration:
+> **Note:** LoreDocs has not yet been published to PyPI, so `uvx loredocs` will not work yet. Use Option C (developer install) in the meantime.
+
+Once published, you will be able to add LoreDocs with:
 
 ```bash
 claude mcp add loredocs -- uvx loredocs
 ```
-
-**Verify it's connected:**
-```bash
-claude mcp list
-```
-You should see `loredocs` in the list.
 
 Or add it manually to `~/.claude/settings.json`:
 
@@ -55,8 +51,6 @@ Or add it manually to `~/.claude/settings.json`:
   }
 }
 ```
-
-Restart Claude Code after editing the file.
 
 ---
 
