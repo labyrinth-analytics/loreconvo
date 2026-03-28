@@ -496,21 +496,32 @@ class SessionDatabase:
     def _parse_json_field(value, default="[]"):
         """Parse a JSON field that may contain a raw string instead of a JSON array.
 
-        Pipeline items (e.g. Gina's architecture proposals) store plain text in
-        fields that the Session model expects to be JSON arrays.  Rather than
-        crashing, wrap plain-text values in a single-element list so all callers
-        get a list back regardless of how the data was written.
+        Handles three storage formats found in the database:
+        1. JSON array (current format):  '["tag1", "tag2"]'
+        2. Comma-separated string (legacy tags): 'tag1,tag2,tag3'
+        3. Plain text blob (Gina architecture proposals in decisions field)
+
+        Always returns a list so callers never need to handle multiple types.
         """
         raw = value or default
         try:
             result = json.loads(raw)
-            # If it parsed but isn't a list, wrap it
             if not isinstance(result, list):
                 return [str(result)]
             return result
         except (json.JSONDecodeError, ValueError):
-            # Plain text -- wrap in a list so callers always get a list
-            return [raw] if raw and raw != default else []
+            if not raw or raw == default:
+                return []
+            # Legacy comma-separated tags (e.g. 'security,supply-chain,audit')
+            # Detect by checking whether the string looks like a CSV tag list:
+            # short tokens, no spaces, commas present.
+            stripped = raw.strip().rstrip(',')
+            tokens = [t.strip() for t in stripped.split(',') if t.strip()]
+            all_short = all(len(t) <= 60 and ' ' not in t for t in tokens)
+            if len(tokens) > 1 and all_short:
+                return tokens
+            # Plain text blob (architecture proposals, free-form text) -- keep as one item
+            return [raw]
 
     def _row_to_session(self, row) -> Session:
         return Session(
@@ -524,7 +535,7 @@ class SessionDatabase:
             decisions=self._parse_json_field(row["decisions"]),
             artifacts=self._parse_json_field(row["artifacts"]),
             open_questions=self._parse_json_field(row["open_questions"]),
-            tags=json.loads(row["tags"] or "[]"),
+            tags=self._parse_json_field(row["tags"]),
             created_at=row["created_at"] or ""
         )
 
