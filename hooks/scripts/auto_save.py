@@ -66,7 +66,18 @@ def parse_transcript(transcript_path):
                     if block.get("type") == "text":
                         text_parts.append(block.get("text", ""))
                     elif block.get("type") == "tool_use":
-                        tool_uses.append(block.get("name", "unknown"))
+                        tool_name = block.get("name", "unknown")
+                        if tool_name == "Skill":
+                            # Extract the actual skill name from the input parameter
+                            # so skill-history shows e.g. "skill:langgraph-finance-workflow"
+                            # instead of the raw string "Skill"
+                            skill_name = block.get("input", {}).get("skill")
+                            if skill_name:
+                                tool_uses.append(f"skill:{skill_name}")
+                            else:
+                                tool_uses.append("Skill")
+                        else:
+                            tool_uses.append(tool_name)
                 elif isinstance(block, str):
                     text_parts.append(block)
             content = " ".join(text_parts)
