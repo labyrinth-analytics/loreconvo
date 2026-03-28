@@ -492,6 +492,26 @@ class SessionDatabase:
 
     # -- Helpers --
 
+    @staticmethod
+    def _parse_json_field(value, default="[]"):
+        """Parse a JSON field that may contain a raw string instead of a JSON array.
+
+        Pipeline items (e.g. Gina's architecture proposals) store plain text in
+        fields that the Session model expects to be JSON arrays.  Rather than
+        crashing, wrap plain-text values in a single-element list so all callers
+        get a list back regardless of how the data was written.
+        """
+        raw = value or default
+        try:
+            result = json.loads(raw)
+            # If it parsed but isn't a list, wrap it
+            if not isinstance(result, list):
+                return [str(result)]
+            return result
+        except (json.JSONDecodeError, ValueError):
+            # Plain text -- wrap in a list so callers always get a list
+            return [raw] if raw and raw != default else []
+
     def _row_to_session(self, row) -> Session:
         return Session(
             id=row["id"],
@@ -501,9 +521,9 @@ class SessionDatabase:
             start_date=row["start_date"],
             end_date=row["end_date"],
             summary=row["summary"] or "",
-            decisions=json.loads(row["decisions"] or "[]"),
-            artifacts=json.loads(row["artifacts"] or "[]"),
-            open_questions=json.loads(row["open_questions"] or "[]"),
+            decisions=self._parse_json_field(row["decisions"]),
+            artifacts=self._parse_json_field(row["artifacts"]),
+            open_questions=self._parse_json_field(row["open_questions"]),
             tags=json.loads(row["tags"] or "[]"),
             created_at=row["created_at"] or ""
         )
