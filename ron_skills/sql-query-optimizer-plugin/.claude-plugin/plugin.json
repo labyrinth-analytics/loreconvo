@@ -1,0 +1,10 @@
+{
+  "name": "sql-query-optimizer",
+  "version": "0.1.0",
+  "description": "Analyze SQL queries for performance anti-patterns, get severity-rated findings with fix hints, and detect query dialect. Supports T-SQL, MySQL, PostgreSQL, and SQLite.",
+  "author": {
+    "name": "Labyrinth Analytics Consulting"
+  },
+  "keywords": ["sql", "database", "performance", "optimization", "query-tuning", "anti-patterns", "tsql", "mysql", "postgresql"],
+  "license": "MIT"
+}
