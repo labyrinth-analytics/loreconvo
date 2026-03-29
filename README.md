@@ -117,11 +117,20 @@ The result: when you switch surfaces mid-project, you never have to re-explain w
 # Search the vault
 .venv/bin/python3 src/cli.py search "rental insurance split"
 
-# Export for Chat paste
+# Export for Chat paste (most recent session, markdown format)
 .venv/bin/python3 src/cli.py export --last --format markdown
+
+# Export a specific session by ID
+.venv/bin/python3 src/cli.py export <session-id>
+
+# Export as JSON
+.venv/bin/python3 src/cli.py export --last --format json
 
 # Skill history
 .venv/bin/python3 src/cli.py skill-history rental-property-accounting
+
+# List all skills by usage count
+.venv/bin/python3 src/cli.py skills list
 
 # Stats
 .venv/bin/python3 src/cli.py stats
