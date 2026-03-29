@@ -6,6 +6,7 @@ git push origin master
 
 # Public product repos (when you want to publish updates)
 git subtree push --prefix=ron_skills/loreconvo loreconvo main
+
 git subtree push --prefix=ron_skills/loredocs loredocs main
 
 #If git push origin master fails:
@@ -18,6 +19,9 @@ git remote set-url origin https://github.com/debbie-shapiro/side_hustle.git
 
 #If there’s a git lock
 rm .git/HEAD.lock  # if still there
+
+rm /Users/debbieshapiro/projects/side_hustle/.git/HEAD.lock
+
 
 
 #If issues with out of sync public product repos
