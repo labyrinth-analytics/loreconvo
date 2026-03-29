@@ -53,12 +53,38 @@ Build and ship products that generate $8K/month passive income through Claude pl
 23. [ ] Build CSV/Excel Data Transformer skill + FastMCP backend
 
 ## Product Research Scout (Scheduled Task)
-- **Task:** `weekly-product-scout` — runs every Monday at 7 AM
+- **Task:** `weekly-product-scout` — runs every Monday at 3 AM
 - **Purpose:** Scans all AI platforms and developer ecosystems for niche product opportunities (picks and shovels)
 - **Output:** HTML report + markdown summary saved to `~/Documents/Claude/Projects/Side Hustle/Opportunities/`
 - **Scope:** All AI platforms (Claude, OpenAI, Cursor, Copilot, LangChain, etc.), developer forums, GitHub trending
 - **Criteria:** Lightweight builds (weekend project or one-week sprint), monetizable, complements Lore ecosystem
 - **Review:** Debbie reviews weekly report and picks winners for Ron to build
+
+## Agent Team
+
+| Agent | Role | Task ID | Schedule | Reports To |
+|-------|------|---------|----------|------------|
+| Ron | Builder | `ron-daily` | Daily 2:00 AM | docs/COMPLETED.md, LoreConvo |
+| Scout | Product Research | `weekly-product-scout` | Monday 3:00 AM | Opportunities/, LoreConvo |
+| Gina | Enterprise Architect | `enterprise-architect-gina` | Wed + Sat 4:00 AM | LoreConvo (pipeline) |
+| Meg | QA Engineer | `meg-qa-daily` | Daily 3:00 AM | docs/qa/, LoreConvo |
+| Brock | Cybersecurity Expert | `brock-security-daily` | Daily 4:00 AM | docs/security/, LoreConvo |
+
+### Meg - QA Engineer (Scheduled Task)
+- **Task:** `meg-qa-daily` -- runs daily at 3:00 AM (after Ron)
+- **Purpose:** Full QA review of Ron's code: runs tests, writes new test cases, code walkthrough for logic errors, edge case analysis, verifies docs match behavior
+- **Output:** Dated QA report in `docs/qa/qa_report_YYYY_MM_DD.md` + LoreConvo session (surface='qa')
+- **Scope:** All products in ron_skills/ -- focuses on recently changed files
+- **Severity ratings:** GREEN (all tests pass, no issues) / YELLOW (minor issues found) / RED (critical bugs found)
+- **Rule:** Meg does NOT modify Ron's source code -- only adds test files and reports
+
+### Brock - Cybersecurity Expert (Scheduled Task)
+- **Task:** `brock-security-daily` -- runs daily at 4:00 AM (after Meg)
+- **Purpose:** Full security posture review: secrets scanning, dependency audit (pip-audit + CVE check), OWASP code review, API security checks, security headers, infrastructure review
+- **Output:** Dated security report in `docs/security/security_report_YYYY_MM_DD.md` + LoreConvo session (surface='security')
+- **Scope:** Entire repo -- code, dependencies, configs, git history
+- **Severity ratings:** SECURE / NEEDS ATTENTION / AT RISK
+- **Rule:** Brock does NOT modify source code -- only writes reports and flags issues for Ron to fix
 
 ## Blocked
 
@@ -99,6 +125,7 @@ Build and ship products that generate $8K/month passive income through Claude pl
 - ALWAYS commit your work to git with clear commit messages before ending a session.
 - ALWAYS push to origin after committing: `git push origin master`
 - ALWAYS update this CLAUDE.md when you complete a TODO (move it to docs/COMPLETED.md with date/commit).
+- ALWAYS check `docs/qa/` and `docs/security/` for recent Meg/Brock reports at session start. Fix CRITICAL/HIGH findings before regular TODOs.
 - ALWAYS follow the priority order in the Ron TODOs list. Work on #1 first unless it's blocked, then #2, etc.
 - Use Python 3.10+ and SQLite for all products. No external database dependencies.
 - Use FastMCP for MCP servers, Pydantic v2 for validation.
@@ -120,9 +147,10 @@ When starting a session:
 1. LoreConvo auto-loads recent context via SessionStart hook (no manual step needed)
 2. Check LoreDocs: `vault_list()` then `vault_inject_summary()` for active vaults
 3. Read this file -- check Debbie TODOs for new approvals/decisions, then Ron TODOs for next work item
-4. Read the relevant product CLAUDE.md for the product you will work on
-5. Pick the highest-priority Ron TODO that isn't blocked
-6. Work on it, commit when done
+4. **Check for Meg/Brock findings:** Read the latest reports in `docs/qa/` and `docs/security/`. Also search LoreConvo: `search_sessions("agent:meg")` and `search_sessions("agent:brock")` for recent findings. CRITICAL and HIGH severity bugs or vulnerabilities take priority over regular TODOs -- fix them first.
+5. Read the relevant product CLAUDE.md for the product you will work on
+6. Pick the highest-priority work: Meg/Brock CRITICAL/HIGH fixes first, then Ron TODOs in order
+7. Work on it, commit when done
 
 When ending a session:
 1. Commit all changes with descriptive messages
