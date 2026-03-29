@@ -19,6 +19,27 @@ git remote set-url origin https://github.com/debbie-shapiro/side_hustle.git
 #If there’s a git lock
 rm .git/HEAD.lock  # if still there
 
+
+#If issues with out of sync public product repos
+##Fetch
+git fetch loreconvo
+git fetch loredocs
+
+##Check what’s on remote versus local
+### What's on the remote
+git log --oneline loreconvo/main -5
+
+### What the subtree is trying to push
+git log --oneline $(git subtree split --prefix=ron_skills/loreconvo) -5
+
+##Force push if out of sync
+git push loreconvo $(git subtree split --prefix=ron_skills/loreconvo):main --force
+git push loredocs $(git subtree split --prefix=ron_skills/loredocs):main --force
+
+##Pull and reconcile to preserve remote history
+git subtree pull --prefix=ron_skills/loreconvo loreconvo main --allow-unrelated-histories
+
+
 #Helpful Information
 The first screenshot (only finance_analytics visible) was taken while your browser was showing your profile as seen by someone not logged in — private repos are hidden from public view. The second screenshot (showing side_hustle, job_skills, finance_analytics) is the real view when logged in as debbie-shapiro, and side_hustle is right there, updated 1 minute ago.
 
