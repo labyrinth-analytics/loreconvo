@@ -12,7 +12,7 @@ from .models import (
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS sessions (
-    id              TEXT PRIMARY KEY,
+    id              TEXT PRIMARY KEY NOT NULL,
     title           TEXT NOT NULL,
     surface         TEXT NOT NULL,
     project         TEXT,
@@ -95,6 +95,20 @@ class SessionDatabase:
         self.conn.executescript(FTS_SQL)
         self.conn.executescript(FTS_TRIGGERS)
         self.conn.commit()
+        # Migration: clean up any rows with NULL id (bug where raw SQL
+        # inserts bypassed the Session dataclass UUID generation).
+        null_rows = self.conn.execute(
+            "SELECT rowid, title FROM sessions WHERE id IS NULL"
+        ).fetchall()
+        if null_rows:
+            import uuid
+            for row in null_rows:
+                new_id = str(uuid.uuid4())
+                self.conn.execute(
+                    "UPDATE sessions SET id = ? WHERE rowid = ?",
+                    (new_id, row['rowid'])
+                )
+            self.conn.commit()
 
     def close(self):
         self.conn.close()
@@ -102,6 +116,12 @@ class SessionDatabase:
     # -- Session CRUD --
 
     def save_session(self, session: Session) -> str:
+        if not session.id:
+            raise ValueError(
+                "Session id must not be None or empty. "
+                "Use the Session dataclass (which auto-generates a UUID) "
+                "instead of raw SQL inserts."
+            )
         self.conn.execute(
             """INSERT OR REPLACE INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
