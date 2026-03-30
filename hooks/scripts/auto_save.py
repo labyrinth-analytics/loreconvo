@@ -71,7 +71,8 @@ def parse_transcript(transcript_path):
                             # Extract the actual skill name from the input parameter
                             # so skill-history shows e.g. "skill:langgraph-finance-workflow"
                             # instead of the raw string "Skill"
-                            skill_name = block.get("input", {}).get("skill")
+                            input_val = block.get("input") or {}
+                            skill_name = input_val.get("skill") if isinstance(input_val, dict) else None
                             if skill_name:
                                 tool_uses.append(f"skill:{skill_name}")
                             else:
