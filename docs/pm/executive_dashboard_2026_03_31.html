@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Side Hustle Executive Dashboard - 2026-03-31</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a202c; color: #e2e8f0; min-height: 100vh; }
+
+  /* Header */
+  .header { background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%); border-bottom: 2px solid #4a5568; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .header-title { font-size: 1.4em; font-weight: 700; letter-spacing: 0.05em; color: #f7fafc; }
+  .header-meta { font-size: 0.85em; color: #a0aec0; margin-top: 4px; }
+  .posture-badge { padding: 8px 18px; border-radius: 20px; font-weight: 700; font-size: 0.9em; letter-spacing: 0.08em; }
+  .posture-review { background: #ed8936; color: #1a202c; }
+  .posture-clear { background: #48bb78; color: #1a202c; }
+  .posture-action { background: #fc8181; color: #1a202c; }
+
+  /* Layout */
+  .main { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  @media(max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  /* Sections */
+  .section { background: #2d3748; border-radius: 8px; border: 1px solid #4a5568; margin-bottom: 16px; overflow: hidden; }
+  .section-header { padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; background: #374151; border-bottom: 1px solid #4a5568; }
+  .section-header:hover { background: #3d4a5e; }
+  .section-title { font-weight: 700; font-size: 0.95em; letter-spacing: 0.03em; display: flex; align-items: center; gap: 8px; }
+  .section-body { padding: 18px; }
+  .section-toggle { font-size: 1.2em; transition: transform 0.2s; }
+  .section-toggle.open { transform: rotate(180deg); }
+  .collapsed .section-body { display: none; }
+
+  /* Attention cards */
+  .attention-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .attention-card { border-radius: 6px; padding: 14px; border-left: 4px solid; }
+  .attention-card.red { background: #3d1e1e; border-color: #fc8181; }
+  .attention-card.orange { background: #3d2a10; border-color: #ed8936; }
+  .attention-card.blue { background: #1a2c4e; border-color: #3182ce; }
+  .attention-card.green { background: #1a3228; border-color: #48bb78; }
+  .attention-card h4 { font-size: 0.85em; font-weight: 700; margin-bottom: 6px; }
+  .attention-card p { font-size: 0.8em; color: #cbd5e0; line-height: 1.5; }
+  .attention-card .tag { display: inline-block; font-size: 0.7em; padding: 2px 6px; border-radius: 10px; margin-top: 6px; font-weight: 600; }
+  .tag-red { background: #fc8181; color: #1a202c; }
+  .tag-orange { background: #ed8936; color: #1a202c; }
+  .tag-blue { background: #3182ce; color: #fff; }
+  .tag-green { background: #48bb78; color: #1a202c; }
+  .tag-gray { background: #4a5568; color: #e2e8f0; }
+
+  /* Agent status row */
+  .agent-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid #4a5568; }
+  .agent-row:last-child { border-bottom: none; }
+  .agent-avatar { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9em; flex-shrink: 0; }
+  .av-ron { background: #3182ce; color: #fff; }
+  .av-meg { background: #d53f8c; color: #fff; }
+  .av-brock { background: #ed8936; color: #1a202c; }
+  .av-scout { background: #48bb78; color: #1a202c; }
+  .av-gina { background: #9f7aea; color: #fff; }
+  .av-jacqueline { background: #81e6d9; color: #1a202c; }
+  .agent-info { flex: 1; }
+  .agent-name { font-weight: 700; font-size: 0.9em; }
+  .agent-status-line { font-size: 0.8em; color: #a0aec0; margin-top: 2px; }
+  .agent-metrics { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  .metric-chip { font-size: 0.72em; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .chip-green { background: #276749; color: #c6f6d5; }
+  .chip-yellow { background: #744210; color: #fefcbf; }
+  .chip-red { background: #742a2a; color: #fed7d7; }
+  .chip-blue { background: #2a4365; color: #bee3f8; }
+  .chip-gray { background: #4a5568; color: #e2e8f0; }
+  .agent-badge { padding: 4px 10px; border-radius: 10px; font-size: 0.75em; font-weight: 700; flex-shrink: 0; }
+  .badge-yellow { background: #ed8936; color: #1a202c; }
+  .badge-green { background: #48bb78; color: #1a202c; }
+  .badge-red { background: #fc8181; color: #1a202c; }
+  .badge-gray { background: #4a5568; color: #e2e8f0; }
+  .badge-blue { background: #3182ce; color: #fff; }
+
+  /* Pipeline Kanban */
+  .kanban { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+  .kanban-col { min-width: 200px; flex: 1; background: #374151; border-radius: 6px; padding: 12px; }
+  .kanban-col-title { font-size: 0.78em; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #a0aec0; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #4a5568; }
+  .kanban-count { display: inline-block; background: #4a5568; color: #e2e8f0; border-radius: 10px; padding: 1px 7px; font-size: 0.75em; margin-left: 6px; }
+  .kanban-card { background: #2d3748; border-radius: 5px; padding: 10px; margin-bottom: 8px; border-left: 3px solid; font-size: 0.8em; }
+  .kanban-card-title { font-weight: 600; line-height: 1.3; margin-bottom: 4px; }
+  .kanban-card-meta { color: #a0aec0; font-size: 0.85em; display: flex; gap: 6px; flex-wrap: wrap; }
+  .kc-scouted { border-color: #3182ce; }
+  .kc-approved { border-color: #48bb78; }
+  .kc-arch { border-color: #9f7aea; }
+  .kc-hold { border-color: #a0aec0; }
+  .kc-completed { border-color: #48bb78; opacity: 0.7; }
+
+  /* Progress bars */
+  .progress-section { margin-bottom: 14px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 0.82em; margin-bottom: 5px; }
+  .progress-bar-bg { background: #4a5568; border-radius: 4px; height: 10px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+  .fill-green { background: #48bb78; }
+  .fill-yellow { background: #ed8936; }
+  .fill-blue { background: #3182ce; }
+  .fill-red { background: #fc8181; }
+
+  /* Findings table */
+  .findings-table { width: 100%; border-collapse: collapse; font-size: 0.82em; }
+  .findings-table th { text-align: left; padding: 8px 10px; background: #374151; color: #a0aec0; font-size: 0.8em; letter-spacing: 0.04em; text-transform: uppercase; }
+  .findings-table td { padding: 8px 10px; border-bottom: 1px solid #4a5568; vertical-align: top; }
+  .findings-table tr:last-child td { border-bottom: none; }
+  .sev-high { color: #fc8181; font-weight: 700; }
+  .sev-med { color: #ed8936; font-weight: 700; }
+  .sev-low { color: #f6e05e; font-weight: 700; }
+  .sev-info { color: #a0aec0; }
+  .sev-stale { color: #4a5568; text-decoration: line-through; }
+  .status-resolved { color: #48bb78; font-weight: 600; }
+  .status-open { color: #ed8936; }
+  .status-new { color: #fc8181; font-weight: 600; }
+  .status-stale { color: #4a5568; font-style: italic; }
+
+  /* Cross-validation */
+  .discrepancy-item { background: #2d2718; border: 1px solid #ed8936; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+  .discrepancy-item h4 { font-size: 0.85em; font-weight: 700; color: #ed8936; margin-bottom: 4px; }
+  .discrepancy-item p { font-size: 0.8em; color: #cbd5e0; line-height: 1.5; }
+  .info-item { background: #1e2940; border: 1px solid #3182ce; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+  .info-item h4 { font-size: 0.85em; font-weight: 700; color: #63b3ed; margin-bottom: 4px; }
+  .info-item p { font-size: 0.8em; color: #cbd5e0; line-height: 1.5; }
+
+  /* Schedule grid */
+  .schedule-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .schedule-card { background: #374151; border-radius: 6px; padding: 12px; }
+  .schedule-agent { font-size: 0.8em; font-weight: 700; margin-bottom: 4px; }
+  .schedule-time { font-size: 0.75em; color: #a0aec0; }
+  .schedule-run { font-size: 0.75em; margin-top: 6px; }
+  .run-ok { color: #48bb78; }
+  .run-warn { color: #ed8936; }
+  .run-no { color: #a0aec0; }
+
+  /* Todo items */
+  .todo-item { display: flex; align-items: flex-start; gap: 8px; padding: 7px 0; border-bottom: 1px solid #374151; font-size: 0.82em; }
+  .todo-item:last-child { border-bottom: none; }
+  .todo-check { width: 16px; height: 16px; border-radius: 50%; border: 2px solid; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; font-size: 0.7em; font-weight: 700; }
+  .check-done { border-color: #48bb78; background: #48bb78; color: #1a202c; }
+  .check-pending { border-color: #a0aec0; }
+  .check-blocked { border-color: #fc8181; }
+  .todo-text { flex: 1; line-height: 1.4; }
+  .todo-text.done { color: #4a5568; text-decoration: line-through; }
+  .todo-text.blocked { color: #fc8181; }
+
+  /* Stat boxes */
+  .stat-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .stat-box { background: #374151; border-radius: 6px; padding: 12px; text-align: center; }
+  .stat-number { font-size: 1.8em; font-weight: 700; }
+  .stat-label { font-size: 0.72em; color: #a0aec0; margin-top: 2px; }
+  .stat-green { color: #48bb78; }
+  .stat-yellow { color: #ed8936; }
+  .stat-red { color: #fc8181; }
+  .stat-blue { color: #63b3ed; }
+  .stat-gray { color: #a0aec0; }
+
+  /* Utilities */
+  .mt8 { margin-top: 8px; }
+  .mt12 { margin-top: 12px; }
+  .small { font-size: 0.8em; color: #a0aec0; }
+  code { background: #374151; padding: 2px 5px; border-radius: 3px; font-family: monospace; font-size: 0.85em; }
+
+  /* Footer */
+  .footer { text-align: center; padding: 20px; color: #4a5568; font-size: 0.78em; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">SIDE HUSTLE EXECUTIVE DASHBOARD</div>
+    <div class="header-meta">Jacqueline PM Report &bull; Tuesday, March 31, 2026 &bull; Synthesized from Ron + Meg + Brock overnight runs</div>
+  </div>
+  <div class="posture-badge posture-review">REVIEW NEEDED</div>
+</div>
+
+<div class="main">
+
+  <!-- ==================== ATTENTION NEEDED ==================== -->
+  <div class="section" id="sec-attention">
+    <div class="section-header" onclick="toggle('sec-attention')">
+      <div class="section-title">&#9888; Attention Needed <span style="color:#fc8181;font-size:0.85em;margin-left:6px;">(8 items)</span></div>
+      <div class="section-toggle open" id="sec-attention-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <div class="attention-grid">
+
+        <div class="attention-card red">
+          <h4 style="color:#fc8181;">Revoke Anthropic API Key (Day 10)</h4>
+          <p>SEC-001: The API key in <code>sql_query_optimizer/api/.env</code> has not been revoked. This is day 10. Go to <strong>console.anthropic.com</strong> and revoke it now. Risk remains INFO locally but will become CRITICAL if the repo ever goes public.</p>
+          <span class="tag tag-red">ACTION REQUIRED</span>
+        </div>
+
+        <div class="attention-card orange">
+          <h4 style="color:#ed8936;">Push Commit b52d96c to GitHub</h4>
+          <p>Ron committed infrastructure work (TODOs #5-7, lock files, SEC-010 redaction) but <strong>cannot push from Cowork VM</strong>. Run <code>git push origin master</code> from your Mac to push commit <code>b52d96c</code>.</p>
+          <span class="tag tag-orange">DEBBIE ACTION</span>
+        </div>
+
+        <div class="attention-card orange">
+          <h4 style="color:#ed8936;">Commit Meg/Brock Reports + New Tests</h4>
+          <p>Git index.lock from a concurrent agent prevented Ron from committing the 03-31 QA/security reports and 2 new Meg test files (<code>test_null_id_migration.py</code>, <code>test_credits_concurrency.py</code>). Run <code>find .git -name "*.lock" -delete</code> then commit from Mac.</p>
+          <span class="tag tag-orange">DEBBIE ACTION</span>
+        </div>
+
+        <div class="attention-card orange">
+          <h4 style="color:#ed8936;">Run setup_venvs.sh + CVE Upgrades on Mac</h4>
+          <p>SQL Optimizer .venv must be created on Mac: <code>bash scripts/setup_venvs.sh</code>. Also run <code>pip install cryptography==46.0.6</code> (both products) and <code>pip install Pygments==2.20.0</code> (LoreDocs) to apply CVE fixes from lock files.</p>
+          <span class="tag tag-orange">DEBBIE ACTION</span>
+        </div>
+
+        <div class="attention-card blue">
+          <h4 style="color:#63b3ed;">2 New Pipeline Opportunities Await Review</h4>
+          <p><strong>Data Pipeline Test Harness MCP</strong> and <strong>Data Catalog Lite MCP</strong> are in "scouted" status from Monday's Scout run. No architecture proposals yet -- move to approved-for-review to queue for Gina, or put on hold.</p>
+          <span class="tag tag-blue">PIPELINE REVIEW</span>
+        </div>
+
+        <div class="attention-card blue">
+          <h4 style="color:#63b3ed;">3 Architecture Proposals Await Approval</h4>
+          <p>Gina has proposed architectures for: <strong>AI Cost Attribution MCP</strong> (P2, E2), <strong>PromptOps Lite / LorePrompts</strong> (P3, E3), and <strong>MCP Token Profiler</strong> (P4, E1). All are awaiting your approval or rejection to move to Ron's queue.</p>
+          <span class="tag tag-blue">PIPELINE REVIEW</span>
+        </div>
+
+        <div class="attention-card orange">
+          <h4 style="color:#ed8936;">BSL License Decision Still Pending</h4>
+          <p>TODO #3 is blocked: no BSL 1.1 license files found in repo -- both products use MIT in <code>pyproject.toml</code>. Decide: keep MIT, switch to BSL, or add BSL as a supplemental license. Unblocks Ron.</p>
+          <span class="tag tag-orange">DECISION NEEDED</span>
+        </div>
+
+        <div class="attention-card blue">
+          <h4 style="color:#63b3ed;">Approve Rebuilt .plugin Files</h4>
+          <p>Ron completed rebuilding <code>loreconvo-v0.3.0.plugin</code> and <code>loredocs-v0.1.0.plugin</code> with Lore names (done 2026-03-27). Your review and approval is needed before these can be published (Debbie TODO #4).</p>
+          <span class="tag tag-blue">REVIEW NEEDED</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== OVERNIGHT SUMMARY ==================== -->
+  <div class="section collapsed" id="sec-overnight">
+    <div class="section-header" onclick="toggle('sec-overnight')">
+      <div class="section-title">&#128337; Overnight Agent Summary</div>
+      <div class="section-toggle" id="sec-overnight-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+
+      <div class="agent-row">
+        <div class="agent-avatar av-ron">RON</div>
+        <div class="agent-info">
+          <div class="agent-name">Ron &mdash; Daily Builder Run</div>
+          <div class="agent-status-line">2026-03-31 12:38 AM &bull; 2 commits: b52d96c, d23f12e</div>
+          <div class="agent-metrics">
+            <span class="metric-chip chip-green">TODOs #5-7 DONE</span>
+            <span class="metric-chip chip-green">3 new lock files</span>
+            <span class="metric-chip chip-yellow">2 CVEs bumped</span>
+            <span class="metric-chip chip-blue">SEC-010 redacted</span>
+            <span class="metric-chip chip-yellow">Push needed from Mac</span>
+          </div>
+          <div class="small mt8"><strong>What Ron did:</strong> Completed all 3 infrastructure TODOs: generated requirements-lock.txt for LoreConvo (29 packages) and LoreDocs (47 packages), created LoreDocs requirements.txt, created <code>scripts/setup_venvs.sh</code> for Mac. Fixed 2 CVEs in lock files (cryptography 46.0.5&rarr;46.0.6, Pygments 2.19.2&rarr;2.20.0). Redacted partial API key from 03-29 and 03-30 security reports. Git lock files prevented committing Meg/Brock 03-31 reports in the same session.</div>
+        </div>
+        <div class="agent-badge badge-blue">INFRA SPRINT</div>
+      </div>
+
+      <div class="agent-row">
+        <div class="agent-avatar av-meg">MEG</div>
+        <div class="agent-info">
+          <div class="agent-name">Meg &mdash; QA Report</div>
+          <div class="agent-status-line">2026-03-31 04:38 AM &bull; docs/qa/qa_report_2026_03_31.md</div>
+          <div class="agent-metrics">
+            <span class="metric-chip chip-green">227 tests PASS</span>
+            <span class="metric-chip chip-green">0 failures</span>
+            <span class="metric-chip chip-blue">+18 new tests</span>
+            <span class="metric-chip chip-yellow">1 MEDIUM finding</span>
+            <span class="metric-chip chip-yellow">2 LOW findings</span>
+          </div>
+          <div class="small mt8"><strong>Meg's findings:</strong> MEG-031 (MEDIUM) SQL Optimizer version mismatch -- CLAUDE.md says v0.1.0, SKILL.md says 1.0.0. MEG-032 (LOW) FTS schema drift between database.py and auto_save.py. MEG-033 (LOW) auto_save.py schema missing NOT NULL on id. Two prior MEDIUMs (credits.py non-atomic JSON, optimizer.py sync-in-async) remain open as MVP-acceptable. Code quality rated GOOD for all 4 changed files. 2 new test files written but untracked due to git lock.</div>
+        </div>
+        <div class="agent-badge badge-yellow">YELLOW</div>
+      </div>
+
+      <div class="agent-row">
+        <div class="agent-avatar av-brock">BRK</div>
+        <div class="agent-info">
+          <div class="agent-name">Brock &mdash; Security Report</div>
+          <div class="agent-status-line">2026-03-31 12:32 AM &bull; docs/security/security_report_2026_03_31.md</div>
+          <div class="agent-metrics">
+            <span class="metric-chip chip-green">0 CVEs found</span>
+            <span class="metric-chip chip-yellow">1 HIGH (SEC-010)</span>
+            <span class="metric-chip chip-yellow">1 MEDIUM (SEC-011 NEW)</span>
+            <span class="metric-chip chip-green">SEC-003 RESOLVED</span>
+            <span class="metric-chip chip-green">SEC-002/004/005/007/008 all resolved</span>
+          </div>
+          <div class="small mt8"><strong>Brock's findings:</strong> SEC-010 (HIGH) partial API key in git history at commit 34d6f43 -- on-disk redaction NOT yet committed at time of scan (Ron committed 6 minutes later). SEC-011 (MEDIUM, NEW) TOCTOU race in LoreDocs file export function. SEC-001 correctly reclassified to INFO per updated guidelines. Git lock files present. pip-audit clean on all 3 products. See Cross-Agent section for timing note on SEC-010.</div>
+        </div>
+        <div class="agent-badge badge-yellow">NEEDS ATTENTION</div>
+      </div>
+
+      <div class="agent-row">
+        <div class="agent-avatar av-scout">SCT</div>
+        <div class="agent-info">
+          <div class="agent-name">Scout &mdash; Weekly Research Run</div>
+          <div class="agent-status-line">2026-03-30 04:19 AM &bull; Monday run (last week)</div>
+          <div class="agent-metrics">
+            <span class="metric-chip chip-blue">5 opportunities found</span>
+            <span class="metric-chip chip-yellow">3 put on hold</span>
+            <span class="metric-chip chip-green">Theme: data engineering gap</span>
+          </div>
+          <div class="small mt8">Scout focused on data engineering tooling gap in the MCP ecosystem. Identified SSIS Package Analyzer, Data Pipeline Test Harness, Schema Diff MCP, Data Catalog Lite, ETL Pattern Library. Recommended ETL Pattern Library as lowest-risk first ship. SSIS, Schema Diff, and ETL Pattern Library put on hold due to SQL Server dependency. Next Scout run: Monday 2026-04-06 at 3:00 AM.</div>
+        </div>
+        <div class="agent-badge badge-green">RAN MON</div>
+      </div>
+
+      <div class="agent-row">
+        <div class="agent-avatar av-gina">GINA</div>
+        <div class="agent-info">
+          <div class="agent-name">Gina &mdash; Enterprise Architect</div>
+          <div class="agent-status-line">Last run: 2026-03-26/earlier &bull; Next: Wednesday 2026-04-01 04:00 AM</div>
+          <div class="agent-metrics">
+            <span class="metric-chip chip-blue">3 proposals active</span>
+            <span class="metric-chip chip-gray">awaiting Debbie approval</span>
+          </div>
+          <div class="small mt8">AI Cost Attribution MCP (P2/E2), PromptOps Lite / LorePrompts (P3/E3), MCP Token Profiler (P4/E1) all in architecture-proposed state. 2 new Scout items (Data Pipeline Test Harness, Data Catalog Lite) are available for Gina to review after Debbie approves them for architecture. Gina runs tonight (Wednesday).</div>
+        </div>
+        <div class="agent-badge badge-blue">RUNS TONIGHT</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== CROSS-AGENT VALIDATION ==================== -->
+  <div class="section collapsed" id="sec-xval">
+    <div class="section-header" onclick="toggle('sec-xval')">
+      <div class="section-title">&#128268; Cross-Agent Validation</div>
+      <div class="section-toggle" id="sec-xval-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+
+      <div class="info-item">
+        <h4>TIMING RESOLUTION: SEC-010 Redaction is Now Committed</h4>
+        <p>Brock's 12:32 AM report says SEC-010 redaction is "on disk but NOT committed." Ron committed it in <code>b52d96c</code> at 12:38 AM -- 6 minutes after Brock's scan. The commit IS in git log. <strong>This finding is now partially resolved:</strong> the on-disk redaction is committed. The partial key in git history at commit <code>34d6f43</code> still exists and would need BFG Repo Cleaner if the repo ever goes public -- but that's a pre-publication task, not an immediate action item.</p>
+      </div>
+
+      <div class="discrepancy-item">
+        <h4>INTERNAL INCONSISTENCY: Brock's Infrastructure Table vs SEC-003 Finding</h4>
+        <p>Brock's Infrastructure Review table says "Requirements lockfiles: MISSING" -- but the SEC-003 finding in the same report says "RESOLVED as of 2026-03-31." Both lock files were generated by Ron in commit <code>b52d96c</code> (same day). The infrastructure table appears to have been written before the findings section was updated. <strong>Brock's infrastructure table entry for lock files is stale.</strong> The correct status is RESOLVED.</p>
+      </div>
+
+      <div class="info-item">
+        <h4>STALE-ADJACENT: MEG-031 Not Yet Addressed by Ron</h4>
+        <p>Meg flagged MEG-031 (MEDIUM) -- SQL Optimizer version mismatch (CLAUDE.md says v0.1.0, SKILL.md says 1.0.0) -- in the 04:38 AM QA report. Ron's 12:38 AM session preceded Meg's report, so Ron could not have addressed it yet. This is correctly open. Should appear in Ron's next session as a doc-sync task.</p>
+      </div>
+
+      <div class="info-item">
+        <h4>CLASSIFICATION CHECK: Brock's "URGENT" Language for SEC-001</h4>
+        <p>SEC-001 (API key in local .env) was correctly reclassified to INFO by Brock -- good. However, the Recommendations section still uses "Debbie (URGENT)" for key revocation. The security guidelines say to avoid alarm language for local .env keys on single-user machines. The finding classification is correct; the recommendation tone is slightly elevated. Still good practice to revoke the key, but it's not urgent from a security standpoint while the repo is private.</p>
+      </div>
+
+      <div class="info-item">
+        <h4>CONFIRMED MATCH: pip-audit Results</h4>
+        <p>Brock's pip-audit results (0 CVEs) align with Ron's lock file work. Ron bumped cryptography and Pygments in the lock files; Brock's scan ran before those bumps were active in venvs on Debbie's Mac, so Brock's 0 CVE finding is based on the previously audited state. After Debbie runs the pip installs from lock files on Mac, all 3 products will be fully clean.</p>
+      </div>
+
+      <div class="info-item">
+        <h4>UNTRACKED FILES: 2 Test Files Pending Commit</h4>
+        <p>Meg's new tests (<code>ron_skills/loreconvo/tests/test_null_id_migration.py</code> and <code>ron_skills/sql_query_optimizer/api/tests/test_credits_concurrency.py</code>) are on disk but untracked due to git lock. Brock noted these as "not a security concern." Debbie needs to <code>git add</code> and commit them from her Mac after clearing the lock file.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== PIPELINE STATUS ==================== -->
+  <div class="section collapsed" id="sec-pipeline">
+    <div class="section-header" onclick="toggle('sec-pipeline')">
+      <div class="section-title">&#128202; Pipeline Status</div>
+      <div class="section-toggle" id="sec-pipeline-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <div class="stat-row">
+        <div class="stat-box"><div class="stat-number stat-blue">2</div><div class="stat-label">Scouted (Awaiting Review)</div></div>
+        <div class="stat-box"><div class="stat-number stat-green">0</div><div class="stat-label">Approved for Review</div></div>
+        <div class="stat-box"><div class="stat-number" style="color:#9f7aea;">3</div><div class="stat-label">Architecture Proposed</div></div>
+        <div class="stat-box"><div class="stat-number stat-green">0</div><div class="stat-label">Approved (Ron Queue)</div></div>
+        <div class="stat-box"><div class="stat-number stat-gray">5</div><div class="stat-label">On Hold</div></div>
+        <div class="stat-box"><div class="stat-number stat-green">6</div><div class="stat-label">Completed</div></div>
+      </div>
+
+      <div class="kanban">
+        <div class="kanban-col">
+          <div class="kanban-col-title">Scouted <span class="kanban-count">2</span></div>
+          <div class="kanban-card kc-scouted">
+            <div class="kanban-card-title">Data Pipeline Test Harness MCP</div>
+            <div class="kanban-card-meta"><span>Scout 03-30</span></div>
+          </div>
+          <div class="kanban-card kc-scouted">
+            <div class="kanban-card-title">Data Catalog Lite MCP</div>
+            <div class="kanban-card-meta"><span>Scout 03-30</span></div>
+          </div>
+        </div>
+
+        <div class="kanban-col">
+          <div class="kanban-col-title">Arch Proposed <span class="kanban-count">3</span></div>
+          <div class="kanban-card kc-arch">
+            <div class="kanban-card-title">AI Cost Attribution MCP</div>
+            <div class="kanban-card-meta"><span>P2</span><span>E=2 (half-day)</span></div>
+          </div>
+          <div class="kanban-card kc-arch">
+            <div class="kanban-card-title">PromptOps Lite / LorePrompts</div>
+            <div class="kanban-card-meta"><span>P3</span><span>E=3 (weekend)</span></div>
+          </div>
+          <div class="kanban-card kc-arch">
+            <div class="kanban-card-title">MCP Token Profiler</div>
+            <div class="kanban-card-meta"><span>P4</span><span>E=1 (afternoon)</span></div>
+          </div>
+        </div>
+
+        <div class="kanban-col">
+          <div class="kanban-col-title">Approved / In Progress <span class="kanban-count">0</span></div>
+          <div style="font-size:0.78em;color:#4a5568;padding:8px 0;">Nothing approved yet. Move architecture proposals to approved to queue for Ron.</div>
+        </div>
+
+        <div class="kanban-col">
+          <div class="kanban-col-title">On Hold <span class="kanban-count">5</span></div>
+          <div class="kanban-card kc-hold">
+            <div class="kanban-card-title">Smart SQL Server MCP</div>
+            <div class="kanban-card-meta"><span>P1</span><span>Cannot test locally</span></div>
+          </div>
+          <div class="kanban-card kc-hold">
+            <div class="kanban-card-title">SSIS Package Analyzer MCP</div>
+            <div class="kanban-card-meta"><span>SQL Server specific</span></div>
+          </div>
+          <div class="kanban-card kc-hold">
+            <div class="kanban-card-title">Schema Diff &amp; Migration MCP</div>
+            <div class="kanban-card-meta"><span>SQL Server specific</span></div>
+          </div>
+          <div class="kanban-card kc-hold">
+            <div class="kanban-card-title">ETL Pattern Library Skill</div>
+            <div class="kanban-card-meta"><span>SQL Server specific</span></div>
+          </div>
+          <div class="kanban-card kc-hold">
+            <div class="kanban-card-title">TabularContext Library</div>
+            <div class="kanban-card-meta"><span>P5</span><span>E=1</span></div>
+          </div>
+        </div>
+
+        <div class="kanban-col">
+          <div class="kanban-col-title">Completed <span class="kanban-count">6</span></div>
+          <div class="kanban-card kc-completed">
+            <div class="kanban-card-title">6x Security Hardening Items</div>
+            <div class="kanban-card-meta"><span>OPP-006 to OPP-011</span><span>All P2/E1</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="small mt12"><strong>Note:</strong> Gina runs tonight (Wednesday 2026-04-01 04:00 AM). If Debbie approves Data Pipeline Test Harness and/or Data Catalog Lite before then, Gina can pick them up tonight.</div>
+    </div>
+  </div>
+
+  <!-- ==================== TODO TRACKER ==================== -->
+  <div class="section collapsed" id="sec-todos">
+    <div class="section-header" onclick="toggle('sec-todos')">
+      <div class="section-title">&#9989; TODO Tracker</div>
+      <div class="section-toggle" id="sec-todos-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+
+      <div class="grid-2">
+        <div>
+          <h3 style="font-size:0.88em;font-weight:700;margin-bottom:10px;color:#a0aec0;letter-spacing:0.04em;">RON TODOs</h3>
+
+          <div class="progress-section">
+            <div class="progress-label"><span>Rebrand (Lore Family)</span><span>3/4 <span style="color:#a0aec0;">(1 blocked)</span></span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill fill-yellow" style="width:75%"></div></div>
+          </div>
+          <div class="progress-section">
+            <div class="progress-label"><span>Infrastructure</span><span style="color:#48bb78;">3/3 DONE</span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill fill-green" style="width:100%"></div></div>
+          </div>
+          <div class="progress-section">
+            <div class="progress-label"><span>LoreConvo CLI Fixes</span><span style="color:#48bb78;">3/3 DONE</span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill fill-green" style="width:100%"></div></div>
+          </div>
+          <div class="progress-section">
+            <div class="progress-label"><span>Pipeline Improvements</span><span style="color:#48bb78;">3/3 DONE</span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill fill-green" style="width:100%"></div></div>
+          </div>
+          <div class="progress-section">
+            <div class="progress-label"><span>Security Fixes (SQL Optimizer)</span><span style="color:#48bb78;">6/6 DONE</span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill fill-green" style="width:100%"></div></div>
+          </div>
+          <div class="progress-section">
+            <div class="progress-label"><span>New Products</span><span>0/4</span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill fill-red" style="width:0%"></div></div>
+          </div>
+
+          <div class="mt12" style="font-size:0.8em;font-weight:700;color:#a0aec0;margin-bottom:6px;">NEXT UP FOR RON:</div>
+          <div class="todo-item"><div class="todo-check check-blocked"></div><div class="todo-text blocked">TODO #3: Update BSL 1.1 license files (BLOCKED on Debbie's decision)</div></div>
+          <div class="todo-item"><div class="todo-check check-pending"></div><div class="todo-text">TODO #20: SQL Query Optimizer - ClawHub skill packaging</div></div>
+          <div class="todo-item"><div class="todo-check check-pending"></div><div class="todo-text">TODO #21: SQL Query Optimizer - integration tests with real SQL Server queries</div></div>
+          <div class="todo-item"><div class="todo-check check-pending"></div><div class="todo-text">TODO #22: Build Financial Report Generator skill + FastMCP backend</div></div>
+          <div class="todo-item"><div class="todo-check check-pending"></div><div class="todo-text">TODO #23: Build CSV/Excel Data Transformer skill + FastMCP backend</div></div>
+          <div class="todo-item"><div class="todo-check check-pending"></div><div class="todo-text">MEG-031: Fix SQL Optimizer version mismatch (SKILL.md 1.0.0 vs CLAUDE.md 0.1.0)</div></div>
+          <div class="todo-item"><div class="todo-check check-pending"></div><div class="todo-text">SEC-011: Fix TOCTOU race in LoreDocs file export (before any multi-user deployment)</div></div>
+        </div>
+
+        <div>
+          <h3 style="font-size:0.88em;font-weight:700;margin-bottom:10px;color:#a0aec0;letter-spacing:0.04em;">DEBBIE TODOs</h3>
+
+          <div class="progress-section">
+            <div class="progress-label"><span>Debbie Actions</span><span>1/5</span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill fill-yellow" style="width:20%"></div></div>
+          </div>
+
+          <div class="todo-item"><div class="todo-check check-done">&#10003;</div><div class="todo-text done">Register copyright (LoreConvo, LoreDocs) -- done</div></div>
+          <div class="todo-item"><div class="todo-check check-pending"></div><div class="todo-text">File USPTO trademark: LoreConvo (Class 009, $350)</div></div>
+          <div class="todo-item"><div class="todo-check check-pending"></div><div class="todo-text">File USPTO trademark: LoreDocs (Class 009, $350)</div></div>
+          <div class="todo-item"><div class="todo-check check-pending"></div><div class="todo-text">Review and approve rebuilt .plugin files (loreconvo-v0.3.0.plugin, loredocs-v0.1.0.plugin)</div></div>
+          <div class="todo-item"><div class="todo-check check-pending"></div><div class="todo-text">Activate live Stripe account (business verification, bank account, EIN). Sandbox set up 2026-03-22.</div></div>
+
+          <div class="mt12" style="font-size:0.8em;font-weight:700;color:#a0aec0;margin-bottom:6px;">INFRASTRUCTURE BLOCKED:</div>
+          <div style="background:#374151;border-radius:5px;padding:10px;font-size:0.78em;">
+            <div style="margin-bottom:6px;"><span style="color:#fc8181;font-weight:700;">BLOCKED:</span> Marketplace publishing &mdash; "knowledge-work-plugins" reserved by Anthropic. Unblocked by self-hosted GitHub marketplace or official submission.</div>
+            <div style="margin-bottom:6px;"><span style="color:#fc8181;font-weight:700;">BLOCKED:</span> Stripe billing integration &mdash; depends on marketplace going live.</div>
+            <div><span style="color:#fc8181;font-weight:700;">BLOCKED:</span> SQL Optimizer paid API backend &mdash; depends on marketplace + billing.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== SECURITY FINDINGS ==================== -->
+  <div class="section collapsed" id="sec-security">
+    <div class="section-header" onclick="toggle('sec-security')">
+      <div class="section-title">&#128274; Security Findings (Brock 2026-03-31)</div>
+      <div class="section-toggle" id="sec-security-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <table class="findings-table">
+        <thead>
+          <tr><th>ID</th><th>Severity</th><th>Status</th><th>Description</th><th>Owner</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SEC-010</td>
+            <td class="sev-high">HIGH</td>
+            <td class="status-open">PARTIAL -- see note</td>
+            <td>Partial API key in git history (commit 34d6f43). On-disk redaction committed by Ron in b52d96c after Brock's scan. Git history scrub (BFG) needed if repo ever goes public.</td>
+            <td>Debbie (pre-publish)</td>
+          </tr>
+          <tr>
+            <td>SEC-011</td>
+            <td class="sev-med">MEDIUM</td>
+            <td class="status-new">NEW</td>
+            <td>TOCTOU race condition in LoreDocs file export (storage.py:1083-1087). Low risk locally; fix before any multi-user deployment. Use atomic file creation.</td>
+            <td>Ron</td>
+          </tr>
+          <tr>
+            <td>SEC-006</td>
+            <td class="sev-low">LOW</td>
+            <td class="status-open">OPEN (MVP-OK)</td>
+            <td>CreditManager JSON file read-modify-write without locking. Acceptable until public API deployment.</td>
+            <td>Ron (pre-deploy)</td>
+          </tr>
+          <tr>
+            <td>SEC-001</td>
+            <td class="sev-info">INFO</td>
+            <td style="color:#a0aec0;">RECLASSIFIED</td>
+            <td>Anthropic API key in local gitignored .env on single-user Mac. No remote access, no evidence of compromise. Revoke when convenient.</td>
+            <td>Debbie (revoke key)</td>
+          </tr>
+          <tr>
+            <td>SEC-009</td>
+            <td class="sev-info">INFO</td>
+            <td style="color:#a0aec0;">INFORMATIONAL</td>
+            <td>Dynamic SQL in LoreDocs/LoreConvo -- all values parameterized, fields whitelisted. No actual injection risk.</td>
+            <td>None</td>
+          </tr>
+          <tr>
+            <td>SEC-003</td>
+            <td><span class="sev-stale">MEDIUM</span></td>
+            <td class="status-resolved">RESOLVED 03-31</td>
+            <td>Dependency pinning. requirements-lock.txt generated for LoreConvo + LoreDocs. SQL Optimizer already pinned. Note: Brock's infrastructure table still shows MISSING -- internal inconsistency in Brock's report, finding is correctly marked resolved.</td>
+            <td>--</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="mt12" style="font-size:0.8em;">
+        <strong>Resolved (cumulative):</strong> SEC-002 (hmac timing-safe), SEC-004 (email PII masking), SEC-005 (rate limiting), SEC-007 (.gitignore), SEC-008 (--reload warning), SEC-003 (lock files) &mdash; all resolved via commits 040c1c4 + b52d96c.
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== QA FINDINGS ==================== -->
+  <div class="section collapsed" id="sec-qa">
+    <div class="section-header" onclick="toggle('sec-qa')">
+      <div class="section-title">&#128202; QA Findings (Meg 2026-03-31)</div>
+      <div class="section-toggle" id="sec-qa-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <div class="stat-row">
+        <div class="stat-box"><div class="stat-number stat-green">227</div><div class="stat-label">Tests Passing</div></div>
+        <div class="stat-box"><div class="stat-number stat-green">0</div><div class="stat-label">Tests Failing</div></div>
+        <div class="stat-box"><div class="stat-number stat-gray">8</div><div class="stat-label">Skipped (no MCP module)</div></div>
+        <div class="stat-box"><div class="stat-number stat-blue">+18</div><div class="stat-label">New Tests This Run</div></div>
+        <div class="stat-box"><div class="stat-number stat-yellow">1</div><div class="stat-label">MEDIUM Finding</div></div>
+        <div class="stat-box"><div class="stat-number stat-yellow">2</div><div class="stat-label">LOW Findings</div></div>
+      </div>
+      <table class="findings-table">
+        <thead>
+          <tr><th>ID</th><th>Severity</th><th>Status</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>MEG-031</td>
+            <td class="sev-med">MEDIUM</td>
+            <td class="status-new">OPEN</td>
+            <td>SQL Optimizer version mismatch: CLAUDE.md = v0.1.0, SKILL.md = 1.0.0. Recommend aligning to 0.1.0 (product is still IN PROGRESS).</td>
+          </tr>
+          <tr>
+            <td>MEG-032</td>
+            <td class="sev-low">LOW</td>
+            <td class="status-open">OPEN</td>
+            <td>FTS schema drift between database.py and auto_save.py -- auto_save.py has extra columns (artifacts, open_questions). Should be unified.</td>
+          </tr>
+          <tr>
+            <td>MEG-033</td>
+            <td class="sev-low">LOW</td>
+            <td class="status-open">OPEN</td>
+            <td>auto_save.py ensure_tables() missing NOT NULL on id column. Should match database.py schema for consistency.</td>
+          </tr>
+          <tr>
+            <td>MEG-OA-1</td>
+            <td class="sev-med">MEDIUM</td>
+            <td class="status-open">OPEN (MVP-OK)</td>
+            <td>credits.py non-atomic JSON read/write (no locking). Acceptable for MVP. From 2026-03-30 report.</td>
+          </tr>
+          <tr>
+            <td>MEG-OA-2</td>
+            <td class="sev-med">MEDIUM</td>
+            <td class="status-open">OPEN (MVP-OK)</td>
+            <td>optimizer.py uses sync Anthropic client inside async function. Acceptable for MVP. From 2026-03-30 report.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="small mt12">MCP-dependent tests (LoreDocs tier_integration, test_mcp_tools) continue to skip because system Python lacks the <code>mcp</code> module. Not a bug -- Cowork VM limitation. Meg's overall code quality assessment: GOOD across all 4 changed files.</div>
+    </div>
+  </div>
+
+  <!-- ==================== SCHEDULE & HEALTH ==================== -->
+  <div class="section collapsed" id="sec-schedule">
+    <div class="section-header" onclick="toggle('sec-schedule')">
+      <div class="section-title">&#128337; Agent Schedule &amp; Health</div>
+      <div class="section-toggle" id="sec-schedule-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <div class="schedule-grid">
+        <div class="schedule-card">
+          <div class="agent-avatar av-ron" style="margin-bottom:8px;">RON</div>
+          <div class="schedule-agent">Ron (Builder)</div>
+          <div class="schedule-time">Daily 12:00 AM</div>
+          <div class="schedule-run run-ok">Last run: 2026-03-31 [OK]</div>
+          <div class="small mt8">2 commits. Infrastructure sprint. Push pending from Mac.</div>
+        </div>
+        <div class="schedule-card">
+          <div class="agent-avatar av-meg" style="margin-bottom:8px;">MEG</div>
+          <div class="schedule-agent">Meg (QA)</div>
+          <div class="schedule-time">Daily 2:00 AM</div>
+          <div class="schedule-run run-ok">Last run: 2026-03-31 [OK]</div>
+          <div class="small mt8">227 tests. Report generated. 2 test files untracked (git lock).</div>
+        </div>
+        <div class="schedule-card">
+          <div class="agent-avatar av-brock" style="margin-bottom:8px;">BRK</div>
+          <div class="schedule-agent">Brock (Security)</div>
+          <div class="schedule-time">Daily 3:00 AM</div>
+          <div class="schedule-run run-ok">Last run: 2026-03-31 [OK]</div>
+          <div class="small mt8">0 CVEs. 1 new finding (SEC-011). Internal inconsistency in infrastructure table noted.</div>
+        </div>
+        <div class="schedule-card">
+          <div class="agent-avatar av-scout" style="margin-bottom:8px;">SCT</div>
+          <div class="schedule-agent">Scout (Research)</div>
+          <div class="schedule-time">Monday 3:00 AM</div>
+          <div class="schedule-run run-ok">Last run: 2026-03-30 [OK]</div>
+          <div class="small mt8">5 opportunities found. Next run: Monday 2026-04-06.</div>
+        </div>
+        <div class="schedule-card">
+          <div class="agent-avatar av-gina" style="margin-bottom:8px;">GINA</div>
+          <div class="schedule-agent">Gina (Architect)</div>
+          <div class="schedule-time">Wed + Sat 4:00 AM</div>
+          <div class="schedule-run run-warn">Next run: 2026-04-01 (TONIGHT)</div>
+          <div class="small mt8">3 proposals pending Debbie approval. 2 new scouted items available.</div>
+        </div>
+        <div class="schedule-card">
+          <div class="agent-avatar av-jacqueline" style="margin-bottom:8px;">JQ</div>
+          <div class="schedule-agent">Jacqueline (PM)</div>
+          <div class="schedule-time">Daily 4:30 AM</div>
+          <div class="schedule-run run-ok">This report: 2026-03-31 [OK]</div>
+          <div class="small mt8">Dashboard generated. LoreConvo session saved.</div>
+        </div>
+      </div>
+
+      <div class="mt12" style="background:#374151;border-radius:5px;padding:12px;font-size:0.8em;">
+        <strong style="color:#ed8936;">Known Infrastructure Issues:</strong>
+        <div class="mt8">1. <strong>Git push blocked from Cowork VM</strong> -- no GitHub credentials. All commits must be pushed by Debbie from Mac. Affects all agents.</div>
+        <div class="mt8">2. <strong>Git lock files</strong> (<code>index.lock</code>, <code>maintenance.lock</code>) left by concurrent agent sessions. Clean with: <code>find .git -name "*.lock" -delete</code></div>
+        <div class="mt8">3. <strong>SQL Optimizer .venv missing on Mac</strong> -- run <code>bash scripts/setup_venvs.sh</code> to create it.</div>
+        <div class="mt8">4. <strong>MCP module not in system Python</strong> -- LoreDocs tier_integration and mcp_tools tests always skip in Cowork VM. Not a bug.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  Generated by Jacqueline (PM Agent) &bull; 2026-03-31 &bull; Side Hustle Project Ron &bull; Labyrinth Analytics Consulting<br>
+  Data sources: git log, docs/qa/, docs/security/, LoreConvo sessions.db, CLAUDE.md
+</div>
+
+<script>
+function toggle(id) {
+  var sec = document.getElementById(id);
+  var tog = document.getElementById(id + '-toggle');
+  if (sec.classList.contains('collapsed')) {
+    sec.classList.remove('collapsed');
+    tog.classList.add('open');
+  } else {
+    sec.classList.add('collapsed');
+    tog.classList.remove('open');
+  }
+}
+// Auto-expand Attention section on load
+document.getElementById('sec-attention').classList.remove('collapsed');
+document.getElementById('sec-attention-toggle').classList.add('open');
+</script>
+</body>
+</html>
