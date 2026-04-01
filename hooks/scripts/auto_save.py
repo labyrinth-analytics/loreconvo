@@ -151,7 +151,7 @@ def ensure_tables(conn):
     """Create tables if they don't exist (matches core/database.py schema)."""
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS sessions (
-            id TEXT PRIMARY KEY,
+            id TEXT PRIMARY KEY NOT NULL,
             title TEXT NOT NULL,
             surface TEXT NOT NULL,
             project TEXT,
@@ -172,8 +172,7 @@ def ensure_tables(conn):
             UNIQUE(session_id, skill_name)
         );
         CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts USING fts5(
-            title, summary, decisions, artifacts, open_questions,
-            content='sessions', content_rowid='rowid'
+            title, summary, decisions, content=sessions, content_rowid=rowid
         );
     """)
 
@@ -236,8 +235,8 @@ def save_to_db(db_path, session_id, parsed):
         # Update FTS index
         try:
             conn.execute(
-                """INSERT INTO sessions_fts(rowid, title, summary, decisions, artifacts, open_questions)
-                   SELECT rowid, title, summary, decisions, artifacts, open_questions
+                """INSERT INTO sessions_fts(rowid, title, summary, decisions)
+                   SELECT rowid, title, summary, decisions
                    FROM sessions WHERE id = ?""",
                 (session_uuid,),
             )
