@@ -178,4 +178,7 @@ Ask Claude to "mount my ~/.loreconvo folder" so Cowork can access the shared dat
 
 ## License
 
-MIT - Labyrinth Analytics Consulting
+Business Source License 1.1 (BSL 1.1) - Labyrinth Analytics Consulting
+
+Free for personal/non-commercial use (up to 50 sessions). Commercial use requires
+a paid license. Converts to Apache 2.0 on 2030-03-31. See [LICENSE](LICENSE) for details.
