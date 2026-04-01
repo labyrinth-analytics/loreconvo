@@ -1,0 +1,24 @@
+# === INTERNAL DOCUMENTS — NEVER COMMIT TO PUBLIC REPO ===
+# Product strategy and business planning
+docs/PUBLISHING.md
+docs/marketplace_listing.md
+docs/LoreDocs_Product_Spec.md
+docs/ProjectVault_Product_Spec.md
+
+# Agent instructions (contains revenue targets, internal metrics)
+CLAUDE.md
+
+# === Standard ignores ===
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+*.db
+*.sqlite
+*.log
+.DS_Store
+.env
+*.env

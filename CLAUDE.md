@@ -46,11 +46,14 @@ Build and ship products that generate $8K/month passive income through Claude pl
 18. [x] MEDIUM: Add `max_length` to SQL query input field in `OptimizeRequest` model -- done 2026-03-29 (max_length=50000).
 19. [x] MEDIUM: Add security headers middleware -- done 2026-03-29 (HSTS, X-Frame-Options, X-Content-Type-Options, CSP, Referrer-Policy, Cache-Control).
 
+### Documentation
+20. [ ] Add README.md for LoreDocs (modeled after LoreConvo README: tagline, quick start, usage for Code/Cowork, tool list, license)
+
 ### New Products
-20. [ ] SQL Query Optimizer: ClawHub skill packaging
-21. [ ] SQL Query Optimizer: integration tests with real SQL Server queries
-22. [ ] Build Financial Report Generator skill + FastMCP backend
-23. [ ] Build CSV/Excel Data Transformer skill + FastMCP backend
+21. [ ] SQL Query Optimizer: ClawHub skill packaging
+22. [ ] SQL Query Optimizer: integration tests with real SQL Server queries
+23. [ ] Build Financial Report Generator skill + FastMCP backend
+24. [ ] Build CSV/Excel Data Transformer skill + FastMCP backend
 
 ## Product Research Scout (Scheduled Task)
 - **Task:** `weekly-product-scout` — runs every Monday at 3 AM
@@ -131,7 +134,35 @@ Build and ship products that generate $8K/month passive income through Claude pl
 | LoreDocs | Cowork plugin packaging | APPROVED |
 | LoreDocs | Marketplace listing | APPROVED |
 
-## Critical Rules
+## Critical Rules — Public Repo Hygiene (MANDATORY)
+The LoreConvo and LoreDocs repos are PUBLIC on GitHub. Internal business documents MUST NEVER be committed to files tracked by these repos. Before creating or modifying any file inside `ron_skills/loreconvo/` or `ron_skills/loredocs/`, check whether it belongs in the public repo or is internal-only.
+
+**NEVER commit these to public-facing product directories:**
+- Revenue projections, financial models, MRR targets (*.xlsx with revenue data, build_revenue_projection.py)
+- Product requirement documents (PRDs), product specs with competitive analysis or pricing strategy
+- PUBLISHING.md, marketplace_listing.md (go-to-market strategy, submission plans)
+- CLAUDE.md files inside product directories (contain revenue targets, internal agent instructions)
+- Any document containing: pricing numbers, MRR/ARR targets, competitive intelligence, Stripe keys, or customer data
+
+**WHERE internal docs go instead:**
+- Revenue projections, PRDs, publishing plans: keep in the product's local `docs/` directory but ensure they are listed in the product's `.gitignore`
+- Product CLAUDE.md files: must be in each product's `.gitignore` (they are local agent instructions, not user docs)
+- If you need to create a new internal doc, add it to the product's `.gitignore` BEFORE committing
+
+**What IS safe for public repos:**
+- README.md, INSTALL.md, LICENSE (user-facing documentation)
+- Source code (src/, tests/)
+- pyproject.toml, requirements.txt, requirements-lock.txt
+- Skills, hooks, config files (.mcp.json with no secrets)
+- COWORK_RESTORE.md, INSTALL_HOOK.md (user setup docs)
+
+**Pre-push checklist (run before ANY subtree push to loreconvo or loredocs remotes):**
+1. `git diff --cached --name-only` -- review every file being committed
+2. Verify NO files from the "NEVER commit" list above are included
+3. Check that the product's `.gitignore` is up to date
+4. If in doubt, ask Debbie before pushing
+
+## Other Critical Rules
 - NEVER publish, deploy, or make anything public without Debbie's explicit approval.
 - ALWAYS use ASCII-only characters in Python source files (no Unicode checkmarks, box-drawing, smart quotes).
 - ALWAYS check LoreConvo for recent sessions before starting work: call `get_recent_sessions` to see what was done last.
