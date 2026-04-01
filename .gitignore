@@ -1,0 +1,27 @@
+# === INTERNAL DOCUMENTS — NEVER COMMIT TO PUBLIC REPO ===
+# Revenue projections, financial models
+docs/*Revenue_Projection*.xlsx
+docs/build_revenue_projection.py
+
+# Product strategy and business planning
+docs/session-bridge-prd.md
+docs/PUBLISHING.md
+docs/marketplace_listing.md
+
+# Agent instructions (contains revenue targets, internal metrics)
+CLAUDE.md
+
+# === Standard ignores ===
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+*.db
+*.sqlite
+*.log
+.DS_Store
+.env
+*.env
