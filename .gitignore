@@ -38,3 +38,10 @@ Thumbs.db
 *.log.1
 *.log.2
 *.log.3
+
+# Revenue projections and internal financial models -- NEVER commit (public repo hygiene)
+*Revenue_Projection*
+*revenue_projection*
+build_revenue_projection.py
+docs/internal/**/*.xlsx
+docs/internal/**/*.csv

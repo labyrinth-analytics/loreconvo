@@ -14,6 +14,7 @@ Pro tier: unlimited on all dimensions.
 """
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -96,7 +97,15 @@ def _save_config(root: Path, config: dict) -> None:
 
 
 def get_tier(root: Path) -> str:
-    """Return the current tier ('free' or 'pro') from config."""
+    """Return the current tier ('free' or 'pro').
+
+    Pro mode can be enabled by setting the LOREDOCS_PRO environment variable
+    to any non-empty value (overrides config.json).  This mirrors the
+    LORECONVO_PRO pattern and makes it easy to grant Pro access to all
+    internal agents via .mcp.json env blocks.
+    """
+    if bool(os.environ.get("LOREDOCS_PRO", "").strip()):
+        return TIER_PRO
     config = _load_config(root)
     tier = config.get("tier", TIER_FREE)
     if tier not in VALID_TIERS:
