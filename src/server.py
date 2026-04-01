@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp.server.fastmcp import FastMCP
 from core.models import Session
-from core.database import SessionDatabase
+from core.database import SessionDatabase, SessionLimitReachedError
 from core.config import Config
 
 mcp = FastMCP(
@@ -75,7 +75,14 @@ def save_session(
     if end_date:
         session.end_date = end_date
 
-    session_id = db.save_session(session)
+    try:
+        session_id = db.save_session(session)
+    except SessionLimitReachedError as e:
+        return {
+            "status": "limit_reached",
+            "error": str(e),
+            "upgrade_url": "https://labyrinthanalyticsconsulting.com/loreconvo",
+        }
     return {"session_id": session_id, "status": "saved", "title": title}
 
 
