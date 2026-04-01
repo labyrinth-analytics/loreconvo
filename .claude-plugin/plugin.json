@@ -15,7 +15,7 @@
     "persistence",
     "recall"
   ],
-  "license": "MIT",
+  "license": "BSL-1.1",
   "hooks": {
     "SessionStart": [
       {

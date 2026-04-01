@@ -105,7 +105,7 @@ Marketplace file format (.claude-plugin/marketplace.json):
         "version": "0.3.0",
         "author": { "name": "Labyrinth Analytics Consulting" },
         "homepage": "https://github.com/labyrinth-analytics/loreconvo",
-        "license": "MIT",
+        "license": "BSL-1.1",
         "keywords": ["memory", "sessions", "context", "recall"]
       }
     ]
@@ -198,7 +198,7 @@ Fix any errors before submitting.
         - description: present
         - author.name: present
         - keywords: present
-        - license: "MIT"
+        - license: "BSL-1.1"
   [OK] .mcp.json (present but needs path fix -- see above)
   [OK] skills/ directory (recall/, save/)
   [OK] README.md
