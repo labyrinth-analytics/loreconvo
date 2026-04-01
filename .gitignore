@@ -1,17 +1,11 @@
-# === INTERNAL DOCUMENTS — NEVER COMMIT TO PUBLIC REPO ===
-# Revenue projections, financial models
-docs/*Revenue_Projection*.xlsx
-docs/build_revenue_projection.py
-
-# Product strategy and business planning
-docs/session-bridge-prd.md
-docs/PUBLISHING.md
-docs/marketplace_listing.md
-
-# Agent instructions (contains revenue targets, internal metrics)
+# Internal docs belong in docs/internal/loreconvo/ (private repo root)
+# This .gitignore exists as a safety net — nothing sensitive should
+# be stored in this directory in the first place.
 CLAUDE.md
+*.xlsx
+*.env
 
-# === Standard ignores ===
+# Python artifacts
 __pycache__/
 *.pyc
 *.pyo
@@ -23,5 +17,3 @@ venv/
 *.sqlite
 *.log
 .DS_Store
-.env
-*.env
