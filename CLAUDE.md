@@ -20,7 +20,7 @@ Build and ship products that generate $8K/month passive income through Claude pl
 ### Rebrand Finishing (Lore Product Family)
 1. [x] Add migration script for existing users (move DB files from old paths to new) -- done 2026-03-27, scripts/migrate_lore.py
 2. [x] Update revenue projection Excel with new names -- done 2026-03-27, docs/LoreConvo_Revenue_Projection.xlsx
-3. [ ] Update BSL 1.1 license files with new product names (BLOCKED: no BSL files found in repo -- both products use MIT in pyproject.toml. Debbie to decide if BSL is still the plan)
+3. [x] Switch from MIT to BSL 1.1 -- done 2026-03-31. Created LICENSE files for LoreConvo and LoreDocs, updated pyproject.toml (both), README.md (LoreConvo), PUBLISHING.md (both), marketplace_listing.md (both), plugin.json (.claude-plugin and .plugin zips).
 4. [x] Rebuild .plugin files (loreconvo-v0.3.0.plugin, loredocs-v0.1.0.plugin) -- done 2026-03-27, both now use Lore names internally
 
 ### Infrastructure (PRIORITY — do these before New Products)
@@ -64,14 +64,15 @@ Build and ship products that generate $8K/month passive income through Claude pl
 
 | Agent | Role | Task ID | Schedule | Reports To |
 |-------|------|---------|----------|------------|
-| Ron | Builder | `ron-daily` | Daily 2:00 AM | docs/COMPLETED.md, LoreConvo |
+| Ron | Builder | `ron-daily` | Daily 12:00 AM | docs/COMPLETED.md, LoreConvo |
+| Meg | QA Engineer | `meg-qa-daily` | Daily 2:00 AM | docs/qa/, LoreConvo |
+| Brock | Cybersecurity Expert | `brock-security-daily` | Daily 3:00 AM | docs/security/, LoreConvo |
 | Scout | Product Research | `weekly-product-scout` | Monday 3:00 AM | Opportunities/, LoreConvo |
 | Gina | Enterprise Architect | `enterprise-architect-gina` | Wed + Sat 4:00 AM | LoreConvo (pipeline) |
-| Meg | QA Engineer | `meg-qa-daily` | Daily 3:00 AM | docs/qa/, LoreConvo |
-| Brock | Cybersecurity Expert | `brock-security-daily` | Daily 4:00 AM | docs/security/, LoreConvo |
+| Jacqueline | Project Manager | `pm-jacqueline-daily` | Daily 4:30 AM | docs/pm/, LoreConvo |
 
 ### Meg - QA Engineer (Scheduled Task)
-- **Task:** `meg-qa-daily` -- runs daily at 3:00 AM (after Ron)
+- **Task:** `meg-qa-daily` -- runs daily at 2:00 AM (after Ron)
 - **Purpose:** Full QA review of Ron's code: runs tests, writes new test cases, code walkthrough for logic errors, edge case analysis, verifies docs match behavior
 - **Output:** Dated QA report in `docs/qa/qa_report_YYYY_MM_DD.md` + LoreConvo session (surface='qa')
 - **Scope:** All products in ron_skills/ -- focuses on recently changed files
@@ -79,7 +80,7 @@ Build and ship products that generate $8K/month passive income through Claude pl
 - **Rule:** Meg does NOT modify Ron's source code -- only adds test files and reports
 
 ### Brock - Cybersecurity Expert (Scheduled Task)
-- **Task:** `brock-security-daily` -- runs daily at 4:00 AM (after Meg)
+- **Task:** `brock-security-daily` -- runs daily at 3:00 AM (after Meg)
 - **Purpose:** Full security posture review: secrets scanning, dependency audit (pip-audit + CVE check), OWASP code review, API security checks, security headers, infrastructure review
 - **Output:** Dated security report in `docs/security/security_report_YYYY_MM_DD.md` + LoreConvo session (surface='security')
 - **Scope:** Entire repo -- code, dependencies, configs, git history
@@ -91,13 +92,21 @@ Build and ship products that generate $8K/month passive income through Claude pl
 - **Dependency pinning:** Check for `requirements-lock.txt` files (not just `pyproject.toml`). It is normal and expected for `pyproject.toml` to use `>=` minimum version constraints -- that is library metadata. The `requirements-lock.txt` files contain the actual exact pins. If lock files exist with exact versions, the dependency pinning finding is RESOLVED.
 - **Single-user context:** All products currently run locally on a single-user machine. Severity ratings should reflect this context. Findings that would be CRITICAL in a multi-user server deployment may be LOW or INFO in the current local-only setup.
 
+### Jacqueline - Project Manager (Scheduled Task)
+- **Task:** `pm-jacqueline-daily` -- runs daily at 4:30 AM (after Brock)
+- **Purpose:** Synthesizes all overnight agent outputs into a single interactive HTML executive dashboard. Cross-validates agent findings, tracks pipeline status, monitors TODO progress, and flags items needing Debbie's attention.
+- **Output:** Interactive HTML dashboard in `docs/pm/executive_dashboard_YYYY_MM_DD.html` + LoreConvo session (surface='pm')
+- **Scope:** All agent reports (Ron/Meg/Brock), pipeline data (Scout/Gina), CLAUDE.md TODOs, cross-agent validation
+- **Posture ratings:** ALL CLEAR / REVIEW NEEDED / ACTION REQUIRED
+- **Rule:** Jacqueline does NOT modify source code, TODOs, or other agents' reports -- only produces the dashboard
+
 ## Blocked
 
 | Item | Blocked on | Unblocked by |
 |------|-----------|--------------|
-| Marketplace publishing (both products) | "knowledge-work-plugins" reserved by Anthropic | Self-hosted GitHub marketplace or official submission |
-| Stripe billing integration | Marketplace publishing not done yet | Marketplace goes live |
-| SQL Optimizer paid API backend | Marketplace/billing decisions | Marketplace + billing resolved |
+| Marketplace publishing (both products) | UNBLOCKED 2026-03-31: Debbie chose self-hosted GitHub marketplace (labyrinth-analytics/claude-plugins) | Ron builds it out |
+| Stripe billing integration | Marketplace not built yet + Debbie needs to activate live Stripe account | Ron builds marketplace, Debbie activates Stripe |
+| SQL Optimizer paid API backend | Marketplace + billing not ready yet | Marketplace + billing resolved |
 
 ---
 

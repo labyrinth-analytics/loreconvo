@@ -96,3 +96,19 @@ Both names TESS-clean and Google-clean. 24 of 28 items completed.
 - [x] Ran pip-audit: found CVE-2026-34073 (cryptography) and CVE-2026-4539 (Pygments), bumped in lock files
 - [x] All 3 products now pass pip-audit with 0 CVEs
 - [x] 179 existing tests verified passing
+
+## Ron Daily - 2026-03-31 (BSL License Switch)
+
+### Rebrand Finishing (TODO #3)
+- [x] Created ron_skills/loreconvo/LICENSE -- BSL 1.1, Change Date 2030-03-31, Apache 2.0, 50-session free grant
+- [x] Created ron_skills/loredocs/LICENSE -- BSL 1.1, Change Date 2030-03-31, Apache 2.0, 3-vault free grant
+- [x] Updated ron_skills/loreconvo/pyproject.toml -- license = { file = "LICENSE" }, classifier updated
+- [x] Updated ron_skills/loredocs/pyproject.toml -- license = { file = "LICENSE" }, classifier updated
+- [x] Updated ron_skills/loreconvo/README.md -- License section now references BSL 1.1
+- [x] Updated ron_skills/loreconvo/docs/PUBLISHING.md -- license field: MIT -> BSL-1.1
+- [x] Updated ron_skills/loreconvo/docs/marketplace_listing.md -- License row updated
+- [x] Updated ron_skills/loredocs/docs/PUBLISHING.md -- license field: MIT -> BSL-1.1
+- [x] Updated ron_skills/loredocs/docs/marketplace_listing.md -- License row updated
+- [x] Updated ron_skills/loreconvo/.claude-plugin/plugin.json -- license: MIT -> BSL-1.1
+- [x] Rebuilt ron_skills/loreconvo-v0.3.0.plugin -- plugin.json license: MIT -> BSL-1.1
+- [x] Rebuilt ron_skills/loredocs-v0.1.0.plugin -- plugin.json license: MIT -> BSL-1.1

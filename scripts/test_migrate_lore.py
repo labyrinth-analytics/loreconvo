@@ -20,7 +20,7 @@ def make_old_tree(tmpdir, product="convovault"):
         db_file = old_dir / "sessions.db"
         db_file.write_text("fake-sqlite-data-convovault")
     elif product == "projectvault":
-        db_file = old_dir / "loredocs.db"
+        db_file = old_dir / "projectvault.db"
         db_file.write_text("fake-sqlite-data-projectvault")
         vaults_dir = old_dir / "vaults" / "my-project"
         vaults_dir.mkdir(parents=True)
@@ -44,7 +44,7 @@ def test_discover_files_finds_all():
         files = migrate_lore.discover_files(old)
         names = [str(f) for f in files]
         assert "config.json" in names
-        assert "loredocs.db" in names
+        assert "projectvault.db" in names
         assert str(Path("vaults") / "my-project" / "doc1.md") in names
 
 
@@ -203,6 +203,46 @@ def test_full_migration_with_remove():
         assert (tmpdir / ".convovault.bak").exists()
 
 
+def test_migration_renames_db_file():
+    """Migration renames projectvault.db to loredocs.db at destination."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmpdir = Path(tmp)
+        old = make_old_tree(tmpdir, "projectvault")
+        new = tmpdir / ".loredocs"
+
+        to_copy, _, _ = migrate_lore.check_migration(old, new, "LoreDocs")
+        copied, errors = migrate_lore.do_copy(to_copy)
+        assert errors == []
+
+        # The file should be renamed to loredocs.db at the destination
+        assert (new / "loredocs.db").exists()
+        assert not (new / "projectvault.db").exists()
+        assert (new / "loredocs.db").read_text() == "fake-sqlite-data-projectvault"
+
+
+def test_fix_renames_already_migrated():
+    """--fix-renames renames projectvault.db -> loredocs.db in existing dirs."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmpdir = Path(tmp)
+        # Simulate already-migrated state: projectvault.db in .loredocs
+        new_dir = tmpdir / ".loredocs"
+        new_dir.mkdir(parents=True)
+        (new_dir / "projectvault.db").write_text("real-data")
+
+        test_migrations = [
+            (tmpdir / ".projectvault", new_dir, "LoreDocs"),
+        ]
+
+        with mock.patch.object(migrate_lore, "MIGRATIONS", test_migrations):
+            with mock.patch("sys.argv", ["migrate_lore.py", "--fix-renames"]):
+                ret = migrate_lore.main()
+
+        assert ret == 0
+        assert (new_dir / "loredocs.db").exists()
+        assert not (new_dir / "projectvault.db").exists()
+        assert (new_dir / "loredocs.db").read_text() == "real-data"
+
+
 if __name__ == "__main__":
     tests = [
         test_discover_files_empty,
@@ -215,6 +255,8 @@ if __name__ == "__main__":
         test_full_migration_dry_run,
         test_full_migration_with_yes,
         test_full_migration_with_remove,
+        test_migration_renames_db_file,
+        test_fix_renames_already_migrated,
     ]
     passed = 0
     failed = 0

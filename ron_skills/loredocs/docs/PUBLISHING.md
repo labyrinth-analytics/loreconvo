@@ -89,7 +89,7 @@ LoreDocs entry for marketplace.json:
     "version": "0.1.0",
     "author": { "name": "Labyrinth Analytics Consulting" },
     "homepage": "https://github.com/labyrinth-analytics/loredocs",
-    "license": "MIT",
+    "license": "BSL-1.1",
     "keywords": ["knowledge-management", "documents", "search", "ai-projects"]
   }
 
@@ -181,7 +181,7 @@ Or from within Claude Code:
         - description: present
         - author.name: present
         - keywords: present
-        - license: "MIT"
+        - license: "BSL-1.1"
   [OK] .mcp.json (present but needs package install solution)
   [OK] skills/ directory
   [OK] README.md

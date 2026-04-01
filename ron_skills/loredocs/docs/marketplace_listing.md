@@ -14,7 +14,7 @@
 | Version | 0.1.0 |
 | Author | Labyrinth Analytics Consulting |
 | Support email | info@labyrinthanalyticsconsulting.com |
-| License | MIT (core plugin) / Pro features require subscription |
+| License | BSL 1.1 (free: up to 3 vaults / non-commercial) / Pro: paid subscription / Converts to Apache 2.0 on 2030-03-31 |
 | Platforms | Claude Code, Cowork |
 
 ---
