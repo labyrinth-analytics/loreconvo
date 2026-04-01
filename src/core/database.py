@@ -10,6 +10,15 @@ from .models import (
     PersonaTag, Project, SearchResult, Session, SessionLink, SkillUsage
 )
 
+
+class SessionLimitReachedError(Exception):
+    """Raised when the free-tier session limit is reached.
+
+    The BSL 1.1 Additional Use Grant allows personal/non-commercial use
+    up to 50 sessions. Exceeding this requires a Pro license.
+    """
+    pass
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS sessions (
     id              TEXT PRIMARY KEY NOT NULL,
@@ -122,6 +131,17 @@ class SessionDatabase:
                 "Use the Session dataclass (which auto-generates a UUID) "
                 "instead of raw SQL inserts."
             )
+        # Enforce BSL 1.1 free-tier session limit.
+        # Pro mode (LORECONVO_PRO env var set) bypasses this check.
+        if not self.config.is_pro:
+            current_count = self.session_count()
+            if current_count >= self.config.max_free_sessions:
+                raise SessionLimitReachedError(
+                    f"Free tier limit reached: {current_count} of "
+                    f"{self.config.max_free_sessions} sessions stored. "
+                    "Set LORECONVO_PRO=1 to unlock unlimited sessions, "
+                    "or contact info@labyrinthanalyticsconsulting.com to upgrade."
+                )
         self.conn.execute(
             """INSERT OR REPLACE INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
