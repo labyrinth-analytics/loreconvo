@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Side Hustle Executive Dashboard - 2026-04-01</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a202c; color: #e2e8f0; line-height: 1.6; padding: 20px; }
+.container { max-width: 1200px; margin: 0 auto; }
+
+/* Header */
+.header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; background: #2d3748; border-radius: 12px; margin-bottom: 20px; }
+.header h1 { font-size: 22px; font-weight: 700; color: #fff; }
+.header-meta { text-align: right; }
+.header-date { font-size: 14px; color: #a0aec0; }
+.badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.badge-review { background: #ed8936; color: #1a202c; }
+.badge-clear { background: #48bb78; color: #1a202c; }
+.badge-action { background: #fc8181; color: #1a202c; }
+
+/* Section */
+.section { background: #2d3748; border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+.section-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; cursor: pointer; user-select: none; transition: background 0.2s; }
+.section-header:hover { background: #374151; }
+.section-header h2 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.section-header .toggle { font-size: 12px; color: #a0aec0; transition: transform 0.2s; }
+.section-header .toggle.open { transform: rotate(90deg); }
+.section-body { padding: 0 24px 20px; display: none; }
+.section-body.open { display: block; }
+.section-summary { font-size: 13px; color: #a0aec0; }
+
+/* Cards */
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; margin-top: 12px; }
+.card { background: #1a202c; border-radius: 8px; padding: 16px; border-left: 4px solid #a0aec0; }
+.card-red { border-left-color: #fc8181; }
+.card-orange { border-left-color: #ed8936; }
+.card-green { border-left-color: #48bb78; }
+.card-blue { border-left-color: #3182ce; }
+.card-gray { border-left-color: #a0aec0; }
+.card h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.card p { font-size: 13px; color: #cbd5e0; }
+.card .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; margin-right: 4px; margin-top: 6px; }
+.tag-red { background: rgba(252,129,129,0.2); color: #fc8181; }
+.tag-orange { background: rgba(237,137,54,0.2); color: #ed8936; }
+.tag-green { background: rgba(72,187,120,0.2); color: #48bb78; }
+.tag-blue { background: rgba(49,130,206,0.2); color: #3182ce; }
+.tag-gray { background: rgba(160,174,192,0.2); color: #a0aec0; }
+
+/* Agent cards */
+.agent-row { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid #374151; }
+.agent-row:last-child { border-bottom: none; }
+.agent-name { font-weight: 700; font-size: 14px; }
+.agent-status { font-size: 12px; margin-top: 2px; }
+.agent-detail { font-size: 13px; color: #cbd5e0; }
+.agent-detail strong { color: #e2e8f0; }
+
+/* Pipeline board */
+.pipeline-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 12px; }
+.pipeline-col { background: #1a202c; border-radius: 8px; padding: 12px; min-height: 100px; }
+.pipeline-col h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #a0aec0; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #374151; }
+.pip-card { background: #2d3748; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 12px; }
+.pip-card .pip-name { font-weight: 600; color: #e2e8f0; }
+.pip-card .pip-meta { color: #a0aec0; font-size: 11px; margin-top: 2px; }
+
+/* Progress bars */
+.progress-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.progress-label { width: 140px; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+.progress-bar { flex: 1; height: 20px; background: #1a202c; border-radius: 10px; overflow: hidden; position: relative; }
+.progress-fill { height: 100%; border-radius: 10px; transition: width 0.5s; }
+.progress-fill-green { background: #48bb78; }
+.progress-fill-blue { background: #3182ce; }
+.progress-fill-orange { background: #ed8936; }
+.progress-text { width: 60px; text-align: right; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+
+/* Finding table */
+.finding-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+.finding-table th { text-align: left; padding: 8px 12px; background: #1a202c; color: #a0aec0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.finding-table td { padding: 8px 12px; border-bottom: 1px solid #374151; }
+.finding-table tr:last-child td { border-bottom: none; }
+
+/* Health grid */
+.health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 12px; }
+.health-card { background: #1a202c; border-radius: 8px; padding: 14px; text-align: center; }
+.health-card .h-name { font-size: 14px; font-weight: 700; }
+.health-card .h-time { font-size: 12px; color: #a0aec0; margin-top: 4px; }
+.health-card .h-next { font-size: 11px; color: #718096; margin-top: 2px; }
+
+/* Utilities */
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.text-sm { font-size: 13px; }
+.text-muted { color: #a0aec0; }
+.text-green { color: #48bb78; }
+.text-orange { color: #ed8936; }
+.text-red { color: #fc8181; }
+.footer { text-align: center; padding: 20px; font-size: 12px; color: #718096; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <h1>SIDE HUSTLE EXECUTIVE DASHBOARD</h1>
+    <div class="header-date">Generated: Wednesday, April 1, 2026 | Agent: Jacqueline (PM)</div>
+  </div>
+  <div class="header-meta">
+    <span class="badge badge-review">REVIEW NEEDED</span>
+  </div>
+</div>
+
+<!-- ATTENTION NEEDED -->
+<div class="section">
+  <div class="section-header" onclick="toggleSection(this)">
+    <h2><span class="toggle open">&#9654;</span> Attention Needed</h2>
+    <span class="section-summary">5 items for Debbie</span>
+  </div>
+  <div class="section-body open">
+    <div class="card-grid">
+
+      <div class="card card-orange">
+        <h3>Pipeline Items Awaiting Decision</h3>
+        <p>5 pipeline opportunities need your input. 3 have architecture proposals ready (OPP-002, OPP-003, OPP-004 -- pending since ~Mar 26). 2 are newly scouted and need triage (OPP-013, OPP-015). Gina flagged these in her Wednesday run.</p>
+        <span class="tag tag-orange">PIPELINE</span>
+      </div>
+
+      <div class="card card-orange">
+        <h3>Debbie TODOs Pending</h3>
+        <p><strong>3 open items:</strong> (1) File USPTO trademark for LoreConvo ($350), (2) File USPTO trademark for LoreDocs ($350), (3) Activate live Stripe account (business verification, EIN). Plugin review (#4) may be ready -- Ron rebuilt both .plugin files.</p>
+        <span class="tag tag-orange">ACTION</span>
+      </div>
+
+      <div class="card card-orange">
+        <h3>SEC-010: Partial API Key in Git History</h3>
+        <p>Brock's last report (03-31) flags that the redacted security_report_2026_03_29.md was never committed. The partial key remains in commit 34d6f43. Ron should commit the redacted file. NOTE: Debbie already revoked the key (per Dashboard), mitigating risk.</p>
+        <span class="tag tag-orange">SECURITY</span>
+      </div>
+
+      <div class="card card-blue">
+        <h3>No New Agent Reports Today (Apr 1)</h3>
+        <p>All agents ran overnight (confirmed via scheduled task metadata), but no new Meg or Brock report files were generated for April 1. Possible session timeouts or no new findings to report. Latest reports are from March 31. Ron did produce commits.</p>
+        <span class="tag tag-blue">AGENT HEALTH</span>
+      </div>
+
+      <div class="card card-blue">
+        <h3>SEC-011: New TOCTOU Race in LoreDocs</h3>
+        <p>Brock found a time-of-check-to-time-of-use race in LoreDocs file export (storage.py). MEDIUM severity. Low risk at current single-user scale but should be fixed before any multi-user deployment.</p>
+        <span class="tag tag-blue">SECURITY</span>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- OVERNIGHT SUMMARY -->
+<div class="section">
+  <div class="section-header" onclick="toggleSection(this)">
+    <h2><span class="toggle">&#9654;</span> Overnight Summary</h2>
+    <span class="section-summary">Ron: 10 commits | Meg: YELLOW (03-31) | Brock: NEEDS ATTENTION (03-31) | Gina: quiet run</span>
+  </div>
+  <div class="section-body">
+
+    <div class="agent-row">
+      <div>
+        <div class="agent-name">Ron</div>
+        <div class="agent-status text-green">ACTIVE</div>
+      </div>
+      <div class="agent-detail">
+        <strong>10 commits in last 24 hours.</strong> Major work: (1) Fixed MEG-031/032/033 findings, (2) Completed TODO #20 (LoreDocs rebrand cleanup) and #21 (LoreDocs README), (3) Moved internal docs out of public product directories, (4) Added repo scrub and pre-push verification scripts, (5) Switched both Lore products from MIT to BSL 1.1 (TODO #3), (6) Added 50-session free-tier enforcement to LoreConvo, (7) Created proper venvs, pinned all deps, ran pip-audit (TODOs #5-7).
+        <div class="mt-8"><span class="tag tag-green">10 COMMITS</span> <span class="tag tag-green">3 TODOs DONE</span> <span class="tag tag-green">3 MEG FIXES</span></div>
+      </div>
+    </div>
+
+    <div class="agent-row">
+      <div>
+        <div class="agent-name">Meg</div>
+        <div class="agent-status text-orange">YELLOW (03-31)</div>
+      </div>
+      <div class="agent-detail">
+        <strong>227 tests passing, 0 failures, 18 new tests written.</strong> Findings: MEG-031 (MEDIUM: SQL Optimizer version mismatch), MEG-032 (LOW: FTS schema drift), MEG-033 (LOW: auto_save.py NOT NULL missing). Two prior MEDIUM advisories still open (credits.py non-atomic JSON, optimizer.py sync-in-async -- acceptable for MVP).
+        <div class="mt-8"><strong>NOTE: Ron already fixed MEG-031/032/033</strong> in commit db60f19 (today). These findings are now STALE.</div>
+        <div class="mt-8"><span class="tag tag-green">227 TESTS</span> <span class="tag tag-orange">3 FINDINGS (RESOLVED)</span> <span class="tag tag-blue">NO REPORT TODAY</span></div>
+      </div>
+    </div>
+
+    <div class="agent-row">
+      <div>
+        <div class="agent-name">Brock</div>
+        <div class="agent-status text-orange">NEEDS ATTN (03-31)</div>
+      </div>
+      <div class="agent-detail">
+        <strong>6 active findings, 1 new (SEC-011 TOCTOU), 1 resolved (SEC-003 deps).</strong> Posture driven by SEC-010 (partial key in git history -- uncommitted redaction). SEC-001 reclassified from CRITICAL to INFO per guidelines. 0 CVEs. OWASP code review all PASS. No new critical vulnerabilities.
+        <div class="mt-8"><strong>CROSS-CHECK:</strong> Debbie already revoked the API key (per DEBBIE_DASHBOARD.md 03-31). Brock's "day 10" urgency around SEC-001 is outdated. SEC-003 RESOLVED but audit table in report still shows "pins needed" -- internal inconsistency.</div>
+        <div class="mt-8"><span class="tag tag-green">0 CVEs</span> <span class="tag tag-orange">1 HIGH (SEC-010)</span> <span class="tag tag-blue">NO REPORT TODAY</span></div>
+      </div>
+    </div>
+
+    <div class="agent-row">
+      <div>
+        <div class="agent-name">Scout</div>
+        <div class="agent-status text-muted">WEEKLY (Mon)</div>
+      </div>
+      <div class="agent-detail">
+        Last ran: Monday Mar 30. Found 4 new opportunities (OPP-012 through OPP-016) focused on data engineering tooling gaps. Next run: Monday Apr 6.
+        <div class="mt-8"><span class="tag tag-gray">NEXT: APR 6</span></div>
+      </div>
+    </div>
+
+    <div class="agent-row">
+      <div>
+        <div class="agent-name">Gina</div>
+        <div class="agent-status text-blue">RAN TODAY</div>
+      </div>
+      <div class="agent-detail">
+        <strong>Quiet run -- no items in approved-for-review status.</strong> Reviewed pipeline consistency. Flagged that 3 architecture-proposed items (OPP-002/003/004) have been pending Debbie's approval since proposals were written. 5 items on hold (SQL Server dependent). Next run: Saturday Apr 4.
+        <div class="mt-8"><span class="tag tag-blue">PIPELINE REVIEW</span> <span class="tag tag-orange">3 ITEMS PENDING APPROVAL</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- PIPELINE STATUS -->
+<div class="section">
+  <div class="section-header" onclick="toggleSection(this)">
+    <h2><span class="toggle">&#9654;</span> Pipeline Status</h2>
+    <span class="section-summary">16 items total | 2 scouted | 3 arch-proposed | 5 on-hold | 6 completed</span>
+  </div>
+  <div class="section-body">
+    <div class="pipeline-board">
+
+      <div class="pipeline-col">
+        <h4>Scouted (2)</h4>
+        <div class="pip-card">
+          <div class="pip-name">OPP-013</div>
+          <div class="pip-meta">Data Pipeline Test Harness MCP</div>
+          <div class="pip-meta">Needs Debbie triage</div>
+        </div>
+        <div class="pip-card">
+          <div class="pip-name">OPP-015</div>
+          <div class="pip-meta">Data Catalog Lite MCP</div>
+          <div class="pip-meta">Needs Debbie triage</div>
+        </div>
+      </div>
+
+      <div class="pipeline-col">
+        <h4>Architecture Proposed (3)</h4>
+        <div class="pip-card">
+          <div class="pip-name">OPP-002 (P2)</div>
+          <div class="pip-meta">AI Cost Attribution MCP</div>
+          <div class="pip-meta">Effort: 2 | ~6 days pending</div>
+        </div>
+        <div class="pip-card">
+          <div class="pip-name">OPP-003 (P3)</div>
+          <div class="pip-meta">LorePrompts</div>
+          <div class="pip-meta">Effort: 3 | ~6 days pending</div>
+        </div>
+        <div class="pip-card">
+          <div class="pip-name">OPP-004 (P4)</div>
+          <div class="pip-meta">MCP Token Profiler</div>
+          <div class="pip-meta">Effort: 1 | ~6 days pending</div>
+        </div>
+      </div>
+
+      <div class="pipeline-col">
+        <h4>On Hold (5)</h4>
+        <div class="pip-card">
+          <div class="pip-name">OPP-001 (P1)</div>
+          <div class="pip-meta">Smart SQL Server MCP</div>
+        </div>
+        <div class="pip-card">
+          <div class="pip-name">OPP-005 (P5)</div>
+          <div class="pip-meta">TabularContext (fold into OPP-001)</div>
+        </div>
+        <div class="pip-card">
+          <div class="pip-name">OPP-012</div>
+          <div class="pip-meta">SSIS Package Analyzer</div>
+        </div>
+        <div class="pip-card">
+          <div class="pip-name">OPP-014</div>
+          <div class="pip-meta">Schema Diff &amp; Migration</div>
+        </div>
+        <div class="pip-card">
+          <div class="pip-name">OPP-016</div>
+          <div class="pip-meta">ETL Pattern Library</div>
+        </div>
+      </div>
+
+      <div class="pipeline-col">
+        <h4>Completed (6)</h4>
+        <div class="pip-card">
+          <div class="pip-name">OPP-006 - OPP-011</div>
+          <div class="pip-meta">Security fixes (all 6 done)</div>
+          <div class="pip-meta text-green">Verified by Brock</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- TODO TRACKER -->
+<div class="section">
+  <div class="section-header" onclick="toggleSection(this)">
+    <h2><span class="toggle">&#9654;</span> TODO Tracker</h2>
+    <span class="section-summary">Ron: 21/25 done (84%) | Debbie: 1/5 done (20%) | Next: New Products</span>
+  </div>
+  <div class="section-body">
+
+    <div class="progress-row">
+      <div class="progress-label">Ron TODOs</div>
+      <div class="progress-bar"><div class="progress-fill progress-fill-green" style="width: 84%"></div></div>
+      <div class="progress-text">21/25</div>
+    </div>
+
+    <div class="progress-row">
+      <div class="progress-label">Debbie TODOs</div>
+      <div class="progress-bar"><div class="progress-fill progress-fill-orange" style="width: 20%"></div></div>
+      <div class="progress-text">1/5</div>
+    </div>
+
+    <div class="mt-12">
+      <h3 style="font-size: 14px; margin-bottom: 8px;">Ron's Next Items (all remaining are New Products)</h3>
+      <table class="finding-table">
+        <tr><th>#</th><th>Item</th><th>Status</th></tr>
+        <tr><td>22</td><td>SQL Query Optimizer: ClawHub skill packaging</td><td><span class="tag tag-blue">PENDING</span></td></tr>
+        <tr><td>23</td><td>SQL Query Optimizer: integration tests with real SQL Server queries</td><td><span class="tag tag-blue">PENDING</span></td></tr>
+        <tr><td>24</td><td>Build Financial Report Generator skill + FastMCP backend</td><td><span class="tag tag-blue">PENDING</span></td></tr>
+        <tr><td>25</td><td>Build CSV/Excel Data Transformer skill + FastMCP backend</td><td><span class="tag tag-blue">PENDING</span></td></tr>
+      </table>
+    </div>
+
+    <div class="mt-12">
+      <h3 style="font-size: 14px; margin-bottom: 8px;">Debbie's Open Items</h3>
+      <table class="finding-table">
+        <tr><th>#</th><th>Item</th><th>Notes</th></tr>
+        <tr><td>1</td><td>File USPTO trademark - LoreConvo</td><td>$350, Class 009</td></tr>
+        <tr><td>2</td><td>File USPTO trademark - LoreDocs</td><td>$350, Class 009</td></tr>
+        <tr><td>4</td><td>Review rebuilt .plugin files</td><td>Ron completed rebuild 03-27</td></tr>
+        <tr><td>5</td><td>Activate live Stripe account</td><td>EIN, bank, business verification</td></tr>
+      </table>
+    </div>
+
+    <div class="mt-12">
+      <h3 style="font-size: 14px; margin-bottom: 8px;">Blocked Items</h3>
+      <table class="finding-table">
+        <tr><th>Item</th><th>Blocked On</th><th>Unblocked By</th></tr>
+        <tr><td>Stripe billing integration</td><td>Marketplace not built + Stripe activation</td><td>Ron builds marketplace, Debbie activates Stripe</td></tr>
+        <tr><td>SQL Optimizer paid API</td><td>Marketplace + billing not ready</td><td>Marketplace + billing resolved</td></tr>
+      </table>
+      <p class="text-sm text-muted mt-8">Note: Marketplace publishing was UNBLOCKED 2026-03-31 (self-hosted GitHub marketplace decision). Ron can start building it.</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- CROSS-AGENT FINDINGS -->
+<div class="section">
+  <div class="section-header" onclick="toggleSection(this)">
+    <h2><span class="toggle">&#9654;</span> Cross-Agent Findings</h2>
+    <span class="section-summary">3 stale findings, 1 inconsistency, 1 discrepancy</span>
+  </div>
+  <div class="section-body">
+    <table class="finding-table">
+      <tr><th>Type</th><th>Source</th><th>Detail</th><th>Severity</th></tr>
+      <tr>
+        <td><span class="tag tag-green">STALE</span></td>
+        <td>Meg (03-31)</td>
+        <td>MEG-031/032/033 all fixed by Ron in commit db60f19 (04-01 00:34). These are no longer active findings.</td>
+        <td>Info</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-green">STALE</span></td>
+        <td>Brock (03-31)</td>
+        <td>SEC-001 "Revoke API key -- day 10" recommendation is outdated. Debbie already revoked the key on 03-31 per DEBBIE_DASHBOARD.md.</td>
+        <td>Info</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-orange">INCONSISTENCY</span></td>
+        <td>Brock (03-31)</td>
+        <td>SEC-003 marked RESOLVED in findings summary, but dependency audit table still shows "Needs lockfile" for LoreDocs and "pins needed" for LoreConvo. The audit table is stale -- lock files DO exist (generated 03-31).</td>
+        <td>Low</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-orange">INCONSISTENCY</span></td>
+        <td>Brock (03-31)</td>
+        <td>SEC-001 reclassified to INFO in executive summary, but the comparison table at bottom still counts it as "CRITICAL | 1 (SEC-001)". Internal report inconsistency.</td>
+        <td>Low</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-blue">OBSERVATION</span></td>
+        <td>Jacqueline</td>
+        <td>Both Meg and Brock tasks ran today (per scheduled task metadata) but produced no new report files for April 1. Previous pattern was daily reports. Possible: sessions completed without generating files, or sessions hit timeouts. Worth monitoring.</td>
+        <td>Info</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!-- SCHEDULE & HEALTH -->
+<div class="section">
+  <div class="section-header" onclick="toggleSection(this)">
+    <h2><span class="toggle">&#9654;</span> Schedule &amp; Health</h2>
+    <span class="section-summary">All 7 tasks enabled | All ran on schedule</span>
+  </div>
+  <div class="section-body">
+    <div class="health-grid">
+
+      <div class="health-card">
+        <div class="h-name" style="color: #48bb78;">Ron</div>
+        <div class="h-time">Last: Apr 1, 12:11 AM</div>
+        <div class="h-next">Next: Apr 2, 12:05 AM</div>
+        <div class="mt-8"><span class="tag tag-green">HEALTHY</span></div>
+      </div>
+
+      <div class="health-card">
+        <div class="h-name" style="color: #48bb78;">Meg</div>
+        <div class="h-time">Last: Apr 1, 2:07 AM</div>
+        <div class="h-next">Next: Apr 2, 2:03 AM</div>
+        <div class="mt-8"><span class="tag tag-orange">NO FILE OUTPUT</span></div>
+      </div>
+
+      <div class="health-card">
+        <div class="h-name" style="color: #48bb78;">Brock</div>
+        <div class="h-time">Last: Apr 1, 3:14 AM</div>
+        <div class="h-next">Next: Apr 2, 3:08 AM</div>
+        <div class="mt-8"><span class="tag tag-orange">NO FILE OUTPUT</span></div>
+      </div>
+
+      <div class="health-card">
+        <div class="h-name" style="color: #a0aec0;">Scout</div>
+        <div class="h-time">Last: Mar 30, 3:07 AM</div>
+        <div class="h-next">Next: Apr 6, 3:08 AM</div>
+        <div class="mt-8"><span class="tag tag-gray">WEEKLY</span></div>
+      </div>
+
+      <div class="health-card">
+        <div class="h-name" style="color: #48bb78;">Gina</div>
+        <div class="h-time">Last: Apr 1, 4:06 AM</div>
+        <div class="h-next">Next: Apr 4, 4:00 AM</div>
+        <div class="mt-8"><span class="tag tag-green">HEALTHY</span></div>
+      </div>
+
+      <div class="health-card">
+        <div class="h-name" style="color: #48bb78;">Jacqueline</div>
+        <div class="h-time">Running now (Apr 1)</div>
+        <div class="h-next">Next: Apr 2, 4:38 AM</div>
+        <div class="mt-8"><span class="tag tag-green">ACTIVE</span></div>
+      </div>
+
+      <div class="health-card">
+        <div class="h-name" style="color: #a0aec0;">Competitive Intel</div>
+        <div class="h-time">Last: --</div>
+        <div class="h-next">Next: Apr 3, 11:39 PM (Thu)</div>
+        <div class="mt-8"><span class="tag tag-gray">BI-WEEKLY</span></div>
+      </div>
+
+    </div>
+
+    <div class="mt-12">
+      <h3 style="font-size: 14px; margin-bottom: 8px;">Product Status</h3>
+      <table class="finding-table">
+        <tr><th>Product</th><th>Version</th><th>Status</th><th>License</th></tr>
+        <tr><td>LoreConvo</td><td>v0.3.0</td><td><span class="tag tag-green">PRODUCTION</span></td><td>BSL 1.1</td></tr>
+        <tr><td>LoreDocs</td><td>v0.1.0</td><td><span class="tag tag-orange">ALPHA</span></td><td>BSL 1.1</td></tr>
+        <tr><td>SQL Query Optimizer</td><td>v0.1.0</td><td><span class="tag tag-blue">IN PROGRESS</span></td><td>--</td></tr>
+        <tr><td>Financial Report Gen</td><td>--</td><td><span class="tag tag-gray">NOT STARTED</span></td><td>--</td></tr>
+        <tr><td>CSV/Excel Transformer</td><td>--</td><td><span class="tag tag-gray">NOT STARTED</span></td><td>--</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  Jacqueline (PM Agent) | Side Hustle Executive Dashboard | Generated 2026-04-01 | Posture: REVIEW NEEDED
+</div>
+
+</div>
+
+<script>
+function toggleSection(header) {
+  var body = header.nextElementSibling;
+  var toggle = header.querySelector('.toggle');
+  if (body.classList.contains('open')) {
+    body.classList.remove('open');
+    toggle.classList.remove('open');
+  } else {
+    body.classList.add('open');
+    toggle.classList.add('open');
+  }
+}
+</script>
+</body>
+</html>
