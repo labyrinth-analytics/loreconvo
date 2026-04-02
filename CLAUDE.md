@@ -52,11 +52,23 @@ Build and ship products that generate $8K/month passive income through Claude pl
 ### Documentation
 21. [x] Add README.md for LoreDocs (modeled after LoreConvo README: tagline, quick start, usage for Code/Cowork, tool list, license) -- done 2026-04-01
 
+### Marketplace & Billing (PRIORITY -- revenue blocker)
+22. [ ] Build self-hosted GitHub marketplace repo (labyrinth-analytics/claude-plugins) -- package plugins for distribution, create install instructions, integrate Stripe billing
+23. [x] Sync Debbie's 2026-03-31 pipeline decisions to PipelineDB (OPP-002/003/004 approved, OPP-006/008 on hold, OPP-007/009/010 approved-for-review with priorities) -- done 2026-04-02
+
+### Plugin Onboarding & Auto-Load Fixes (user experience -- do before marketplace launch)
+24. [x] Fix LoreConvo SessionStart hook: wire up `auto_load.py` in plugin.json as second hook entry. Flattened nested hooks array structure. -- done 2026-04-02
+25. [x] Add "Recommended CLAUDE.md Setup" section to LoreConvo README.md with exact snippet for ~/.claude/CLAUDE.md session start/end instructions, Code and Cowork guidance. -- done 2026-04-02
+26. [x] Add "Recommended CLAUDE.md Setup" section to LoreDocs README.md (same pattern as LoreConvo). -- done 2026-04-02
+27. [ ] Build `/lore-onboard` skill for LoreConvo plugin that walks users through first-time setup: verifies MCP server is connected, adds CLAUDE.md snippet, runs a test save/load cycle, confirms hooks are firing.
+28. [x] Add "Verify Installation" section to both READMEs with a quick test: "Ask Claude to run `get_recent_sessions` / `vault_list` -- if you see results, it is working." -- done 2026-04-02
+29. [x] Fix COWORK_RESTORE.md: rewrote with correct tool names, CLAUDE.md workaround as primary recommendation, manual restore as fallback. -- done 2026-04-02
+
 ### New Products
-22. [ ] SQL Query Optimizer: ClawHub skill packaging
-23. [ ] SQL Query Optimizer: integration tests with real SQL Server queries
-24. [ ] Build Financial Report Generator skill + FastMCP backend
-25. [ ] Build CSV/Excel Data Transformer skill + FastMCP backend
+30. [ ] SQL Query Optimizer: ClawHub skill packaging
+31. [ ] SQL Query Optimizer: integration tests with real SQL Server queries
+32. [ ] Build Financial Report Generator skill + FastMCP backend
+33. [ ] Build CSV/Excel Data Transformer skill + FastMCP backend
 
 ## Product Research Scout (Scheduled Task)
 - **Task:** `weekly-product-scout` — runs every Monday at 3 AM
@@ -76,6 +88,7 @@ Build and ship products that generate $8K/month passive income through Claude pl
 | Scout | Product Research | `weekly-product-scout` | Monday 3:00 AM | Opportunities/, LoreConvo |
 | Gina | Enterprise Architect | `enterprise-architect-gina` | Wed + Sat 4:00 AM | LoreConvo (pipeline) |
 | Jacqueline | Project Manager | `pm-jacqueline-daily` | Daily 4:30 AM | docs/pm/, LoreConvo |
+| Madison | Content Marketer | `madison-marketing-agent` | Tue + Fri 1:00 AM | docs/marketing/, LoreConvo |
 
 ### Meg - QA Engineer (Scheduled Task)
 - **Task:** `meg-qa-daily` -- runs daily at 2:00 AM (after Ron)
@@ -105,6 +118,14 @@ Build and ship products that generate $8K/month passive income through Claude pl
 - **Scope:** All agent reports (Ron/Meg/Brock), pipeline data (Scout/Gina), CLAUDE.md TODOs, cross-agent validation
 - **Posture ratings:** ALL CLEAR / REVIEW NEEDED / ACTION REQUIRED
 - **Rule:** Jacqueline does NOT modify source code, TODOs, or other agents' reports -- only produces the dashboard
+
+### Madison - Marketing Content Creator (Scheduled Task)
+- **Task:** `madison-marketing-agent` -- runs twice weekly at 1:00 AM (Tuesday, Friday)
+- **Purpose:** Create blog post drafts, promotional copy, and marketing content for Labyrinth Analytics Consulting and the Lore product family. Promotes LoreConvo, LoreDocs, LorePrompts, and LoreScope through educational content, thought leadership, and product announcements.
+- **Output:** Dated blog post drafts in `docs/marketing/blog_drafts/` + promo copy in `docs/marketing/promo/` + LoreConvo session (surface='marketing')
+- **Scope:** Blog posts (800-2000 words) targeting data engineers and AI practitioners. Topics: data pipeline design, Claude plugins, AI productivity, Lore suite features.
+- **Content Calendar:** Madison maintains a rolling 8-week content calendar in `docs/marketing/content_calendar_madison.md`
+- **Rule:** Madison does NOT publish anything directly. All content goes to draft for Debbie's review before publishing.
 
 ## Blocked
 
@@ -165,6 +186,19 @@ The LoreConvo and LoreDocs repos are PUBLIC on GitHub. Internal business documen
 3. Check that the product's `.gitignore` is up to date
 4. If in doubt, ask Debbie before pushing
 
+## Pipeline Integration (MANDATORY for ALL agents)
+
+**Every agent MUST use PipelineDB for their pipeline interactions.** Read `docs/PIPELINE_AGENT_GUIDE.md` for your role-specific instructions. The pipeline is the shared data layer connecting all agents -- if you do not use it, downstream agents cannot see your work.
+
+Key responsibilities:
+- **Ron:** Sync Debbie's decisions from DEBBIE_DASHBOARD.md to PipelineDB at the START of every session (before other work). Update status to 'in-progress' when building, 'completed' when done.
+- **Scout:** Create `db.add_opportunity()` entries for every opportunity discovered.
+- **Gina:** Query `db.get_by_status('approved-for-review')` and write architecture via `db.set_architecture()`.
+- **Meg:** Log QA findings to pipeline items via `db.set_open_questions()`.
+- **Brock:** Log security findings to pipeline items via `db.set_open_questions()`. Use `db.set_hold_reason()` for CRITICAL findings.
+- **Jacqueline:** Query `db.get_all_pipeline()` as the primary data source for the executive dashboard.
+- **Madison:** Check pipeline for product status before writing about any product.
+
 ## Other Critical Rules
 - NEVER publish, deploy, or make anything public without Debbie's explicit approval.
 - ALWAYS use ASCII-only characters in Python source files (no Unicode checkmarks, box-drawing, smart quotes).
@@ -196,10 +230,12 @@ When starting a session:
 1. LoreConvo auto-loads recent context via SessionStart hook (no manual step needed)
 2. Check LoreDocs: `vault_list()` then `vault_inject_summary()` for active vaults
 3. Read this file -- check Debbie TODOs for new approvals/decisions, then Ron TODOs for next work item
-4. **Check for Meg/Brock findings:** Read the latest reports in `docs/qa/` and `docs/security/`. Also search LoreConvo: `search_sessions("agent:meg")` and `search_sessions("agent:brock")` for recent findings. CRITICAL and HIGH severity bugs or vulnerabilities take priority over regular TODOs -- fix them first.
-5. Read the relevant product CLAUDE.md for the product you will work on
-6. Pick the highest-priority work: Meg/Brock CRITICAL/HIGH fixes first, then Ron TODOs in order
-7. Work on it, commit when done
+4. **Sync pipeline (Ron only):** Read DEBBIE_DASHBOARD.md for any new decisions. Apply status changes to PipelineDB using `update_status()`, `set_priority()`, `set_hold_reason()`. See `docs/PIPELINE_AGENT_GUIDE.md` for details.
+5. **Check for Meg/Brock findings:** Read the latest reports in `docs/qa/` and `docs/security/`. Also search LoreConvo: `search_sessions("agent:meg")` and `search_sessions("agent:brock")` for recent findings. CRITICAL and HIGH severity bugs or vulnerabilities take priority over regular TODOs -- fix them first.
+6. Read the relevant product CLAUDE.md for the product you will work on
+7. Read `docs/PIPELINE_AGENT_GUIDE.md` for your agent's pipeline responsibilities
+8. Pick the highest-priority work: Meg/Brock CRITICAL/HIGH fixes first, then Ron TODOs in order
+9. Work on it, commit when done
 
 When ending a session:
 1. Commit all changes with descriptive messages

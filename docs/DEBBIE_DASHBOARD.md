@@ -1,7 +1,7 @@
 # Debbie's Action Dashboard
 
 Single source of truth for everything that needs Debbie's attention.
-Updated by Jacqueline (daily) or manually. Last updated: 2026-03-31.
+Updated by Jacqueline (daily) or manually. Last updated: 2026-04-01.
 
 ---
 
@@ -9,6 +9,35 @@ Updated by Jacqueline (daily) or manually. Last updated: 2026-03-31.
 
 ~~**Revoke the Anthropic API key** at console.anthropic.com.~~ DONE (2026-03-31).
 Debbie rotated the key. SEC-001 can be closed in Brock's next report.
+
+---
+
+## TODAY -- 2026-04-01
+
+### Stripe Checking Account Setup (DEBBIE ACTION -- by Friday 4/3)
+
+Open a new checking account at your credit union for Labyrinth Analytics Stripe payouts.
+Credit union had a technical issue 3/31; account creation in progress as of 4/1.
+Expected ready: 4/2 or 4/3. Not blocking Ron -- marketplace repo build comes first.
+
+Once the account is open:
+1. Log in to Stripe Dashboard (dashboard.stripe.com)
+2. Settings -> Business settings -> Complete business verification (EIN for Labyrinth Analytics)
+3. Settings -> Payouts -> Add the new checking account as payout destination
+4. Switch from Sandbox to Live mode
+
+This unblocks: marketplace payment collection, LoreConvo/LoreDocs Pro tier billing.
+
+### New Agent: Madison (Marketing)
+Madison has been added to the agent team. She runs Tuesday + Friday at 1:00 AM.
+First run: tomorrow (Tuesday 4/2). All content goes to `docs/marketing/blog_drafts/`
+as drafts for your review. She will NOT publish anything without your approval.
+
+### Pipeline Process Fix
+All agent CLAUDE.md instructions updated to require PipelineDB usage.
+Ron's top priority tonight is syncing your 3/31 decisions to the pipeline DB,
+then building the marketplace repo. Gina should see approved items on her
+Saturday 4/4 run.
 
 ---
 

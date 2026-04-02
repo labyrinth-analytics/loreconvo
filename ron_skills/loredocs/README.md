@@ -62,6 +62,36 @@ LoreDocs organizes knowledge into **vaults** -- named containers for related doc
 - **Full-text search** via SQLite FTS5 finds anything instantly
 - **Injection** loads vault content into Claude's context on demand
 
+## Verify Installation
+
+After installing, verify LoreDocs is working by asking Claude:
+
+> "Run `vault_list` and show me the results."
+
+If you see a list of vaults (or an empty list if this is your first time), LoreDocs is connected. If you get an error about missing tools, re-run `uv sync` and reload the plugin.
+
+## Recommended CLAUDE.md Setup
+
+For the best experience, add the following snippet to your `~/.claude/CLAUDE.md` (global) or your project's `CLAUDE.md`. This tells Claude how to use LoreDocs consistently across sessions.
+
+```markdown
+## LoreDocs (persistent project knowledge)
+
+At session start:
+1. Call `vault_list` to see available knowledge vaults.
+2. Call `vault_inject_summary` for any vaults relevant to the current project.
+3. Use this context to understand project architecture, decisions, and reference docs.
+
+During the session:
+- If you create significant documentation, add it to LoreDocs with `vault_add_doc`.
+- Tag documents for easy cross-vault discovery with `vault_tag_doc`.
+
+At session end:
+- If new docs were created or updated, ensure they are stored in LoreDocs for future sessions.
+```
+
+**For Cowork users:** Cowork does not run hooks automatically. Add instructions to call `vault_list` and `vault_inject_summary` at session start in your project CLAUDE.md.
+
 ## Features
 
 - **Vault organization**: Group docs by project with linked project metadata

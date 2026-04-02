@@ -126,3 +126,16 @@ Both names TESS-clean and Google-clean. 24 of 28 items completed.
 
 ### Documentation (TODO #21)
 - [x] Created LoreDocs README.md -- tagline, quick start, Code/Cowork usage, all 34 tools listed by category, LoreConvo cross-reference, troubleshooting, license
+
+## 2026-04-02 -- Pipeline Sync & Plugin Onboarding UX
+
+### Pipeline Sync (TODO #23)
+- [x] Synced Debbie's 2026-03-31 pipeline decisions to PipelineDB: OPP-002/003/004 approved, OPP-013 approved-for-review P2, OPP-015 approved-for-review P1, OPP-016 approved-for-review P3
+
+### Plugin Onboarding & Auto-Load Fixes (TODOs #24-26, #28-29)
+- [x] TODO #24: Fixed LoreConvo plugin.json -- flattened nested hooks array, added on_session_start.sh as second SessionStart hook so auto_load.py actually runs
+- [x] TODO #25: Added "Recommended CLAUDE.md Setup" and "Verify Installation" sections to LoreConvo README.md. Also fixed personal path reference.
+- [x] TODO #26: Added "Recommended CLAUDE.md Setup" and "Verify Installation" sections to LoreDocs README.md
+- [x] TODO #28: Verify Installation sections added to both READMEs with quick test commands
+- [x] TODO #29: Rewrote COWORK_RESTORE.md with correct tool names, CLAUDE.md workaround as primary recommendation, manual restore as fallback
+- [x] Fixed loreconvo-plugin plugin.json license from MIT to BSL-1.1
