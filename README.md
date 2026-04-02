@@ -30,7 +30,7 @@ claude --plugin-dir /path/to/loreconvo
 /plugin add /path/to/loreconvo
 ```
 
-Replace `/path/to/loreconvo` with wherever you saved the source folder (e.g., `~/projects/side_hustle/ron_skills/loreconvo`).
+Replace `/path/to/loreconvo` with wherever you saved the source folder.
 
 After making code changes, use `/reload-plugins` to refresh without restarting.
 
@@ -93,6 +93,41 @@ Claude Chat (web)
 **Claude Chat** (web) does not support plugins. The `export-to-chat.sh` script bridges the gap: it exports your most recent session to your clipboard so you can paste it directly into Chat. This gives Chat the same context that Code would have loaded automatically.
 
 The result: when you switch surfaces mid-project, you never have to re-explain what you were doing.
+
+## Verify Installation
+
+After installing, verify LoreConvo is working by asking Claude:
+
+> "Run `get_recent_sessions` and show me the results."
+
+If you see a list of sessions (or an empty list if this is your first time), LoreConvo is connected. If you get an error about missing tools, re-run `bash install.sh` and reload the plugin.
+
+For hooks verification (Claude Code only):
+
+> "Check if LoreConvo auto-loaded any context at the start of this session."
+
+If the SessionStart hook is working, Claude will have received context from your recent sessions automatically.
+
+## Recommended CLAUDE.md Setup
+
+For the best experience, add the following snippet to your `~/.claude/CLAUDE.md` (global) or your project's `CLAUDE.md`. This tells Claude how to use LoreConvo consistently across sessions.
+
+```markdown
+## LoreConvo (persistent session memory)
+
+At session start:
+1. Call `get_recent_sessions` to check for recent context relevant to the current work.
+2. Use this context to avoid re-explaining things already discussed in prior sessions.
+
+During the session:
+- If important decisions are made or domain knowledge is shared, note it for the session summary.
+
+At session end:
+- Call `save_session` with a summary of what was accomplished, key decisions, open questions,
+  and any artifacts created. Use appropriate tags (e.g., project name, surface).
+```
+
+**For Cowork users:** Cowork does not run hooks automatically. Add instructions to call `get_recent_sessions` at session start and `save_session` at session end in your project CLAUDE.md. See [COWORK_RESTORE.md](COWORK_RESTORE.md) for details.
 
 ## Features
 
