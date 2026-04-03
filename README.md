@@ -211,6 +211,30 @@ The `.mcp.json` points to `.venv/bin/python3` inside the plugin folder. If you m
 **Cowork can't see sessions saved in Code?**
 Ask Claude to "mount my ~/.loreconvo folder" so Cowork can access the shared database.
 
+## Fallback Script (Direct DB Access)
+
+If the MCP server is unreachable (e.g., in scheduled tasks or automation scripts), `scripts/save_to_loreconvo.py` provides the same core operations directly against the SQLite database.
+
+```bash
+# Save a session
+python scripts/save_to_loreconvo.py \
+    --title "Daily QA run" \
+    --surface "qa" \
+    --summary "Ran full test suite. All passing." \
+    --tags '["qa", "automated"]'
+
+# Read recent sessions
+python scripts/save_to_loreconvo.py --read --limit 5
+
+# Filter by surface
+python scripts/save_to_loreconvo.py --read --surface code --limit 3
+
+# Search sessions
+python scripts/save_to_loreconvo.py --search "tax pipeline"
+```
+
+The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `--db-path` explicitly). It generates proper UUIDs and writes the same schema as the MCP `save_session` tool.
+
 ## License
 
 Business Source License 1.1 (BSL 1.1) - Labyrinth Analytics Consulting
