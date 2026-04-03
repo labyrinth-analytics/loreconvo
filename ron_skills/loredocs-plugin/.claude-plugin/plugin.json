@@ -5,6 +5,8 @@
   "author": {
     "name": "Labyrinth Analytics Consulting"
   },
+  "homepage": "https://github.com/labyrinth-analytics/loredocs",
+  "repository": "https://github.com/labyrinth-analytics/loredocs",
   "keywords": ["knowledge-management", "documents", "search", "ai-projects", "vault"],
-  "license": "MIT"
+  "license": "BSL-1.1"
 }

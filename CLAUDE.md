@@ -11,39 +11,34 @@ Build and ship products that generate $8K/month passive income through Claude pl
 
 1. [ ] File USPTO trademark for LoreConvo (Class 009, $350)
 2. [ ] File USPTO trademark for LoreDocs (Class 009, $350)
-3. [ ] Review and approve rebuilt .plugin files when Ron completes them
+3. [ ] Review and approve rebuilt .plugin files (rebuilt 2026-04-03 with fixed .mcp.json, READMEs, plugin.json)
 4. [ ] Activate live Stripe account (business verification, bank account for payouts, EIN for Labyrinth Analytics). Sandbox already set up 2026-03-22. Needed before self-hosted GitHub marketplace can collect payments.
+5. [ ] Create GitHub repo labyrinth-analytics/claude-plugins and push marketplace/claude-plugins/ contents. Then test: `/plugin marketplace add labyrinth-analytics/claude-plugins` followed by `/plugin install loreconvo@labyrinth-analytics-claude-plugins` and `/install loreconvo`.
 
 ## Ron TODOs (autonomous work, priority order)
 
 All completed items are in `docs/COMPLETED.md`. Only open work lives here.
 
 ### Marketplace & Plugin Distribution (TOP PRIORITY -- nothing else ships until this works)
-NOTE: Items 1-6 are ONE block of work. The marketplace repo, plugin fixes, and
-install documentation must ALL be done together. The install flow is currently BROKEN
-for external users -- `/plugin install` references a marketplace that doesn't exist,
-.mcp.json defaults to Pro tier, and READMEs omit critical post-install steps.
-Debbie tested on 2026-04-02 and confirmed: the entire install path fails.
+NOTE: Marketplace repo, plugin .mcp.json fixes, and README install docs are DONE (2026-04-03).
+Remaining: Debbie needs to create the GitHub repo (labyrinth-analytics/claude-plugins),
+push the marketplace/ directory contents, and test the full install flow end-to-end.
+License key validation is next for Ron.
 
-1. [ ] Build self-hosted GitHub marketplace repo (labyrinth-analytics/claude-plugins) -- create repo with marketplace.json, package both .plugin files, write install instructions that actually work. TEST the full flow: `/plugin marketplace add`, `/plugin install`, `/install` enable step.
-2. [ ] Fix LoreConvo .mcp.json: set LORECONVO_PRO default to "" (empty/free tier), not "1". Public repo must ship as free tier.
-3. [ ] Fix LoreDocs .mcp.json: set LOREDOCS_PRO default to "" (empty/free tier), not "1". Same reasoning.
-4. [ ] Implement license key validation for Pro tier (both products): env var alone is not sufficient -- users can just set LORECONVO_PRO=1. Need Stripe checkout -> license key -> validation flow so Pro features require a valid key, not just an env flag.
-5. [ ] Add missing installation instructions to LoreConvo README: (a) after `/plugin install`, user must run `/install loreconvo` to enable it; (b) add CLAUDE.md snippet for session start/end rules; (c) document mounting .loreconvo directory to projects/Desktop so Cowork sessions can access the DB.
-6. [ ] Add same missing installation instructions to LoreDocs README: (a) `/install` step after `/plugin install`; (b) CLAUDE.md snippet; (c) mounting .loredocs directory.
+1. [ ] Implement license key validation for Pro tier (both products): env var alone is not sufficient -- users can just set LORECONVO_PRO=1. Need Stripe checkout -> license key -> validation flow so Pro features require a valid key, not just an env flag.
 
 ### Plugin Onboarding
-7. [ ] Build `/lore-onboard` skill for LoreConvo plugin that walks users through first-time setup: verifies MCP server is connected, adds CLAUDE.md snippet, runs a test save/load cycle, confirms hooks are firing.
+2. [ ] Build `/lore-onboard` skill for LoreConvo plugin that walks users through first-time setup: verifies MCP server is connected, adds CLAUDE.md snippet, runs a test save/load cycle, confirms hooks are firing.
 
 ### Cleanup (do after marketplace is working)
-8. [ ] Update CLAUDE.md agent paths to reference product copies (`ron_skills/*/scripts/`) instead of monorepo `scripts/`
-9. [ ] Delete old monorepo `scripts/save_to_loreconvo.py` and `scripts/query_loredocs.py` after path migration
+3. [ ] Update CLAUDE.md agent paths to reference product copies (`ron_skills/*/scripts/`) instead of monorepo `scripts/`
+4. [ ] Delete old monorepo `scripts/save_to_loreconvo.py` and `scripts/query_loredocs.py` after path migration
 
 ### New Products
-10. [ ] SQL Query Optimizer: ClawHub skill packaging (ON HOLD -- no local SQL Server)
-11. [ ] SQL Query Optimizer: integration tests with real SQL Server queries (ON HOLD)
-12. [ ] Build Financial Report Generator skill + FastMCP backend
-13. [ ] Build CSV/Excel Data Transformer skill + FastMCP backend
+5. [ ] SQL Query Optimizer: ClawHub skill packaging (ON HOLD -- no local SQL Server)
+6. [ ] SQL Query Optimizer: integration tests with real SQL Server queries (ON HOLD)
+7. [ ] Build Financial Report Generator skill + FastMCP backend
+8. [ ] Build CSV/Excel Data Transformer skill + FastMCP backend
 
 ## Product Research Scout (Scheduled Task)
 - **Task:** `weekly-product-scout` — runs every Monday at 3 AM

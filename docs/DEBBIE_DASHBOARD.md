@@ -1,45 +1,49 @@
 # Debbie's Action Dashboard
 
 Single source of truth for everything that needs Debbie's attention.
-Updated by Jacqueline (daily) or manually. Last updated: 2026-04-02.
+Updated by Jacqueline (daily) or manually. Last updated: 2026-04-03.
 
 ---
 
-## TODAY -- 2026-04-02
+## TODAY -- 2026-04-03 (Friday)
 
-### CRITICAL: Plugin Install Flow is Broken
+### RESOLVED: Plugin Install Flow -- Most Issues Fixed (Ron 4/3)
 
-Debbie tested the full plugin install path on 2026-04-02 and it does NOT work:
-- `/plugin install loreconvo@labyrinth-analytics-claude-plugins` downloads but the marketplace doesn't exist
-- `/install loreconvo` to enable the plugin doesn't work
-- `.mcp.json` files default to PRO tier (should be free)
-- READMEs are missing the `/install` enable step, CLAUDE.md snippet, and directory mounting instructions
+Ron completed the marketplace + plugin distribution block overnight on 4/3:
+- Marketplace repo structure built (marketplace/claude-plugins/ with marketplace.json)
+- Both .mcp.json files fixed: PRO defaults changed from "1" to "" (free tier)
+- Both plugin READMEs updated with full install flow: marketplace add, plugin install, /install enable, CLAUDE.md snippet, Cowork mount instructions
+- Both plugin.json files updated with homepage/repository fields, LoreDocs license fixed to BSL-1.1
+- Both .plugin zips rebuilt with all fixes
+- SEC-012 fixed (anthropic 0.86.0 -> 0.87.0 in SQL Optimizer)
+- SEC-013 fixed (.gitignore added to SQL Optimizer)
 
-**Ron's #1 priority is fixing this.** Items #22, #35-39 are now one consolidated block.
-Nothing else ships until external users can actually install and use the plugins.
+**Still needs Debbie:**
+- Create GitHub repo labyrinth-analytics/claude-plugins and push marketplace/ contents
+- Test the full install flow end-to-end
+- Review rebuilt .plugin files
 
-### Stripe Checking Account Setup (DEBBIE ACTION -- by Friday 4/3)
+**Still needs Ron (next session):**
+- License key validation for Pro tier (env var alone is bypassable)
 
-Credit union account still not ready as of 4/2. Not blocking Ron -- marketplace repo build comes first.
+### Madison Blog Post #2 Ready for Review
 
-Once the account is open:
-1. Log in to Stripe Dashboard (dashboard.stripe.com)
-2. Settings -> Business settings -> Complete business verification (EIN for Labyrinth Analytics)
-3. Settings -> Payouts -> Add the new checking account as payout destination
-4. Switch from Sandbox to Live mode
+"Building a Reference Library for AI Projects: How LoreDocs Vault Architecture Works"
+- 1400+ words, covers semantic vaults, episodic vs reference knowledge, LoreConvo cross-reference
+- File: docs/marketing/blog_drafts/blog_loredocs_vault_architecture_2026_04_03.md
+- Madison's content calendar has 8 weeks planned through May 9
 
-This unblocks: marketplace payment collection, LoreConvo/LoreDocs Pro tier billing.
+### Stripe Checking Account Setup (DEBBIE ACTION)
 
-### Madison Blog Post -- APPROVED
-Debbie reviewed and approved "Why Your Claude Sessions Start From Zero" on 2026-04-02.
-Debbie is publishing via the Labyrinth Analytics website project.
-Email promo template also approved but blocked on no marketing/email list yet.
+Credit union account still pending as of 4/2. Not blocking Ron -- marketplace repo comes first.
+Once the account is open: business verification, bank account for payouts, EIN for Labyrinth Analytics.
 
-### Overnight Summary (from Jacqueline 4/2 dashboard)
-- Ron completed 7 TODOs (#23-26, #28-29, plugin license fix)
-- Meg: YELLOW (286 tests, 2 pre-existing failures in SQL Optimizer test isolation)
-- Brock: NEEDS ATTENTION (SEC-012: CVE in anthropic SDK 0.86.0, one-line bump to 0.87.0 -- non-urgent, product on hold)
-- All agents ran successfully, git push done by Debbie AM 4/2
+### Overnight Summary (from Jacqueline 4/3 dashboard)
+- Ron: DID NOT RUN on 4/3. Last session was 4/2 (7 TODOs completed: #23-26, #28-29, plugin.json fix)
+- Meg: YELLOW -- 304 tests (+18 from yesterday), 2 pre-existing failures. NEW: MEG-037 (HIGH) confirms PRO defaults still broken
+- Brock: NEEDS ATTENTION (trending positive) -- SEC-012 and SEC-013 RESOLVED. 0 new CVEs. Report generated but no LoreConvo session saved.
+- Madison: Blog #2 drafted (LoreDocs vault architecture). Content calendar updated through May 9.
+- Blog #1 ("Why Your Claude Sessions Start From Zero") published on Labyrinth Analytics website 4/2
 
 ---
 
@@ -52,20 +56,7 @@ Email promo template also approved but blocked on no marketing/email list yet.
 - **Change License:** Apache 2.0
 - **Additional Use Grant:** LoreConvo: free for individual non-commercial use with up to 50 sessions. LoreDocs: free for individual non-commercial use with up to 3 vaults.
 
-**Background:** The IP Protection Strategy (`docs/IP_Protection_Strategy_Labyrinth.docx`,
-Section 6) recommended BSL 1.1 to prevent competitors from forking and reselling. Both
-repos are already public on GitHub under MIT. Code already published under MIT stays MIT
-for anyone who already has it; the license change applies going forward only.
-
-**Ron handles:** Create LICENSE files, update pyproject.toml, update all doc references.
-This is now unblocked as `CLAUDE.md` Ron TODO #3.
-
-**Debbie steps (after Ron finishes the file changes):**
-1. Review the LICENSE files Ron creates in each product directory
-2. Push the changes from your Mac (`git push origin master`) since Cowork can't push
-3. Consider the IP strategy doc's advice to consult an IP attorney for the MIT-to-BSL transition on already-public repos
-
-Note: GitHub auto-detects the license from the LICENSE file, so no manual repo settings change is needed.
+**Status:** COMPLETED by Ron on 2026-03-31. LICENSE files created, pyproject.toml updated, all doc references updated, plugins rebuilt.
 
 ### 2. DECIDED: Self-hosted GitHub marketplace (2026-03-31)
 
@@ -73,33 +64,26 @@ Note: GitHub auto-detects the license from the LICENSE file, so no manual repo s
 The official Claude marketplace has "knowledge-work-plugins" reserved by Anthropic, so
 self-hosted is the path forward. Can submit to the official marketplace later if it opens up.
 
-**Ron handles:** Build out the GitHub marketplace repo, package plugins for distribution,
-integrate Stripe billing.
-
-**This unblocks:**
-- Stripe billing integration (Debbie TODO #5 -- activate live Stripe account)
-- Revenue collection for both LoreConvo and LoreDocs
-- SQL Optimizer paid API backend
+**Status:** COMPLETED by Ron on 2026-04-03. Marketplace structure built locally (marketplace/claude-plugins/). Debbie needs to create the GitHub repo and push.
 
 ### 3. DECIDED: Pipeline opportunity dispositions (2026-03-31)
 
-**Scout opportunities (should be assigned OPP-006 through OPP-010):**
-- OPP-006: SSIS Packager Analyzer -- ON HOLD (no local SQL Server installation)
+**Scout opportunities:**
+- OPP-006: SSIS Packager Analyzer -- ON HOLD (no local SQL Server)
 - OPP-007: Data Pipeline Test Harness MCP -- APPROVED for architectural review, P2
-- OPP-008: Schema Diff & Migration MCP -- ON HOLD (no local SQL Server installation)
+- OPP-008: Schema Diff & Migration MCP -- ON HOLD (no local SQL Server)
 - OPP-009: Data Catalog Lite MCP -- APPROVED for architectural review, P1
 - OPP-010: ETL Pattern Library Skill -- APPROVED for architectural review, P3
 
 **Gina architecture items:**
-- OPP-001: ON HOLD (no local SQL Server installation)
+- OPP-001: ON HOLD (no local SQL Server)
 - OPP-002: APPROVED. Brock should review architectural plans for security concerns going forward.
-- OPP-003: Already documented. Product name: **LorePrompts**. Pricing: $10/mo. Deployment: same route as all LoreSuite tools unless compelling reason otherwise. Follow-up for Gina: create a data model showing how all LoreSuite tools' tables relate in the SQLite DB.
+- OPP-003: Already documented. Product name: **LorePrompts**. Pricing: $10/mo.
 - OPP-004: APPROVED. Product name: **LoreScope**.
 
 ### 4. DECIDED: SQL Query Optimizer on hold (2026-03-31)
 
-Project on hold -- no local SQL Server installation to test against. API key has been
-rotated (SEC-001 resolved). Will resume when SQL Server is available.
+Project on hold -- no local SQL Server installation to test against.
 
 ---
 
@@ -113,16 +97,17 @@ rotated (SEC-001 resolved). Will resume when SQL Server is available.
 - Sandbox already set up (2026-03-22). LoreDocs `tiers.py` has TierEnforcer ready.
 - Credit union account still pending (technical issue 3/31, not ready as of 4/2)
 - What's needed: business verification, bank account for payouts, EIN for Labyrinth Analytics
-- Where this is tracked: `CLAUDE.md` Debbie TODO #5
+- Where this is tracked: `CLAUDE.md` Debbie TODO #4
 
 ### 7. Review rebuilt .plugin files (BLOCKED on Ron)
 - Debbie reviewed 2026-04-02 and found install flow is broken (see CRITICAL section above)
 - Ron must fix marketplace, .mcp.json defaults, and README instructions before Debbie can meaningfully re-test
-- Where this is tracked: `CLAUDE.md` Debbie TODO #4
+- Where this is tracked: `CLAUDE.md` Debbie TODO #3
 
-### 8. Publish Madison's blog post (IN PROGRESS)
-- "Why Your Claude Sessions Start From Zero" approved 2026-04-02
-- Debbie publishing via Labyrinth Analytics website project
+### 8. Publish Madison's blog post #2 (NEW -- ready for review)
+- "Building a Reference Library for AI Projects: How LoreDocs Vault Architecture Works"
+- File: docs/marketing/blog_drafts/blog_loredocs_vault_architecture_2026_04_03.md
+- Blog #1 published successfully on 4/2
 
 ---
 
@@ -134,38 +119,43 @@ Ron's next session must focus entirely on the marketplace + plugin distribution 
 
 1. **Build the marketplace repo** (`labyrinth-analytics/claude-plugins`): create the GitHub repo with `marketplace.json`, package both .plugin files, write install instructions. TEST the full flow end-to-end.
 
-2. **Fix .mcp.json PRO defaults:** Both LoreConvo and LoreDocs ship with PRO=1. Change to "" (free tier) for public distribution.
+2. **Fix .mcp.json PRO defaults:** Both LoreConvo and LoreDocs ship with PRO=1. Change to "" (free tier) for public distribution. MEG-037 (HIGH) confirms this is still broken as of 4/3.
 
 3. **Fix README install instructions (both products):**
    - Add the `/install <name>` enable step after `/plugin install`
-   - Add CLAUDE.md snippet for session start/end rules
+   - Add CLAUDE.md snippet for session start/end rules (DONE 4/2)
    - Document mounting .loreconvo/.loredocs directory to projects/Desktop for Cowork access
    - Only document install paths that ACTUALLY WORK. Mark anything not yet built as "Coming Soon"
 
 4. **Design license key validation:** Users can currently bypass Pro tier by setting env var. Need Stripe -> license key -> validation. Can build alongside marketplace but design it now.
 
+5. **Commit staged Brock fixes:** SEC-012 (anthropic bump) and SEC-013 (.gitignore) are staged but not committed.
+
 ### Previous Ron action items (lower priority, do after marketplace works)
-5. **Gina follow-up:** Request Gina create a data model showing how all LoreSuite tools' SQLite tables relate
-6. **Process improvement:** Brock reviews Gina architecture proposals for security before they go to Ron
+6. **Gina follow-up:** Request Gina create a data model showing how all LoreSuite tools' SQLite tables relate
+7. **Process improvement:** Brock reviews Gina architecture proposals for security before they go to Ron
+8. **Stale worktree cleanup:** .claude/worktrees/pedantic-bardeen/ should be removed
 
 ---
 
 ## Reviews Waiting (Agent Reports)
 
-### Meg QA -- 2026-04-02 (YELLOW)
-286 tests passing (+25 from yesterday). One MEDIUM finding:
-- **MEG-036:** Test isolation bug in SQL Optimizer credit tests -- 2 tests fail in aggregate runs due to cross-file `os.environ` pollution. Meg wrote isolated replacement tests. Ron should fix the original file. (Non-urgent: SQL Optimizer is ON HOLD)
-- Full report: check `docs/qa/` for latest
+### Meg QA -- 2026-04-03 (YELLOW)
+304 tests passing (+18 from yesterday). 24 new tests written. Findings:
+- **MEG-037 (HIGH, NEW):** Plugin .mcp.json files (loreconvo-plugin, loredocs-plugin) ship with PRO=1. Must be "" for public distribution. Cross-validates Debbie's 4/2 finding. Ron TODOs #2/#3.
+- **MEG-036 (MEDIUM, EXISTING):** SQL Optimizer test isolation bug -- 2 tests fail in aggregate runs. Meg wrote isolated replacements. Non-urgent (product ON HOLD).
+- Full report: `docs/qa/qa_report_2026_04_03.md`
 
-### Brock Security -- 2026-04-02 (NEEDS ATTENTION)
-- **SEC-012 (MEDIUM, NEW):** CVEs in anthropic==0.86.0 (SQL Optimizer). CVE-2026-34450 (world-readable memory files) and CVE-2026-34452 (async symlink escape). Fix: bump to 0.87.0. Low actual risk on single-user Mac, and product is on hold.
-- **SEC-013 (LOW, NEW):** SQL Optimizer missing product-level .gitignore
-- LoreConvo and LoreDocs: 0 CVEs, OWASP all PASS
-- Full report: check `docs/security/` for latest
+### Brock Security -- 2026-04-03 (NEEDS ATTENTION, trending positive)
+- **SEC-012 RESOLVED:** anthropic bumped to 0.87.0 (staged, pending commit)
+- **SEC-013 RESOLVED:** SQL Optimizer .gitignore created (staged, pending commit)
+- **SEC-011 (MEDIUM, EXISTING):** TOCTOU race in LoreDocs file export -- low risk on single-user machine
+- **SEC-006 (LOW, EXISTING):** CreditManager race condition -- product on hold
+- LoreConvo: 0 CVEs | LoreDocs: 0 CVEs | SQL Optimizer: 0 CVEs (after bump)
+- Full report: `docs/security/security_report_2026_04_03.md`
 
-### Jacqueline PM Dashboard -- 2026-04-02
-- Interactive dashboard: `docs/pm/executive_dashboard_2026_04_02.html`
-- NOTE: Jacqueline's task updated 2026-04-02 to also update this DEBBIE_DASHBOARD.md daily and fix day-of-week bug (was showing Wednesday for Thursday)
+### Jacqueline PM Dashboard -- 2026-04-03
+- Interactive dashboard: `docs/pm/executive_dashboard_2026_04_03.html`
 
 ---
 
@@ -178,13 +168,21 @@ Your review points in the pipeline:
 2. **Architecture-proposed items** -- review Gina's proposals, move to `approved` or `rejected`
 3. **Completed items** -- verify Ron's finished work
 
+**Current pipeline state (17 items):**
+- 3 awaiting architecture review: OPP-015 (Data Catalog Lite, P1), OPP-013 (Test Harness, P2), OPP-016 (ETL Patterns, P3)
+- 3 approved: OPP-002 (AI Cost Attribution), OPP-003 (LorePrompts), OPP-004 (LoreScope)
+- 5 completed: security hardening (OPP-006 through OPP-011)
+- 4 on hold: OPP-001, OPP-005, OPP-012, OPP-014 (SQL Server dependency)
+
+Gina runs next on Saturday 4/4 -- should produce architecture proposals for the 3 awaiting items.
+
 To check current pipeline status, ask any Claude session to run:
 ```python
 from pipeline_helpers import PipelineDB
 db = PipelineDB()
-db.get_by_status("scouted")        # Items waiting for your first review
-db.get_by_status("architecture-proposed")  # Gina's proposals waiting for approval
-db.get_by_status("completed")      # Finished work waiting for verification
+db.get_by_status("scouted")
+db.get_by_status("architecture-proposed")
+db.get_by_status("completed")
 ```
 
 ---
@@ -193,11 +191,9 @@ db.get_by_status("completed")      # Finished work waiting for verification
 
 These are tracked in the global `~/.claude/CLAUDE.md` under "Pending Items":
 
-- ~~K-1 parser~~ -- COMPLETED, taxes mailed for 2025
 - **Portfolio maker/checker validation** -- in progress
 - **Crypto price API** -- connected. ATOM unstaked. ETH unstaking in progress.
 - **Portfolio_Master remaining tabs** -- in progress
-- ~~Recalculate projected federal tax~~ -- COMPLETED
 - **2024 Amended Return (1040-X)** -- filed Feb 25, 2026; waiting on IRS processing
 
 ---
@@ -216,3 +212,5 @@ These are tracked in the global `~/.claude/CLAUDE.md` under "Pending Items":
 | Product details | Per-product CLAUDE.md in `ron_skills/<product>/CLAUDE.md` |
 | Global project context | `~/.claude/CLAUDE.md` |
 | Product roadmap | `Project_Ron_Product_Roadmap.html` |
+| Marketing blog drafts | `docs/marketing/blog_drafts/` |
+| Content calendar | `docs/marketing/content_calendar_madison.md` |

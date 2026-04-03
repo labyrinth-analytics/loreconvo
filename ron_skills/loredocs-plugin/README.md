@@ -13,12 +13,24 @@
 ```bash
 # Install uv (one time, if you don't have it)
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install via the Labyrinth Analytics marketplace
-/plugin install loredocs@labyrinth-analytics-claude-plugins
 ```
 
-Or add directly as an MCP server in Claude Code's `.claude/settings.json`:
+### Option A: Install from the Labyrinth Analytics marketplace
+
+```bash
+# 1. Add the marketplace (one time)
+/plugin marketplace add labyrinth-analytics/claude-plugins
+
+# 2. Install the plugin
+/plugin install loredocs@labyrinth-analytics-claude-plugins
+
+# 3. Enable the MCP server
+/install loredocs
+```
+
+### Option B: Add directly as an MCP server
+
+Add to your Claude Code settings (`.claude/settings.json`):
 
 ```json
 {
@@ -30,6 +42,33 @@ Or add directly as an MCP server in Claude Code's `.claude/settings.json`:
   }
 }
 ```
+
+---
+
+## Post-Install Setup
+
+After installing, complete these steps to get the most out of LoreDocs:
+
+### 1. Add CLAUDE.md instructions
+
+Add the following to your project's `CLAUDE.md` or global `~/.claude/CLAUDE.md`:
+
+```markdown
+## LoreDocs Knowledge Base
+
+At the start of every session, call `vault_list` then `vault_inject_summary` to load relevant project knowledge.
+When you create or update significant documentation, call `vault_add_doc` to store it in the knowledge base.
+```
+
+This tells Claude to automatically load project knowledge at session start.
+
+### 2. Mount the data directory (Cowork only)
+
+If you use **Cowork**, mount your LoreDocs data directory so Cowork sessions can access the database:
+
+- Mount `~/.loredocs` as a folder in your Cowork project
+
+Without this step, Cowork sessions cannot read or write to your knowledge vaults.
 
 ---
 

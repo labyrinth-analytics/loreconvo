@@ -1,0 +1,39 @@
+# Environment and secrets
+.env
+.env.*
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Pytest
+.pytest_cache/
+pytest-cache-files-*/
+
+# Internal docs (never commit to public repo)
+CLAUDE.md
+docs/internal/

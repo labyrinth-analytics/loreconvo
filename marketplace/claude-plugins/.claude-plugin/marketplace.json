@@ -1,0 +1,45 @@
+{
+  "name": "labyrinth-analytics-claude-plugins",
+  "owner": {
+    "name": "Labyrinth Analytics Consulting",
+    "email": "debbie.wonderkitty@gmail.com"
+  },
+  "metadata": {
+    "description": "Claude plugins from Labyrinth Analytics Consulting. Persistent memory and knowledge management for Claude sessions.",
+    "homepage": "https://labyrinthanalyticsconsulting.com"
+  },
+  "plugins": [
+    {
+      "name": "loreconvo",
+      "source": {
+        "source": "github",
+        "repo": "labyrinth-analytics/loreconvo",
+        "ref": "v0.3.0"
+      },
+      "description": "Cross-surface persistent memory for Claude sessions. Vault conversations from Code, Cowork, and Chat -- recall decisions, artifacts, and context in any future session.",
+      "version": "0.3.0",
+      "author": {
+        "name": "Labyrinth Analytics Consulting"
+      },
+      "homepage": "https://github.com/labyrinth-analytics/loreconvo",
+      "license": "BSL-1.1",
+      "keywords": ["memory", "sessions", "context", "recall", "cross-surface", "conversations"]
+    },
+    {
+      "name": "loredocs",
+      "source": {
+        "source": "github",
+        "repo": "labyrinth-analytics/loredocs",
+        "ref": "v0.1.0"
+      },
+      "description": "Searchable, organized knowledge base for your AI projects. Store documents, tag them, search across them, and inject context into any Claude conversation.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Labyrinth Analytics Consulting"
+      },
+      "homepage": "https://github.com/labyrinth-analytics/loredocs",
+      "license": "BSL-1.1",
+      "keywords": ["knowledge-management", "documents", "search", "ai-projects", "vault"]
+    }
+  ]
+}

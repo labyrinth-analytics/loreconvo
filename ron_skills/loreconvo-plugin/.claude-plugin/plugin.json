@@ -5,6 +5,8 @@
   "author": {
     "name": "Labyrinth Analytics Consulting"
   },
+  "homepage": "https://github.com/labyrinth-analytics/loreconvo",
+  "repository": "https://github.com/labyrinth-analytics/loreconvo",
   "keywords": ["memory", "sessions", "conversations", "recall", "context", "cross-surface"],
   "license": "BSL-1.1"
 }

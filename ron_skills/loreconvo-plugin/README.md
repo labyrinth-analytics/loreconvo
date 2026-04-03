@@ -13,12 +13,24 @@
 ```bash
 # Install uv (one time, if you don't have it)
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install via the Labyrinth Analytics marketplace
-/plugin install loreconvo@labyrinth-analytics-claude-plugins
 ```
 
-Or add directly as an MCP server in Claude Code's `.claude/settings.json`:
+### Option A: Install from the Labyrinth Analytics marketplace
+
+```bash
+# 1. Add the marketplace (one time)
+/plugin marketplace add labyrinth-analytics/claude-plugins
+
+# 2. Install the plugin
+/plugin install loreconvo@labyrinth-analytics-claude-plugins
+
+# 3. Enable the MCP server
+/install loreconvo
+```
+
+### Option B: Add directly as an MCP server
+
+Add to your Claude Code settings (`.claude/settings.json`):
 
 ```json
 {
@@ -30,6 +42,33 @@ Or add directly as an MCP server in Claude Code's `.claude/settings.json`:
   }
 }
 ```
+
+---
+
+## Post-Install Setup
+
+After installing, complete these steps to get the most out of LoreConvo:
+
+### 1. Add CLAUDE.md instructions
+
+Add the following to your project's `CLAUDE.md` or global `~/.claude/CLAUDE.md`:
+
+```markdown
+## LoreConvo Session Memory
+
+At the start of every session, call `get_recent_sessions` to load context from prior sessions.
+At the end of every session, call `save_session` to preserve decisions, artifacts, and open questions.
+```
+
+This tells Claude to automatically save and load session context.
+
+### 2. Mount the data directory (Cowork only)
+
+If you use **Cowork**, mount your LoreConvo data directory so Cowork sessions can access the database:
+
+- Mount `~/.loreconvo` as a folder in your Cowork project
+
+Without this step, Cowork sessions cannot read or write to your session vault.
 
 ---
 

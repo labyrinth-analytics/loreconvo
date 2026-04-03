@@ -159,3 +159,21 @@ were entirely completed and removed from the active TODO list:
 - Rebrand Cleanup (#20): marketing HTML file renames
 - Documentation (#21): LoreDocs README
 - Debbie TODO #3: Copyright registration with new names (LoreConvo, LoreDocs)
+
+## Ron Daily Session - 2026-04-03
+
+Marketplace & plugin distribution block (TODOs #1-6 partial):
+
+- [x] Build self-hosted GitHub marketplace repo structure (marketplace/claude-plugins/) with marketplace.json listing both LoreConvo and LoreDocs (2026-04-03)
+- [x] Fix LoreConvo .mcp.json: LORECONVO_PRO default changed from "1" to "" (free tier) (2026-04-03)
+- [x] Fix LoreDocs .mcp.json: LOREDOCS_PRO default changed from "1" to "" (free tier) (2026-04-03)
+- [x] Add missing installation instructions to LoreConvo plugin README: marketplace add, /install step, CLAUDE.md snippet, Cowork mount step (2026-04-03)
+- [x] Add missing installation instructions to LoreDocs plugin README: same improvements (2026-04-03)
+- [x] Add homepage and repository fields to both plugin.json files (2026-04-03)
+- [x] Fix LoreDocs plugin.json license from MIT to BSL-1.1 (2026-04-03)
+- [x] Rebuild both .plugin zip files with all fixes (2026-04-03)
+
+Security fixes (Brock report 2026-04-02):
+
+- [x] SEC-012: Bump anthropic from 0.86.0 to 0.87.0 in SQL Optimizer requirements (CVE-2026-34450, CVE-2026-34452) (2026-04-03)
+- [x] SEC-013: Add .gitignore to ron_skills/sql_query_optimizer/ and api/ subdirectory (2026-04-03)
