@@ -206,6 +206,36 @@ The `.mcp.json` points to the virtual environment's Python. If you moved the fol
 **Cowork can't see docs saved in Code?**
 Ask Claude to "mount my ~/.loredocs folder" so Cowork can access the shared database.
 
+## Fallback Script (Direct DB Access)
+
+If the MCP server is unreachable (e.g., in scheduled tasks or automation scripts), `scripts/query_loredocs.py` provides the same core operations directly against the SQLite database.
+
+```bash
+# List all vaults
+python scripts/query_loredocs.py --list
+
+# Show vault details and document manifest
+python scripts/query_loredocs.py --info "My Project Docs"
+
+# Search documents across all vaults
+python scripts/query_loredocs.py --search "architecture"
+
+# Add a document to a vault
+python scripts/query_loredocs.py --add-doc \
+    --vault "My Project Docs" \
+    --name "Architecture Overview" \
+    --file docs/architecture.md \
+    --tags '["architecture", "design"]'
+
+# Add a document from stdin
+echo "# Quick Note" | python scripts/query_loredocs.py --add-doc \
+    --vault "My Project Docs" \
+    --name "Quick Note" \
+    --stdin
+```
+
+The script auto-discovers the database at `~/.loredocs/loredocs.db` (or pass `--db-path` explicitly). It writes the same schema as the MCP tools, including FTS indexing and on-disk file storage.
+
 ## License
 
 Business Source License 1.1 (BSL 1.1) - Labyrinth Analytics Consulting

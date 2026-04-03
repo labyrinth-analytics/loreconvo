@@ -52,11 +52,22 @@ Build and ship products that generate $8K/month passive income through Claude pl
 ### Documentation
 21. [x] Add README.md for LoreDocs (modeled after LoreConvo README: tagline, quick start, usage for Code/Cowork, tool list, license) -- done 2026-04-01
 
-### Marketplace & Billing (PRIORITY -- revenue blocker)
-22. [ ] Build self-hosted GitHub marketplace repo (labyrinth-analytics/claude-plugins) -- package plugins for distribution, create install instructions, integrate Stripe billing
-23. [x] Sync Debbie's 2026-03-31 pipeline decisions to PipelineDB (OPP-002/003/004 approved, OPP-006/008 on hold, OPP-007/009/010 approved-for-review with priorities) -- done 2026-04-02
+### Marketplace & Plugin Distribution (TOP PRIORITY -- nothing else ships until this works)
+NOTE: Items 22, 35-39 are ONE block of work. The marketplace repo, plugin fixes, and
+install documentation must ALL be done together. The install flow is currently BROKEN
+for external users -- `/plugin install` references a marketplace that doesn't exist,
+.mcp.json defaults to Pro tier, and READMEs omit critical post-install steps.
+Debbie tested on 2026-04-02 and confirmed: the entire install path fails.
 
-### Plugin Onboarding & Auto-Load Fixes (user experience -- do before marketplace launch)
+22. [ ] Build self-hosted GitHub marketplace repo (labyrinth-analytics/claude-plugins) -- create repo with marketplace.json, package both .plugin files, write install instructions that actually work. TEST the full flow: `/plugin marketplace add`, `/plugin install`, `/install` enable step.
+23. [x] Sync Debbie's 2026-03-31 pipeline decisions to PipelineDB (OPP-002/003/004 approved, OPP-006/008 on hold, OPP-007/009/010 approved-for-review with priorities) -- done 2026-04-02
+35. [ ] Fix LoreConvo .mcp.json: set LORECONVO_PRO default to "" (empty/free tier), not "1". Public repo must ship as free tier.
+36. [ ] Fix LoreDocs .mcp.json: set LOREDOCS_PRO default to "" (empty/free tier), not "1". Same reasoning.
+37. [ ] Implement license key validation for Pro tier (both products): env var alone is not sufficient -- users can just set LORECONVO_PRO=1. Need Stripe checkout -> license key -> validation flow so Pro features require a valid key, not just an env flag.
+38. [ ] Add missing installation instructions to LoreConvo README: (a) after `/plugin install`, user must run `/install loreconvo` to enable it; (b) add CLAUDE.md snippet for session start/end rules; (c) document mounting .loreconvo directory to projects/Desktop so Cowork sessions can access the DB.
+39. [ ] Add same missing installation instructions to LoreDocs README: (a) `/install` step after `/plugin install`; (b) CLAUDE.md snippet; (c) mounting .loredocs directory.
+
+### Plugin Onboarding & Auto-Load Fixes (do alongside marketplace work)
 24. [x] Fix LoreConvo SessionStart hook: wire up `auto_load.py` in plugin.json as second hook entry. Flattened nested hooks array structure. -- done 2026-04-02
 25. [x] Add "Recommended CLAUDE.md Setup" section to LoreConvo README.md with exact snippet for ~/.claude/CLAUDE.md session start/end instructions, Code and Cowork guidance. -- done 2026-04-02
 26. [x] Add "Recommended CLAUDE.md Setup" section to LoreDocs README.md (same pattern as LoreConvo). -- done 2026-04-02
@@ -64,11 +75,22 @@ Build and ship products that generate $8K/month passive income through Claude pl
 28. [x] Add "Verify Installation" section to both READMEs with a quick test: "Ask Claude to run `get_recent_sessions` / `vault_list` -- if you see results, it is working." -- done 2026-04-02
 29. [x] Fix COWORK_RESTORE.md: rewrote with correct tool names, CLAUDE.md workaround as primary recommendation, manual restore as fallback. -- done 2026-04-02
 
+### Fallback Scripts (product reliability -- ship with plugins)
+30. [x] Create cleaned save_to_loreconvo.py in `ron_skills/loreconvo/scripts/` (no internal refs) -- done 2026-04-02
+31. [x] Create cleaned query_loredocs.py in `ron_skills/loredocs/scripts/` (no internal refs) -- done 2026-04-02
+32. [x] Document fallback scripts in both product READMEs -- done 2026-04-02
+33. [x] Update CLAUDE.md agent paths to reference product copies (`ron_skills/*/scripts/`) instead of monorepo `scripts/` -- moved to #40
+34. [x] Delete old monorepo `scripts/save_to_loreconvo.py` and `scripts/query_loredocs.py` after path migration -- moved to #41
+
+### Cleanup (do after marketplace is working)
+40. [ ] Update CLAUDE.md agent paths to reference product copies (`ron_skills/*/scripts/`) instead of monorepo `scripts/`
+41. [ ] Delete old monorepo `scripts/save_to_loreconvo.py` and `scripts/query_loredocs.py` after path migration
+
 ### New Products
-30. [ ] SQL Query Optimizer: ClawHub skill packaging
-31. [ ] SQL Query Optimizer: integration tests with real SQL Server queries
-32. [ ] Build Financial Report Generator skill + FastMCP backend
-33. [ ] Build CSV/Excel Data Transformer skill + FastMCP backend
+42. [ ] SQL Query Optimizer: ClawHub skill packaging (ON HOLD -- no local SQL Server)
+43. [ ] SQL Query Optimizer: integration tests with real SQL Server queries (ON HOLD)
+44. [ ] Build Financial Report Generator skill + FastMCP backend
+45. [ ] Build CSV/Excel Data Transformer skill + FastMCP backend
 
 ## Product Research Scout (Scheduled Task)
 - **Task:** `weekly-product-scout` — runs every Monday at 3 AM
@@ -125,6 +147,7 @@ Build and ship products that generate $8K/month passive income through Claude pl
 - **Output:** Dated blog post drafts in `docs/marketing/blog_drafts/` + promo copy in `docs/marketing/promo/` + LoreConvo session (surface='marketing')
 - **Scope:** Blog posts (800-2000 words) targeting data engineers and AI practitioners. Topics: data pipeline design, Claude plugins, AI productivity, Lore suite features.
 - **Content Calendar:** Madison maintains a rolling 8-week content calendar in `docs/marketing/content_calendar_madison.md`
+- **Blog Standards:** Before drafting any blog post, read the blog publishing skill at `~/projects/labyrinthanalytics_website/.claude/skills/labyrinth-blog-publishing/SKILL.md`. It contains the frontmatter schema, editorial voice guidelines, post structure arc, and pre-publish checklist. All blog drafts must follow these standards.
 - **Rule:** Madison does NOT publish anything directly. All content goes to draft for Debbie's review before publishing.
 
 ## Blocked
