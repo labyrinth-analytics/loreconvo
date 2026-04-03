@@ -25,11 +25,14 @@ class Config:
 
     @property
     def is_pro(self) -> bool:
-        """Return True if the user has an active Pro license.
+        """Return True if the user has a valid Pro license.
 
         Pro mode is enabled by setting the LORECONVO_PRO environment variable
-        to any non-empty value. This is a simple first-pass mechanism -- a
-        cryptographically-verified license key will replace it once billing
-        is wired up.
+        to a valid Labyrinth Analytics license key (LAB-...).
+
+        For internal agents: set both LORECONVO_PRO=1 and LAB_DEV_MODE=1 in
+        the internal .mcp.json to bypass key validation.  The public plugin
+        .mcp.json files must NOT include LAB_DEV_MODE.
         """
-        return bool(os.environ.get("LORECONVO_PRO", "").strip())
+        from .license import is_pro_licensed
+        return is_pro_licensed()
