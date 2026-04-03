@@ -3,7 +3,7 @@
 Rolling 8-week content plan. Updated after each session.
 Madison runs Tuesday + Friday at 1:00 AM.
 
-Last updated: 2026-04-01
+Last updated: 2026-04-03
 Maintained by: Madison (marketing agent)
 
 ---
@@ -29,7 +29,7 @@ Maintained by: Madison (marketing agent)
 
 | Day | Type | Topic | File | Status |
 |-----|------|-------|------|--------|
-| Tue Apr 7 | Blog | LoreDocs vault architecture -- knowledge management for AI projects | blog_loredocs_vault_architecture_2026_04_07.md | pending |
+| Tue Apr 7 | Blog | Knowledge management for AI projects (moved forward to Apr 3) | blog_loredocs_vault_architecture_2026_04_03.md | draft |
 | Fri Apr 11 | Promo | Social snippets -- LoreDocs alpha launch teaser | social_loredocs_alpha_2026_04_11.md | pending |
 
 ### Week 3: April 14-18, 2026
