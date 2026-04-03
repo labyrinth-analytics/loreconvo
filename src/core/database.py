@@ -132,14 +132,14 @@ class SessionDatabase:
                 "instead of raw SQL inserts."
             )
         # Enforce BSL 1.1 free-tier session limit.
-        # Pro mode (LORECONVO_PRO env var set) bypasses this check.
+        # Pro mode (valid LORECONVO_PRO license key) bypasses this check.
         if not self.config.is_pro:
             current_count = self.session_count()
             if current_count >= self.config.max_free_sessions:
                 raise SessionLimitReachedError(
                     f"Free tier limit reached: {current_count} of "
                     f"{self.config.max_free_sessions} sessions stored. "
-                    "Set LORECONVO_PRO=1 to unlock unlimited sessions, "
+                    "Set your LORECONVO_PRO license key to unlock unlimited sessions, "
                     "or contact info@labyrinthanalyticsconsulting.com to upgrade."
                 )
         self.conn.execute(
