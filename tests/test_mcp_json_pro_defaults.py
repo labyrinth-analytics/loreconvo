@@ -29,17 +29,15 @@ class TestLoreConvoPluginMcpJson:
     def test_pro_default_should_be_free_tier(self, mcp_data):
         """PUBLIC plugin must NOT ship with LORECONVO_PRO=1.
 
-        This is a known issue (MEG-037 / CLAUDE.md TODO #2).
-        The default should be "" (empty string) so public users
-        get the free tier by default.
+        Fixed in commit following MEG-037 (2026-04-03).
+        Public plugin .mcp.json must default to "" (free tier).
+        License keys are set by users after purchasing Pro.
         """
         env = mcp_data.get("mcpServers", {}).get("loreconvo", {}).get("env", {})
         pro_val = env.get("LORECONVO_PRO", "")
-        # This test documents the CURRENT (incorrect) state.
-        # When Ron fixes TODO #2, change this to: assert pro_val == ""
-        assert pro_val == "1", (
-            "If this fails, it means TODO #2 was fixed! "
-            "Update this test to assert pro_val == '' and remove MEG-037."
+        assert pro_val == "", (
+            f"PUBLIC plugin .mcp.json must default LORECONVO_PRO to '' (free tier), "
+            f"got '{pro_val}'. External users should start on free tier."
         )
 
 
@@ -55,17 +53,15 @@ class TestLoreDocsPluginMcpJson:
     def test_pro_default_should_be_free_tier(self, mcp_data):
         """PUBLIC plugin must NOT ship with LOREDOCS_PRO=1.
 
-        This is a known issue (MEG-037 / CLAUDE.md TODO #3).
-        The default should be "" (empty string) so public users
-        get the free tier by default.
+        Fixed in commit following MEG-037 (2026-04-03).
+        Public plugin .mcp.json must default to "" (free tier).
+        License keys are set by users after purchasing Pro.
         """
         env = mcp_data.get("mcpServers", {}).get("loredocs", {}).get("env", {})
         pro_val = env.get("LOREDOCS_PRO", "")
-        # This test documents the CURRENT (incorrect) state.
-        # When Ron fixes TODO #3, change this to: assert pro_val == ""
-        assert pro_val == "1", (
-            "If this fails, it means TODO #3 was fixed! "
-            "Update this test to assert pro_val == '' and remove MEG-037."
+        assert pro_val == "", (
+            f"PUBLIC plugin .mcp.json must default LOREDOCS_PRO to '' (free tier), "
+            f"got '{pro_val}'. External users should start on free tier."
         )
 
 

@@ -55,19 +55,23 @@ class TestIsProFlag:
         cfg.max_free_sessions = 50
         assert cfg.is_pro is False
 
-    def test_is_pro_when_env_set_to_1(self, monkeypatch):
+    def test_is_pro_when_dev_bypass(self, monkeypatch):
+        """LORECONVO_PRO=1 + LAB_DEV_MODE=1 activates Pro (internal agents)."""
         monkeypatch.setenv("LORECONVO_PRO", "1")
+        monkeypatch.setenv("LAB_DEV_MODE", "1")
         cfg = Config.__new__(Config)
         cfg.db_path = ""
         cfg.max_free_sessions = 50
         assert cfg.is_pro is True
 
-    def test_is_pro_when_env_set_to_any_value(self, monkeypatch):
-        monkeypatch.setenv("LORECONVO_PRO", "true")
+    def test_is_not_pro_when_env_set_to_1_without_dev_mode(self, monkeypatch):
+        """LORECONVO_PRO=1 alone no longer grants Pro -- requires a license key."""
+        monkeypatch.setenv("LORECONVO_PRO", "1")
+        monkeypatch.delenv("LAB_DEV_MODE", raising=False)
         cfg = Config.__new__(Config)
         cfg.db_path = ""
         cfg.max_free_sessions = 50
-        assert cfg.is_pro is True
+        assert cfg.is_pro is False
 
     def test_not_pro_when_env_empty_string(self, monkeypatch):
         monkeypatch.setenv("LORECONVO_PRO", "")
@@ -110,7 +114,7 @@ class TestFreeTierEnforcement:
             db.save_session(make_session(99))
         assert "50" not in str(exc_info.value)  # uses configured limit (3)
         assert "3" in str(exc_info.value)
-        assert "LORECONVO_PRO" in str(exc_info.value)
+        assert "LORECONVO_PRO" in str(exc_info.value) or "license key" in str(exc_info.value)
         db.close()
 
     def test_count_not_incremented_after_limit_error(self, tmp_path, monkeypatch):
@@ -130,7 +134,7 @@ class TestFreeTierEnforcement:
             db.save_session(make_session(1))
         msg = str(exc_info.value)
         assert "labyrinthanalyticsconsulting.com" in msg
-        assert "LORECONVO_PRO" in msg
+        assert "LORECONVO_PRO" in msg or "license key" in msg
         db.close()
 
     def test_at_exactly_limit_raises_error(self, tmp_path, monkeypatch):
@@ -149,7 +153,9 @@ class TestFreeTierEnforcement:
 
 class TestProTierBypass:
     def test_pro_mode_allows_saving_beyond_free_limit(self, tmp_path, monkeypatch):
+        """Dev bypass (LORECONVO_PRO=1 + LAB_DEV_MODE=1) allows unlimited saves."""
         monkeypatch.setenv("LORECONVO_PRO", "1")
+        monkeypatch.setenv("LAB_DEV_MODE", "1")
         db = make_db(tmp_path, max_free=2, monkeypatch=None)
         # Save more than the free limit without error
         for i in range(5):
@@ -161,13 +167,15 @@ class TestProTierBypass:
     def test_switching_to_non_pro_enforces_limit(self, tmp_path, monkeypatch):
         """If pro env is unset mid-use, subsequent saves are blocked at limit."""
         monkeypatch.setenv("LORECONVO_PRO", "1")
+        monkeypatch.setenv("LAB_DEV_MODE", "1")
         db = make_db(tmp_path, max_free=2, monkeypatch=None)
         for i in range(3):
             db.save_session(make_session(i))
         assert db.session_count() == 3
 
-        # Now remove pro flag -- next save should be blocked (count 3 > limit 2)
+        # Now remove both pro flags -- next save should be blocked (count 3 > limit 2)
         monkeypatch.delenv("LORECONVO_PRO")
+        monkeypatch.delenv("LAB_DEV_MODE")
         with pytest.raises(SessionLimitReachedError):
             db.save_session(make_session(99))
         db.close()
