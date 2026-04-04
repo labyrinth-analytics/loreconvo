@@ -55,7 +55,6 @@ class LicenseError(Exception):
 def _load_public_key():
     """Load the embedded Labyrinth Ed25519 public key."""
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
     raw = base64.b64decode(_LAB_PUBLIC_KEY_B64)
     return Ed25519PublicKey.from_public_bytes(raw)
 
