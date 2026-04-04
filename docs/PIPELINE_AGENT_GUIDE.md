@@ -1,52 +1,50 @@
 # Pipeline Agent Guide
 
-All agents in the Project Ron team MUST use the opportunity pipeline for their work.
-The pipeline is the shared data layer that connects Scout -> Gina -> Ron and tracks
-QA/security findings from Meg and Brock.
+All agents in the Project Ron team MUST use the pipeline tracker for their work.
+The pipeline is the shared data layer that connects all agents and Debbie.
 
 **If you are an agent reading this file, follow the instructions for YOUR role below.**
 
-## Pipeline Setup (all agents)
+## Pipeline Tool
 
-```python
-import sys, os
-sys.path.insert(0, os.path.expanduser('~/.loreconvo'))
-from pipeline_helpers import PipelineDB
-db = PipelineDB()
-# ... your operations ...
-db.close()
+All pipeline operations use a single CLI script. No raw SQL, no Python imports.
+
+```bash
+python scripts/pipeline_tracker.py <command> [options]
 ```
 
-If the native path fails (e.g., in a Cowork VM), PipelineDB auto-discovers the
-database from mounted paths. You can also pass an explicit path:
-```python
-db = PipelineDB(db_path='/sessions/.../mnt/.loreconvo/sessions.db')
-```
+Run `python scripts/pipeline_tracker.py --help` for full usage.
+Run `python scripts/pipeline_tracker.py types` to see valid item types.
+Run `python scripts/pipeline_tracker.py statuses` to see valid statuses.
+
+Ref IDs are auto-generated when `--ref` is omitted on `add`.
 
 ## Status Lifecycle
 
 ```
-scouted -> approved-for-review -> architecture-proposed -> approved -> in-progress -> completed
-scouted -> archived (Debbie skips it)
-architecture-proposed -> rejected (disposition: rearchitect or archive)
-Any status -> on-hold (with hold reason)
+new -> approved-for-review -> approved -> in-progress -> completed
+new -> rejected (Debbie kills it)
+new -> deferred (Debbie pushes to later)
+new -> needs-info (more research needed)
+Any status -> on-hold (blocked, with blocker text)
 ```
 
-## Debbie's Triage Statuses (4-state)
+## Debbie's Triage Statuses
 
-When Scout discovers new opportunities, they start as "New" (equivalent to `scouted` in
-the pipeline). Debbie triages them using one of four decisions:
+When Scout or Competitive Intel discovers new items, they start as `new`.
+Debbie triages them using one of these decisions:
 
 | Triage Decision | Pipeline Status | Meaning |
 |----------------|----------------|---------|
-| **Approve** | `approved-for-review` | Greenlit for Gina's architecture pass |
-| **Needs Info** | `scouted` (with open_questions) | Scout or Gina should dig deeper before Debbie decides |
-| **Defer** | `on-hold` | Not now, revisit later |
-| **Reject** | `archived` | Killed, won't pursue |
+| **Approve** | `approved-for-review` | Greenlit for Gina's architecture review |
+| **Approve (direct)** | `approved` | Skip architecture, go straight to Ron |
+| **Needs Info** | `needs-info` | Scout/Gina/CompIntel should dig deeper |
+| **Defer** | `deferred` | Not now, revisit later |
+| **Reject** | `rejected` | Not pursuing this |
+| **Acknowledge** | `acknowledged` | Debbie has seen it, pending assignment |
 
-Ron syncs Debbie's triage decisions to PipelineDB at the start of each session.
-Jacqueline surfaces untriaged items (status=`scouted`, no open_questions) in
-the daily dashboard with a count badge so Debbie knows how many need attention.
+Ron syncs Debbie's triage decisions to the pipeline at the start of each session.
+Jacqueline surfaces untriaged items (status=`new`) in the daily dashboard.
 
 ---
 
@@ -55,142 +53,177 @@ the daily dashboard with a count badge so Debbie knows how many need attention.
 ### Scout (weekly-product-scout)
 
 **MUST DO on every run:**
-1. For each opportunity you discover, create a pipeline entry:
-   ```python
-   opp_id = db.add_opportunity(
-       title='Product Name MCP',
-       summary='One-paragraph description of the opportunity...',
-       extra_tags=['niche:data-engineering', 'type:mcp-server']
-   )
-   print(f'Created {opp_id}')
+1. For each opportunity discovered, create a pipeline entry:
+   ```bash
+   python scripts/pipeline_tracker.py add --type opportunity \
+       --desc "Product Name - one-line description" --agent scout \
+       --priority P3 --product productname
    ```
-2. Link yourself to the opportunity:
-   ```python
-   db.link_persona(opp_id, 'Scout', 'Discovered in weekly scan')
+   The ref ID (e.g., OPP-025) is auto-generated. Capture it from the output.
+
+2. At the end of your run, list all opportunities you created:
+   ```bash
+   python scripts/pipeline_tracker.py list --type opportunity --agent scout
    ```
-3. At the end of your run, print a summary of all OPP IDs you created so other
-   agents can reference them.
-4. **Save a LATEST report (MANDATORY).** In addition to the timestamped HTML and
-   Markdown files in `~/Documents/Claude/Projects/Side Hustle/Opportunities/`,
-   ALWAYS save an extra copy to this fixed path (overwriting the previous one):
-   ```
-   ~/Documents/Claude/Projects/Side Hustle/Opportunities/LATEST_SCOUT_REPORT.html
-   ```
-   This is Debbie's bookmarked path. She checks it every Monday after your run.
-5. **Opportunity table format.** Each opportunity in the HTML report MUST include
-   these columns:
-   - ID (OPP-xxx)
-   - Name (short product name)
-   - Description (1-2 sentence summary)
-   - Effort (1-5 scale)
-   - MRR Month 12 (projected monthly recurring revenue)
-   - Debbie Fit (1-5 score)
-   - Status (default: **New** for freshly scouted items)
-   - Action Needed (what Debbie needs to decide)
+
+3. **Save LATEST report (MANDATORY):** Overwrite
+   `~/Documents/Claude/Projects/Side Hustle/Opportunities/LATEST_SCOUT_REPORT.html`
+
+4. **Opportunity table format.** Each row MUST include: ID, Name, Description,
+   Effort (1-5), MRR M12, Debbie Fit (1-5), Status (New), Action Needed.
 
 **DO NOT** update status on existing items. Your job is to ADD new scouted items only.
+
+---
+
+### Competitive Intel (competitive-intel)
+
+**MUST DO on every run:**
+1. Research competitors for each active Lore product (status `in-progress` or `approved`):
+   ```bash
+   python scripts/pipeline_tracker.py list --status in-progress
+   python scripts/pipeline_tracker.py list --status approved
+   ```
+
+2. For each actionable finding, create a pipeline item:
+   - **Feature gap we should close** -> type `task`, assigned to Ron:
+     ```bash
+     python scripts/pipeline_tracker.py add --type task \
+         --desc "Add multi-LLM support to LoreConvo (competitive gap vs Cipher)" \
+         --agent competitive-intel --priority P3 --product loreconvo
+     ```
+   - **New product opportunity from competitive gap** -> type `opportunity`:
+     ```bash
+     python scripts/pipeline_tracker.py add --type opportunity \
+         --desc "LoreSync - cross-LLM memory bridge (gap identified in competitive scan)" \
+         --agent competitive-intel --priority P3
+     ```
+   - **Messaging angle for marketing** -> add a note to the relevant PROD item:
+     ```bash
+     python scripts/pipeline_tracker.py update --ref PROD-001 \
+         --agent competitive-intel \
+         --note "MADISON: Cipher requires manual context management -- position LoreConvo automation as key differentiator in next blog post"
+     ```
+   - **Architectural risk** (competitor has better approach) -> type `architecture`:
+     ```bash
+     python scripts/pipeline_tracker.py add --type architecture \
+         --desc "GINA-REVIEW: Competitor X uses vector search for recall -- evaluate for LoreDocs" \
+         --agent competitive-intel --priority P2 --product loredocs
+     ```
+
+3. Rate each competitor finding by threat level:
+   - **HIGH**: Competitor has feature parity or better, actively marketing to our audience
+   - **MEDIUM**: Competitor exists but different positioning or weaker execution
+   - **LOW**: Tangentially related, not a direct threat
+
+4. **Tag downstream agents in notes.** Use these prefixes so agents know to pick up items:
+   - `MADISON:` - messaging angle or content idea for Madison
+   - `GINA-REVIEW:` - architectural concern for Gina to evaluate
+   - `BROCK-REVIEW:` - security comparison for Brock to assess
+   - `RON:` - feature gap or bug for Ron to build/fix
+
+5. **Save report.** Write competitive analysis to:
+   ```
+   docs/competitive/competitive_scan_YYYY_MM_DD.md
+   ```
 
 ---
 
 ### Gina (enterprise-architect-gina)
 
 **MUST DO on every run:**
-1. Query for items ready for your review:
-   ```python
-   items = db.get_by_status('approved-for-review')
+1. Query for items ready for architecture review:
+   ```bash
+   python scripts/pipeline_tracker.py list --status approved-for-review
    ```
-2. For each item you review, write your architecture proposal:
-   ```python
-   doc_path = db.set_architecture(opp_id, architecture_text)
-   db.set_effort(opp_id, 5)  # Fibonacci: 1,2,3,5,8,13
-   db.set_dependencies(opp_id, 'Depends on: LoreConvo v0.3+, Python 3.10+')
-   db.set_open_questions(opp_id, 'Q1: Should this use SQLite or DuckDB?')
-   db.update_status(opp_id, 'architecture-proposed')
+
+2. Also check for competitive intel items tagged GINA-REVIEW:
+   ```bash
+   python scripts/pipeline_tracker.py list --type architecture --agent competitive-intel
    ```
-3. Link yourself:
-   ```python
-   db.link_persona(opp_id, 'Gina', 'Architecture review completed')
+
+3. For each item reviewed, update status and add notes:
+   ```bash
+   python scripts/pipeline_tracker.py update --ref OPP-015 \
+       --status approved --agent gina \
+       --note "Architecture review complete. HIGH compatibility with Lore patterns. See docs/architecture/OPP-015_data_catalog_lite.md"
    ```
-4. **Save architecture proposals as readable files (MANDATORY).** For EACH
-   proposal you write, save a standalone Markdown file that Debbie can review:
+   For items that need rework:
+   ```bash
+   python scripts/pipeline_tracker.py update --ref OPP-016 \
+       --status needs-info --agent gina \
+       --note "Scope too narrow (SQL-Server-only). Recommend reframe to two-dialect."
+   ```
+
+4. **Save architecture proposals as files:**
    ```
    docs/architecture/OPP-xxx_product_name.md
    ```
-   The file must include ALL sections from the Architectural Proposal Template
-   (Overview, Technical Architecture, Implementation Plan, Security Design,
-   Effort Estimate, Dependencies, Open Questions). Use the OPP ID in the
-   filename so Debbie can match it to the pipeline table.
-5. **Save a LATEST architecture report (MANDATORY).** After completing all
-   proposals for this run, save a combined summary to:
+
+5. **Save LATEST architecture report:** Overwrite
+   `~/Documents/Claude/Projects/Side Hustle/Opportunities/LATEST_ARCHITECTURE_REVIEW.html`
+
+6. Tag items for Brock when security architecture review is needed:
+   ```bash
+   python scripts/pipeline_tracker.py update --ref OPP-015 \
+       --agent gina --note "BROCK-REVIEW: New transport layer needs security assessment"
    ```
-   ~/Documents/Claude/Projects/Side Hustle/Opportunities/LATEST_ARCHITECTURE_REVIEW.html
-   ```
-   This HTML report should list ALL items with status `architecture-proposed`,
-   including the full proposal text, effort estimate, dependencies, and open
-   questions. Debbie reviews this to decide which proposals to approve for Ron
-   to build. Overwrite the previous file each run.
-6. **Also include a summary in the session report.** The `docs/pm/gina_session_YYYY_MM_DD.md`
-   file must include a brief summary of each proposal (not just a list of IDs),
-   so Jacqueline can surface the details in the daily dashboard.
 
 ---
 
 ### Ron (ron-daily)
 
-**MUST DO at the START of every run (BEFORE other work):**
+**MUST DO at the START of every session (BEFORE other work):**
 
-1. **Sync Debbie's decisions to the pipeline database.** Read DEBBIE_DASHBOARD.md
-   and CLAUDE.md for any approval/rejection/hold decisions Debbie has made. Then
-   apply them:
-   ```python
-   # Example: Debbie approved OPP-007 for architectural review at P2
-   db.update_status('OPP-007', 'approved-for-review')
-   db.set_priority('OPP-007', 'P2')
-
-   # Example: Debbie put OPP-006 on hold
-   db.set_hold_reason('OPP-006', 'No local SQL Server installation')
-
-   # Example: Debbie approved Gina's architecture for OPP-002
-   db.update_status('OPP-002', 'approved')
-   ```
-2. Only sync decisions that have NOT already been applied. Check current status
-   first:
-   ```python
-   item = db.get_opportunity('OPP-007')
-   if item and item['_status'] != 'approved-for-review':
-       db.update_status('OPP-007', 'approved-for-review')
+1. **Sync Debbie's decisions to the pipeline.** Read DEBBIE_DASHBOARD.md for any
+   new decisions. Apply them:
+   ```bash
+   python scripts/pipeline_tracker.py update --ref OPP-007 \
+       --status approved-for-review --agent debbie --priority P2
+   python scripts/pipeline_tracker.py block --ref OPP-006 \
+       --blocker "No local SQL Server" --agent debbie
    ```
 
-**MUST DO when starting build work on an approved item:**
-```python
-db.update_status(opp_id, 'in-progress')
-db.link_persona(opp_id, 'Ron', 'Starting build')
-```
+2. **Check for competitive intel tasks assigned to you:**
+   ```bash
+   python scripts/pipeline_tracker.py list --type task --agent competitive-intel
+   ```
+   Items with `RON:` in their notes are feature gaps you should prioritize.
 
-**MUST DO when completing an item:**
-```python
-db.update_status(opp_id, 'completed')
-```
+3. When starting work on an item:
+   ```bash
+   python scripts/pipeline_tracker.py update --ref RON-005 \
+       --status in-progress --agent ron
+   ```
+
+4. When completing an item:
+   ```bash
+   python scripts/pipeline_tracker.py update --ref RON-005 \
+       --status completed --agent ron --note "Fixed in commit abc123"
+   ```
 
 ---
 
 ### Meg (meg-qa-daily)
 
 **MUST DO on every run:**
-1. After writing your QA report, log each finding to the pipeline if it relates
-   to a specific product/opportunity:
-   ```python
-   # Find related pipeline items
-   items = db.search('LoreConvo')
-   for item in items:
-       # Append QA finding to open_questions
-       existing = item.get('open_questions', '') or ''
-       new_note = f'\n\nMEG-031 (MEDIUM, {datetime.now().strftime("%Y-%m-%d")}): Version mismatch in CLAUDE.md vs SKILL.md'
-       db.set_open_questions(item['id'], existing + new_note)
+1. After writing your QA report, log each finding to the pipeline:
+   ```bash
+   python scripts/pipeline_tracker.py add --type bug \
+       --desc "Version mismatch in CLAUDE.md vs SKILL.md" \
+       --agent meg --priority P2 --product loreconvo
    ```
-2. For findings that affect the overall pipeline health, print a summary:
-   ```python
-   print('QA Pipeline Impact: 1 MEDIUM finding on OPP-003 (LorePrompts)')
+
+2. For findings that relate to existing items, add a note:
+   ```bash
+   python scripts/pipeline_tracker.py update --ref PROD-001 \
+       --agent meg --note "MEG-041 (MEDIUM): Version mismatch found in docs"
+   ```
+
+3. For CRITICAL findings that should block a release:
+   ```bash
+   python scripts/pipeline_tracker.py block --ref PROD-001 \
+       --blocker "MEG-042: Critical regression in session save" --agent meg
    ```
 
 ---
@@ -198,19 +231,29 @@ db.update_status(opp_id, 'completed')
 ### Brock (brock-security-daily)
 
 **MUST DO on every run:**
-1. After writing your security report, log each finding to the pipeline if it
-   relates to a specific product/opportunity:
-   ```python
-   items = db.search('SQL Optimizer')
-   for item in items:
-       existing = item.get('open_questions', '') or ''
-       new_note = f'\n\nSEC-011 (MEDIUM, {datetime.now().strftime("%Y-%m-%d")}): TOCTOU race in file export'
-       db.set_open_questions(item['id'], existing + new_note)
+1. After writing your security report, log each finding:
+   ```bash
+   python scripts/pipeline_tracker.py add --type security \
+       --desc "TOCTOU race in LoreDocs file export" \
+       --agent brock --product loredocs
    ```
-2. For CRITICAL/HIGH findings, also update the item status if appropriate:
-   ```python
-   # If a CRITICAL security finding blocks a product launch:
-   db.set_hold_reason(opp_id, 'CRITICAL security finding SEC-XXX must be resolved first')
+
+2. Check for BROCK-REVIEW items from Gina or Competitive Intel:
+   ```bash
+   python scripts/pipeline_tracker.py list --type architecture
+   ```
+   Look for items with `BROCK-REVIEW:` in notes or description.
+
+3. For CRITICAL findings that should block a product:
+   ```bash
+   python scripts/pipeline_tracker.py block --ref PROD-002 \
+       --blocker "SEC-014: cryptography missing from dependencies" --agent brock
+   ```
+
+4. Tag items needing Gina's architectural input:
+   ```bash
+   python scripts/pipeline_tracker.py update --ref SEC-011 \
+       --agent brock --note "GINA-REVIEW: Need architectural guidance on TOCTOU mitigation"
    ```
 
 ---
@@ -219,21 +262,29 @@ db.update_status(opp_id, 'completed')
 
 **MUST DO on every run:**
 1. Read the full pipeline state as your primary data source:
-   ```python
-   all_items = db.get_all_pipeline()
-   for item in all_items:
-       print(f"{item['id']}: {item['title']} -- {item['_status']} (P{item['_priority'] or '?'})")
+   ```bash
+   python scripts/pipeline_tracker.py list
    ```
-2. Cross-reference pipeline state with agent reports (Meg, Brock, Ron) to validate
-   that what agents reported matches the DB state.
-3. Include the pipeline dashboard table in your HTML executive dashboard.
-4. Flag any items where status seems stale (e.g., 'in-progress' for more than 7 days).
 
-You can also generate a markdown dashboard:
-```python
-dashboard_md = db.generate_markdown_dashboard()
-print(dashboard_md)
-```
+2. Check for items needing Debbie's attention:
+   ```bash
+   python scripts/pipeline_tracker.py list --status new
+   python scripts/pipeline_tracker.py list --status needs-info
+   ```
+
+3. Check competitive intel for Madison handoffs:
+   ```bash
+   python scripts/pipeline_tracker.py list --agent competitive-intel
+   ```
+   Items with `MADISON:` notes should be surfaced in the dashboard for Madison.
+
+4. Cross-reference pipeline state with agent reports (Meg, Brock, Ron, Competitive Intel)
+   to validate consistency.
+
+5. Include the pipeline summary in your HTML executive dashboard.
+
+6. Flag stale items (e.g., `in-progress` for more than 7 days, `new` with no triage
+   for more than 3 days).
 
 ---
 
@@ -241,30 +292,107 @@ print(dashboard_md)
 
 **MUST DO on every run:**
 1. Check pipeline for product status before writing about any product:
-   ```python
-   all_items = db.get_all_pipeline()
+   ```bash
+   python scripts/pipeline_tracker.py list --type product
    ```
-2. Only write about products that are in 'approved', 'in-progress', or 'completed' status.
-3. Reference pipeline OPP IDs when linking content to specific products.
+   Only write about products in `approved`, `in-progress`, or `completed` status.
+
+2. Check for messaging angles from competitive intel:
+   ```bash
+   python scripts/pipeline_tracker.py list --agent competitive-intel
+   ```
+   Items with `MADISON:` in their notes contain messaging angles, differentiators,
+   and content ideas identified from competitive analysis.
+
+3. After using a messaging angle, acknowledge it:
+   ```bash
+   python scripts/pipeline_tracker.py update --ref PROD-001 \
+       --agent madison --note "Used 'automated vs manual' differentiator in blog post draft 2026-04-08"
+   ```
 
 ---
 
-## Pipeline Methods Quick Reference
+### John (john-tech-docs)
 
-| Method | Used By | Purpose |
-|--------|---------|---------|
-| `add_opportunity(title, summary, tags)` | Scout | Create new scouted item |
-| `get_by_status(status)` | Gina, Jacqueline | Query items by status |
-| `get_all_pipeline()` | Jacqueline, Madison | Full pipeline view |
-| `get_opportunity(opp_id)` | All | Get single item |
-| `search(query)` | Meg, Brock | Find related items |
-| `update_status(opp_id, status)` | Ron, Gina | Change item status |
-| `set_priority(opp_id, 'P1')` | Ron | Set priority from Debbie's decisions |
-| `set_effort(opp_id, 5)` | Gina | Fibonacci effort estimate |
-| `set_architecture(opp_id, text)` | Gina | Write architecture proposal |
-| `set_dependencies(opp_id, text)` | Gina | Note dependencies |
-| `set_open_questions(opp_id, text)` | Gina, Meg, Brock | Add questions/findings |
-| `set_hold_reason(opp_id, reason)` | Ron, Brock | Put item on hold |
-| `reject(opp_id, reason, disposition)` | Ron | Reject with reason |
-| `link_persona(opp_id, name, note)` | All | Link agent to item |
-| `generate_markdown_dashboard()` | Jacqueline | Generate dashboard table |
+**MUST DO on every run:**
+1. Check pipeline for product versions and feature status:
+   ```bash
+   python scripts/pipeline_tracker.py list --type product
+   ```
+
+2. Check for recently completed Ron tasks that need documentation:
+   ```bash
+   python scripts/pipeline_tracker.py list --status completed --type task
+   ```
+
+---
+
+## Competitive Intel Feedback Loop
+
+The competitive intelligence agent feeds findings back into the product lifecycle.
+Here is how findings flow through the system:
+
+```
+Competitive Intel Agent
+  |
+  |-- Feature gap found
+  |     --> add --type task (tagged RON:)
+  |     --> Ron picks up, builds the feature
+  |     --> Meg tests, Brock reviews security
+  |
+  |-- New product opportunity
+  |     --> add --type opportunity
+  |     --> Debbie triages
+  |     --> Gina architects (if approved-for-review)
+  |     --> Ron builds (if approved)
+  |
+  |-- Messaging/positioning angle
+  |     --> update --note "MADISON: ..." on relevant PROD item
+  |     --> Jacqueline surfaces in dashboard
+  |     --> Madison incorporates into blog/promo content
+  |
+  |-- Architectural concern
+  |     --> add --type architecture (tagged GINA-REVIEW:)
+  |     --> Gina evaluates in next Wed/Sat run
+  |     --> May generate Ron tasks or product changes
+  |
+  |-- Security comparison
+  |     --> note tagged BROCK-REVIEW: on relevant item
+  |     --> Brock evaluates in next daily run
+```
+
+Every finding gets a pipeline item or note. Nothing stays only in a report.
+
+---
+
+## Cross-Agent Handoff Tags
+
+Use these prefixes in notes and descriptions. Downstream agents search for them.
+
+| Tag | Picked up by | Meaning |
+|-----|-------------|---------|
+| `RON:` | Ron | Feature to build, bug to fix |
+| `MADISON:` | Madison | Messaging angle, content idea |
+| `GINA-REVIEW:` | Gina | Needs architectural evaluation |
+| `BROCK-REVIEW:` | Brock | Needs security assessment |
+| `DEBBIE:` | Debbie | Needs Debbie's decision |
+| `MEG:` | Meg | Needs QA verification |
+| `JOHN:` | John | Needs documentation |
+
+---
+
+## Pipeline CLI Quick Reference
+
+| Command | Example | Purpose |
+|---------|---------|---------|
+| `add` | `add --type opportunity --desc "..." --agent scout` | Create new item (auto-ID) |
+| `add` | `add --type task --ref RON-012 --desc "..." --agent ron` | Create with explicit ID |
+| `update` | `update --ref OPP-022 --status approved --agent debbie` | Change status |
+| `update` | `update --ref PROD-001 --agent meg --note "MEG-041: ..."` | Add a note |
+| `block` | `block --ref OPP-006 --blocker "No SQL Server" --agent debbie` | Mark blocked |
+| `depend` | `depend --ref RON-001 --blocks RON-003` | Set dependency |
+| `list` | `list --type opportunity --status new` | Filter items |
+| `show` | `show --ref OPP-022` | Full details + history |
+| `next` | `next --agent ron` | What to work on next |
+| `types` | `types` | Show valid item types |
+| `statuses` | `statuses` | Show valid statuses |

@@ -87,25 +87,32 @@ Debbie (decisions via DEBBIE_DASHBOARD.md + LoreConvo agent:debbie)
   |
   v
 Ron (builder) ---> produces code in ron_skills/, docs/COMPLETED.md
-  |
+  |                 reads: competitive-intel tasks (RON: tagged items)
   v
 Meg (QA) ---> reads Ron's code, produces docs/qa/qa_report_YYYY_MM_DD.md
   |
 Brock (security) ---> reads Ron's code, produces docs/security/security_report_YYYY_MM_DD.md
   |                    cross-refs with Gina (BROCK-REVIEW: / GINA-REVIEW: tags)
+  |                    reads: competitive-intel security notes (BROCK-REVIEW: tags)
   v
 Gina (architecture) ---> reads pipeline + Ron's code, produces docs/architecture/
   |                       cross-refs with Brock
+  |                       reads: competitive-intel architecture items (GINA-REVIEW: tags)
   v
 Scout (research) ---> reads market, produces Opportunities/ reports
   |
+Competitive Intel ---> reads market + products, produces docs/competitive/
+  |                    feeds into: Ron (tasks), Madison (messaging), Gina (arch),
+  |                    Brock (security), Jacqueline (dashboard)
   v
 Jacqueline (PM) ---> reads ALL of the above, produces:
   |                   - docs/pm/executive_dashboard_YYYY_MM_DD.html (daily)
   |                   - docs/pm/labyrinth_product_roadmap_YYYY_MM_DD.html (weekly)
   |                   - docs/DEBBIE_DASHBOARD.md (updates daily)
   v
-Madison (marketing) ---> reads product status, produces docs/marketing/blog_drafts/
+Madison (marketing) ---> reads product status + competitive intel messaging angles
+  |                       (MADISON: tagged notes on PROD items)
+  |                       produces docs/marketing/blog_drafts/
   |
 John (tech docs) ---> reads Meg-verified code, produces ron_skills/*/docs/
   |
@@ -155,6 +162,11 @@ Debbie (reviews dashboards, makes decisions, cycle repeats)
 **Madison**
 - Reads: Product status from Jacqueline/CLAUDE.md, blog publishing skill
 - Produces: docs/marketing/blog_drafts/*.md, docs/marketing/promo/*.md, docs/marketing/content_calendar_madison.md, LoreConvo (surface: marketing)
+
+**Competitive Intel**
+- Reads: Web research, product CLAUDE.md files, previous reports in docs/competitive/, pipeline state
+- Produces: docs/competitive/competitive_scan_YYYY_MM_DD.md, pipeline items (tasks for Ron, opportunities, architecture items for Gina, MADISON: notes on PROD items), LoreConvo (surface: pipeline)
+- Feeds into: Ron (RON: tasks), Madison (MADISON: notes), Gina (GINA-REVIEW: arch items), Brock (BROCK-REVIEW: notes), Jacqueline (dashboard), Debbie (new opportunities to triage)
 
 **John**
 - Reads: Meg-verified code in ron_skills/, existing docs in ron_skills/*/docs/
