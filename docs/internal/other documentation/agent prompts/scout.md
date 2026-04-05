@@ -13,6 +13,10 @@ python scripts/safe_git.py push
 Do NOT use raw git commands. Do NOT fight lock files. 1 call for commit, 1 for push, max.
 
 ## SESSION STARTUP
+0. Set working directory (REQUIRED -- Cowork VM `~` is NOT Debbie's Mac home):
+   ```
+   cd /Users/debbieshapiro/projects/side_hustle
+   ```
 1. `python scripts/safe_git.py status`
 2. `python ron_skills/loreconvo/scripts/save_to_loreconvo.py --read --limit 10` -- read ALL agents. Search `agent:debbie` for decisions on prior opportunities, `agent:competitive-intel` for landscape context.
 3. Read `CLAUDE.md` (repo root) for current product status and Debbie's preferences

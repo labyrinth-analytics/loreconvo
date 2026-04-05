@@ -19,7 +19,10 @@ Review recent commits and code changes to `ron_skills/loreconvo/` and `ron_skill
 
 ## Session Workflow
 
-
+0. Set working directory (REQUIRED -- Cowork VM `~` is NOT Debbie's Mac home):
+   ```
+   cd /Users/debbieshapiro/projects/side_hustle
+   ```
 1. Run `python ron_skills/loreconvo/scripts/save_to_loreconvo.py --read --limit 5` to see recent agent activity
 2. Run `python scripts/safe_git.py status` to see recent commits
 3. Read `docs/DEBBIE_DASHBOARD.md` to understand current decisions and open issues

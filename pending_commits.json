@@ -97,5 +97,14 @@
     ],
     "agent": "gina",
     "applied": false
+  },
+  {
+    "timestamp": "2026-04-05T18:59:47.833181+00:00",
+    "message": "fix: GINA-001/SEC-017 -- vault_set_tier now validates license before persisting Pro tier\n\nvault_set_tier previously allowed any caller to write 'pro' to config.json\nwithout a valid license key. get_tier() reads config.json as a fallback when\nLOREDOCS_PRO env var is not set, creating a bypass path.\n\nFix: vault_set_tier now calls get_license_status() before calling set_tier()\nwhen upgrading to Pro. If no valid license (or dev bypass) is active, returns\nan error with instructions to set LOREDOCS_PRO and get a license key.\n\nDowngrade to free still works without a license (no gate needed).\nAll 39 LoreDocs tests pass.",
+    "files": [
+      "ron_skills/loredocs/loredocs/server.py"
+    ],
+    "agent": "ron",
+    "applied": true
   }
 ]

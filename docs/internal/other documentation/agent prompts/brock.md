@@ -23,6 +23,10 @@ Do NOT use raw git commands. Do NOT fight lock files. 1 call for commit, 1 for p
 
 
 ## SESSION STARTUP
+0. Set working directory (REQUIRED -- Cowork VM `~` is NOT Debbie's Mac home):
+   ```
+   cd /Users/debbieshapiro/projects/side_hustle
+   ```
 1. `python scripts/safe_git.py status`
 2. `python ron_skills/loreconvo/scripts/save_to_loreconvo.py --read --limit 10` -- read ALL agents. Search `agent:debbie` for decisions, `agent:ron` for recent code changes, `agent:gina` for BROCK-REVIEW items, `agent:competitive-intel` for security comparison findings.
 3. Read `CLAUDE.md` (repo root) -- especially the Brock Security Classification Guidelines section

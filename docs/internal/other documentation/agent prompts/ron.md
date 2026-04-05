@@ -16,9 +16,11 @@ python scripts/safe_git.py push
 Do NOT use raw git commands. Do NOT fight lock files. 1 call for commit, 1 for push, max.
 
 ## SESSION STARTUP
-0. Set pipeline DB path (REQUIRED -- prevents Cowork VM from using wrong database):
+0. Set working directory and pipeline DB path (REQUIRED -- Cowork VM `~` is NOT Debbie's Mac home):
    ```
+   export SIDE_HUSTLE=/Users/debbieshapiro/projects/side_hustle
    export PIPELINE_DB=/Users/debbieshapiro/projects/side_hustle/data/pipeline.db
+   cd /Users/debbieshapiro/projects/side_hustle
    ```
 1. `python scripts/safe_git.py status`
 2. `python ron_skills/loreconvo/scripts/save_to_loreconvo.py --read --limit 10` -- read ALL agents. Search `agent:debbie` for decisions.
