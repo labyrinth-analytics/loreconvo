@@ -21,7 +21,6 @@ Exit codes:
 import argparse
 import json
 import logging
-import os
 import subprocess
 import sys
 import yaml
@@ -237,9 +236,9 @@ def main() -> int:
     if template:
         # Use template values, allow CLI args to override
         prompt = args.prompt or template.get('prompt', '')
-        model = args.model if args.model else template.get('model', '')
-        output_format = args.output_format if args.output_format != 'text' else template.get('output_format', 'text')
-        timeout = args.timeout if args.timeout != 30 else template.get('timeout', 30)
+        model = args.model  # --model is required, always use CLI arg
+        output_format = template.get('output_format', args.output_format)
+        timeout = template.get('timeout', args.timeout)
     else:
         # No template found
         if not args.prompt:
