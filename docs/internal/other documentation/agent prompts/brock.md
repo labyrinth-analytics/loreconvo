@@ -45,8 +45,10 @@ Full security review covering TWO dimensions:
 
 Run:
 ```bash
-python scripts/local_model_preprocess.py --agent brock --task file_screening --input all_changed_files.txt --model qwen3.5:9b --output-format json
+python scripts/local_model_preprocess.py --agent brock --task file_screening --input all_changed_files.txt --model qwen3.5:9b --output-format json --save-to-loreconvo
 ```
+
+(This saves the preprocessing output and file categorization to LoreConvo for audit trail and debugging.)
 
 If the above command succeeds, you'll get JSON with:
 - `flagged`: files needing deep security review
