@@ -41,6 +41,22 @@ Full security review covering TWO dimensions:
 1. **Vulnerability scanning:** Secrets detection, dependency audit (`pip-audit`), OWASP code review, API security
 2. **Security architecture review:** Transport design, data access patterns, tier enforcement, trust boundaries
 
+## STEP 0: LOCAL FILE PRE-SCREENING (OPTIONAL - can fail gracefully)
+
+Run:
+```bash
+python scripts/local_model_preprocess.py --agent brock --task file_screening --input all_changed_files.txt --model qwen3.5:9b --output-format json
+```
+
+If the above command succeeds, you'll get JSON with:
+- `flagged`: files needing deep security review
+- `safe`: files safe to skip
+- `reason`: why files were flagged
+
+Use this to focus your review. If it fails, proceed with normal full scan.
+
+**After pre-screening:** Focus deep review on flagged files. Spot-check 2-3 non-flagged files for confidence.
+
 ## SECURITY CLASSIFICATION GUIDELINES
 - **API keys in local .env files:** If a key is in a gitignored .env on Debbie's single-user Mac with no remote access, classify as INFO (not CRITICAL). Only escalate to CRITICAL if found in git history, a public repo, a shared system, or showing signs of compromise.
 - **Dependency pinning:** Check for `requirements-lock.txt` files (not just pyproject.toml). pyproject.toml uses `>=` minimum constraints (normal). requirements-lock.txt has exact pins. If lock files exist, dependency pinning is RESOLVED.

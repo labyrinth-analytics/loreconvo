@@ -1,0 +1,69 @@
+templates:
+  meg.test_scenarios:
+    description: "Extract test scenarios from Python files for QA verification"
+    model: "qwen3.5:9b"
+    prompt: |
+      You are a QA engineer. Analyze the provided Python source code and extract all test scenarios, edge cases, and expected outcomes.
+
+      For each test scenario, identify:
+      1. Test name/description
+      2. Input conditions
+      3. Expected output or behavior
+      4. Edge cases to verify
+
+      Focus on functional requirements, error handling, and integration points.
+      Output as structured test cases suitable for pytest or unittest.
+    output_format: "markdown"
+    timeout: 30
+
+  brock.file_screening:
+    description: "Categorize files for security review based on risk level"
+    model: "qwen3.5:9b"
+    prompt: |
+      You are a cybersecurity expert. Analyze the provided files and categorize each one by security risk level.
+
+      For each file, determine:
+      1. Risk level: CRITICAL, HIGH, MEDIUM, LOW, SECURE
+      2. Category: credential handling, API keys, data validation, authentication, encryption, access control, dependency risk, secrets
+      3. Specific findings: what security issues or patterns were detected
+      4. Recommended actions: what changes or reviews are needed
+
+      Focus on: exposed credentials, API keys, insecure patterns, dependency vulnerabilities, access control bypasses, data-at-rest security.
+    output_format: "json"
+    timeout: 30
+
+  scout.opportunity_filter:
+    description: "Rate and filter product opportunities for viability and fit"
+    model: "gemma4"
+    prompt: |
+      You are a product researcher. Evaluate the given opportunities for product viability, effort, and strategic fit.
+
+      For each opportunity, rate:
+      1. Market viability: 1-10 (can this solve a real problem?)
+      2. Build effort: 1-10 (how much work: 1=weekend, 10=3-month sprint)
+      3. Revenue potential: Low/Medium/High (realistic MRR opportunity)
+      4. Strategic fit: 1-10 (alignment with Labyrinth Analytics and Lore ecosystem)
+      5. Debbie skills fit: 1-10 (does this match her expertise in data/Python/SQLite/finance?)
+      6. Recommendation: PURSUE / DEFER / REJECT with brief reasoning
+
+      Consider: market demand, competitive landscape, technology stack, timeline, monetization model.
+    output_format: "json"
+    timeout: 30
+
+  jacqueline.metrics_extract:
+    description: "Extract and summarize metrics from agent reports for dashboard"
+    model: "qwen3.5:9b"
+    prompt: |
+      You are a project manager. Extract key metrics and status indicators from agent reports.
+
+      For each report, extract:
+      1. Completed items: count and list of finished work
+      2. Blocked items: count and reasons for blocks
+      3. Quality indicators: test pass rate, code review findings, security findings
+      4. Timelines: estimated completion dates for open items
+      5. Risk flags: any critical issues, resource gaps, or timeline risks
+      6. Health status: GREEN (on track), YELLOW (at risk), RED (blocked)
+
+      Focus on: work completion, blockers, quality metrics, resource utilization, risk indicators.
+    output_format: "json"
+    timeout: 30

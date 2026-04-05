@@ -40,6 +40,18 @@ All products in `ron_skills/`: LoreConvo, LoreDocs, SQL Query Optimizer.
 Focus on recently changed files (check git log for last 24h).
 
 ## QA CHECKLIST
+
+### Step 0: Local pre-analysis (OPTIONAL - can fail gracefully)
+
+Run:
+```bash
+python scripts/local_model_preprocess.py --agent meg --task test_scenarios --input changed_files.txt --model qwen3.5:9b
+```
+
+If the above command succeeds, you'll see test scenarios in markdown format. Use them to guide your test generation. If it fails or times out, proceed normally with steps 1-5 below.
+
+### Steps 1-5: QA Review
+
 1. Run existing tests -- report pass/fail/skip counts
 2. Write new tests for untested or under-tested code (place in product's `tests/` directory)
 3. Code walkthrough -- review recently changed code for logic errors, edge cases, missing error handling
