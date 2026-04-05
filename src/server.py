@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from core.models import Session
 from core.database import SessionDatabase, SessionLimitReachedError
 from core.config import Config
+from core.license import get_license_status
 
 mcp = FastMCP(
     "loreconvo",
@@ -333,6 +334,23 @@ def vault_suggest(
         limit: Max suggestions to return (default 5)
     """
     return db.get_suggestions(project, persona, days_back, limit)
+
+
+@mcp.tool()
+def get_tier() -> dict:
+    """Return the current LoreConvo license tier and status.
+
+    Use this to confirm whether the Pro license key is loaded and valid.
+
+    Returns a dict with keys:
+        is_pro  -- bool, True if Pro tier is active
+        mode    -- "licensed" | "dev_bypass" | "free" | "invalid_key"
+        product -- product name from the license payload (if licensed)
+        exp     -- expiry date or "never" (if licensed)
+        email   -- customer email (if licensed and present)
+        error   -- error message (if mode is "invalid_key")
+    """
+    return get_license_status()
 
 
 def main():
