@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
     "mcp[cli]>=1.0.0",
     "click>=8.0.0",
+    "cryptography>=41.0.0",
 ]
 
 [project.optional-dependencies]
