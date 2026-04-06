@@ -125,6 +125,7 @@ VALID_STATUSES = [
 
 VALID_TYPES = [
     "opportunity",   # Scout pipeline items
+    "enhancement",   # Feature improvements to existing products (Debbie-direct or any agent)
     "bug",           # Meg QA findings
     "security",      # Brock security findings
     "architecture",  # Gina architecture findings
@@ -136,6 +137,7 @@ VALID_TYPES = [
 # Map item type -> ref_id prefix for auto-generation
 TYPE_PREFIX = {
     "opportunity":   "OPP",
+    "enhancement":   "ENH",
     "bug":           "MEG",
     "security":      "SEC",
     "architecture":  "GINA",
@@ -433,6 +435,7 @@ def cmd_types(args):
     print("  " + "-" * 60)
     descs = {
         "opportunity":   "Pipeline opportunities (Scout finds these)",
+        "enhancement":   "Feature improvements to existing products (Debbie-direct)",
         "bug":           "QA findings (Meg)",
         "security":      "Security findings (Brock)",
         "architecture":  "Architecture findings (Gina)",

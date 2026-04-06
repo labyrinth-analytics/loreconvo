@@ -48,6 +48,36 @@ Jacqueline surfaces untriaged items (status=`new`) in the daily dashboard.
 
 ---
 
+## Debbie-Direct Enhancement Requests
+
+Debbie (or any Cowork session) can add feature improvement ideas directly to the
+pipeline without going through Scout. Use the `enhancement` type with
+`--status approved-for-review` to send it straight to Gina's queue, or
+`--status approved` to send it straight to Ron (skip architecture review).
+
+**To queue an enhancement for Gina's architecture review:**
+```bash
+python scripts/pipeline_tracker.py add --type enhancement \
+    --desc "LoreConvo: add session stats MCP tool (sessions saved, vaults queried, summary sizes)" \
+    --agent debbie --priority P2 --product loreconvo \
+    --status approved-for-review
+```
+
+**To send an enhancement directly to Ron (no architecture review needed):**
+```bash
+python scripts/pipeline_tracker.py add --type enhancement \
+    --desc "LoreDocs: add --dry-run flag to vault_delete command" \
+    --agent debbie --priority P3 --product loredocs \
+    --status approved
+```
+
+Enhancement ref IDs are auto-generated as `ENH-NNN`. They appear in Gina's queue
+via the same `--status approved-for-review` query she already runs, so no changes
+to Gina's scheduled task are needed. Ron also picks them up via the existing
+`--status approved` query.
+
+---
+
 ## Agent-Specific Instructions
 
 ### Scout (weekly-product-scout)
@@ -132,10 +162,13 @@ Jacqueline surfaces untriaged items (status=`new`) in the daily dashboard.
 ### Gina (enterprise-architect-gina)
 
 **MUST DO on every run:**
-1. Query for items ready for architecture review:
+1. Query for items ready for architecture review (opportunities AND enhancements):
    ```bash
    python scripts/pipeline_tracker.py list --status approved-for-review
    ```
+   This returns both `opportunity` items (new products from Scout) and `enhancement`
+   items (feature improvements added directly by Debbie or any agent). Treat both
+   the same -- write an architecture proposal and update the status.
 
 2. Also check for competitive intel items tagged GINA-REVIEW:
    ```bash
@@ -407,6 +440,19 @@ Use these prefixes in notes and descriptions. Downstream agents search for them.
 | `DEBBIE:` | Debbie | Needs Debbie's decision |
 | `MEG:` | Meg | Needs QA verification |
 | `JOHN:` | John | Needs documentation |
+
+## Item Type Reference
+
+| Type | Ref Prefix | Created by | Goes to |
+|------|-----------|-----------|---------|
+| `opportunity` | OPP- | Scout, Competitive Intel | Debbie triage -> Gina -> Ron |
+| `enhancement` | ENH- | Debbie, any Cowork session | Directly to Gina or Ron (skip triage) |
+| `bug` | MEG- | Meg | Ron (fix), Jacqueline (dashboard) |
+| `security` | SEC- | Brock | Ron (fix), Gina (architecture) |
+| `architecture` | GINA- | Gina, Competitive Intel | Gina evaluates, Ron acts |
+| `task` | RON- | Ron, any agent | Ron builds |
+| `debbie-action` | DEBBIE- | Any agent | Debbie resolves |
+| `product` | PROD- | Ron | Jacqueline tracks |
 
 ---
 
