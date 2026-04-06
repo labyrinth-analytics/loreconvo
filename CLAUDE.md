@@ -82,7 +82,7 @@ License key generation: Debbie needs to save the private signing key from the 20
 ## Product Research Scout (Scheduled Task)
 - **Task:** `weekly-product-scout` — runs every Monday at 3 AM
 - **Purpose:** Scans all AI platforms and developer ecosystems for niche product opportunities (picks and shovels)
-- **Output:** Timestamped HTML report + markdown summary saved to `~/Documents/Claude/Projects/Side Hustle/Opportunities/`. ALSO saves a stable copy to `~/Documents/Claude/Projects/Side Hustle/Opportunities/LATEST_SCOUT_REPORT.html` (overwritten each run — Debbie's bookmarked path).
+- **Output:** Timestamped HTML report + markdown summary saved to `docs/internal/opportunities/`. ALSO saves a stable copy to `ocs/internal/opportunities/LATEST_SCOUT_REPORT.html` (overwritten each run — Debbie's bookmarked path).
 - **Report format:** Each opportunity row includes: ID, Name, Description, Effort, MRR (M12), Debbie Fit, Status (default: New), Action Needed.
 - **Triage statuses:** New (default) | Approve | Needs Info | Defer | Reject. See `docs/PIPELINE_AGENT_GUIDE.md` for status mappings.
 - **Scope:** All AI platforms (Claude, OpenAI, Cursor, Copilot, LangChain, etc.), developer forums, GitHub trending
@@ -96,7 +96,7 @@ License key generation: Debbie needs to save the private signing key from the 20
 | Ron | Builder | `ron-daily` | Daily 12:00 AM | docs/COMPLETED.md, LoreConvo |
 | Meg | QA Engineer | `meg-qa-daily` | Daily 2:00 AM | docs/internal/qa/, LoreConvo |
 | Brock | Cybersecurity Expert | `brock-security-daily` | Daily 3:00 AM | docs/internal/security/, LoreConvo |
-| Scout | Product Research | `weekly-product-scout` | Monday 3:00 AM | Opportunities/, LoreConvo |
+| Scout | Product Research | `weekly-product-scout` | Monday 3:00 AM | docs/internal/opportunities/, LoreConvo |
 | Gina | Enterprise Architect | `enterprise-architect-gina` | Wed + Sat 4:00 AM | docs/internal/architecture/, Opportunities/LATEST_ARCHITECTURE_REVIEW.html, LoreConvo |
 | Jacqueline | Project Manager | `pm-jacqueline-daily` + `pm-jacqueline-roadmap` | Daily 4:30 AM + Sat 5:00 AM | docs/internal/pm/, LoreConvo |
 | Madison | Content Marketer | `madison-marketing-agent` | Tue + Fri 1:00 AM | docs/internal/marketing/, LoreConvo |
@@ -152,7 +152,7 @@ License key generation: Debbie needs to save the private signing key from the 20
 - **Output:** Dated blog post drafts in `docs/internal/marketing/blog_drafts/` + promo copy in `docs/internal/marketing/promo/` + LoreConvo session (surface='marketing')
 - **Scope:** Blog posts (800-2000 words) targeting data engineers and AI practitioners. Topics: data pipeline design, Claude plugins, AI productivity, Lore suite features.
 - **Content Calendar:** Madison maintains a rolling 8-week content calendar in `docs/internal/marketing/content_calendar_madison.md`
-- **Blog Standards:** Before drafting any blog post, read the blog publishing skill at `~/projects/labyrinthanalytics_website/.claude/skills/labyrinth-blog-publishing/SKILL.md`. It contains the frontmatter schema, editorial voice guidelines, post structure arc, and pre-publish checklist. All blog drafts must follow these standards.
+- **Blog Standards:** Before drafting any blog post, read the blog publishing skill at `Users/debbieshapiro/projects/labyrinthanalytics_website/.claude/skills/labyrinth-blog-publishing/SKILL.md`. It contains the frontmatter schema, editorial voice guidelines, post structure arc, and pre-publish checklist. All blog drafts must follow these standards.
 - **Rule:** Madison does NOT publish anything directly. All content goes to draft for Debbie's review before publishing.
 
 ### John - Technical Documentation Specialist (Scheduled Task)
@@ -256,10 +256,10 @@ This script handles Cowork VM lock files automatically. If locks are immutable, 
 - NEVER publish, deploy, or make anything public without Debbie's explicit approval.
 - ALWAYS use ASCII-only characters in Python source files (no Unicode checkmarks, box-drawing, smart quotes).
 - ALWAYS check LoreConvo for recent sessions before starting work: call `get_recent_sessions` MCP tool, or fallback: `python scripts/save_to_loreconvo.py --read --limit 5`.
-- ALWAYS check LoreDocs for current docs: call `vault_list` then `vault_inject_summary` for relevant vaults. **Fallback (if MCP tools unavailable):** `python scripts/query_loredocs.py --list` and `python scripts/query_loredocs.py --info "vault name"`.
+- ALWAYS check LoreDocs for current docs: call `vault_list` then `vault_inject_summary` for relevant vaults. **Fallback (if MCP tools unavailable):** `python ron_skills/loredocs/scripts/query_loredocs.py --list` and `python ron_skills/loredocs/scripts/query_loredocs.py --info "vault name"`.
 - ALWAYS commit your work using `python scripts/safe_git.py commit` before ending a session. Accept the result (committed or pending).
 - ALWAYS attempt push after commit: `python scripts/safe_git.py push` (will fail from Cowork VM -- that is expected).
-- ALWAYS save sessions to LoreConvo at session end. Preferred: `save_session` MCP tool. **Fallback (if MCP tools unavailable):** run `python scripts/save_to_loreconvo.py --title "..." --surface "..." --summary "..."` -- this script auto-generates UUIDs and matches the MCP tool's behavior exactly. NEVER use raw SQL INSERT.
+- ALWAYS save sessions to LoreConvo at session end with `project='side_hustle'`. Preferred: `save_session` MCP tool. **Fallback (if MCP tools unavailable):** run `python ron_skills/loreconvo/scripts/save_to_loreconvo.py --title "..." --surface "..." --summary "..." --project "side_hustle"` -- this script auto-generates UUIDs and matches the MCP tool's behavior exactly. NEVER use raw SQL INSERT.
 - ALWAYS move completed TODOs out of this file immediately. When you finish a TODO: (1) add it to docs/COMPLETED.md with date/commit, (2) DELETE the [x] line from this file entirely, (3) renumber remaining items if needed. No [x] items should ever remain in this file -- only open [ ] items belong here.
 - ALWAYS check `docs/internal/qa/` and `docs/internal/security/` for recent Meg/Brock reports at session start. Fix CRITICAL/HIGH findings before regular TODOs.
 - ALWAYS follow the priority order in the Ron TODOs list. Work on #1 first unless it's blocked, then #2, etc.
@@ -275,17 +275,17 @@ This script handles Cowork VM lock files automatically. If locks are immutable, 
   4. Verify version numbers match across: SKILL.md metadata, README.md, product CLAUDE.md, and marketplace listing.
   5. Verify pricing/tier info matches across: INSTALL.md, marketplace listing, and product CLAUDE.md.
   6. If any doc references a marketplace install command, confirm whether that marketplace is actually live. If not, mark the command as "coming soon" or remove it.
-  7. If milestones were completed, features shipped, blockers resolved, or product status changed, update `~/Documents/Claude/Projects/Side Hustle/Project_Ron_Product_Roadmap.html` -- move timeline dots from future/current to active/current, update the "What Changed" changelog, and refresh the "Next 30 Days" section.
+  7. If milestones were completed, features shipped, blockers resolved, or product status changed, update `docs/internal/Project_Ron_Product_Roadmap.html` -- move timeline dots from future/current to active/current, update the "What Changed" changelog, and refresh the "Next 30 Days" section.
 
 ## Session Workflow
 
 When starting a session:
 0. **Check git status (1 tool call max):** Run `python scripts/safe_git.py status`. If there are pending commits from prior agents, note them but do NOT try to fix them -- Debbie handles pending commits.
-1. **Load recent LoreConvo context (CRITICAL -- read ALL agents, not just your own):** Try `get_recent_sessions` MCP tool first. If MCP tools are not available, use the fallback: `python scripts/save_to_loreconvo.py --read --limit 10` (or `--search "keyword"` for targeted lookups). **Read sessions from ALL agents** to understand what happened since your last run. Search for `agent:debbie` to find Debbie's decisions and task completions.
-2. Check LoreDocs: try `vault_list()` then `vault_inject_summary()` MCP tools. Fallback: `python scripts/query_loredocs.py --list` and `python scripts/query_loredocs.py --info "vault name"`
+1. **Load recent LoreConvo context (CRITICAL -- read ALL agents, not just your own):** Try `get_recent_sessions` MCP tool first. If MCP tools are not available, use the fallback: `python ron_skills/loreconvo/scripts/save_to_loreconvo.py --read --limit 10` (or `--search "keyword"` for targeted lookups). **Read sessions from ALL agents** to understand what happened since your last run. Search for `agent:debbie` to find Debbie's decisions and task completions.
+2. Check LoreDocs: try `vault_list()` then `vault_inject_summary()` MCP tools. Fallback: `python scripts/query_loredocs.py --list` and `python ron_skills/loredocs/scripts/query_loredocs.py --info "vault name"`
 3. Read this file -- check Debbie TODOs for new approvals/decisions, then Ron TODOs for next work item. Also read `docs/DEBBIE_DASHBOARD.md` for Debbie's latest decisions.
 4. **Sync pipeline (Ron only):** Read DEBBIE_DASHBOARD.md for any new decisions. Apply status changes to PipelineDB using `update_status()`, `set_priority()`, `set_hold_reason()`. See `docs/PIPELINE_AGENT_GUIDE.md` for details.
-5. **Check for Meg/Brock findings:** Read the latest reports in `docs/internal/qa/` and `docs/internal/security/`. Also search LoreConvo: try `search_sessions("agent:meg")` MCP tool, or fallback: `python scripts/save_to_loreconvo.py --search "agent:meg"`. CRITICAL and HIGH severity bugs or vulnerabilities take priority over regular TODOs -- fix them first.
+5. **Check for Meg/Brock findings:** Read the latest reports in `docs/internal/qa/` and `docs/internal/security/`. Also search LoreConvo: try `search_sessions("agent:meg")` MCP tool, or fallback: `python ron_skills/loreconvo/scripts/save_to_loreconvo.py --search "agent:meg"`. CRITICAL and HIGH severity bugs or vulnerabilities take priority over regular TODOs -- fix them first.
 6. Read the relevant product CLAUDE.md for the product you will work on
 7. Read `docs/PIPELINE_AGENT_GUIDE.md` for your agent's pipeline responsibilities
 8. Pick the highest-priority work: Meg/Brock CRITICAL/HIGH fixes first, then Ron TODOs in order
@@ -295,20 +295,21 @@ When starting a session:
 When ending a session:
 1. Commit all changes: `python scripts/safe_git.py commit -m "message" --agent "your-name" file1 file2`. Accept the result.
 2. Attempt push: `python scripts/safe_git.py push` (will fail from Cowork VM -- expected).
-3. **Save to LoreConvo (MANDATORY -- this is how agents communicate):** Try `save_session` MCP tool first. If MCP tools are not available (common in scheduled Cowork tasks), use the direct fallback script instead:
+3. **Save to LoreConvo (MANDATORY -- this is how agents communicate):** Try `save_session` MCP tool first with `project='side_hustle'`. If MCP tools are not available (common in scheduled Cowork tasks), use the direct fallback script instead:
    ```
-   python scripts/save_to_loreconvo.py \
+   python ron_skills/loreconvo/scripts/save_to_loreconvo.py \
        --title "Agent-name session YYYY-MM-DD" \
        --surface "your-surface" \
        --summary "What was accomplished..." \
        --tags '["agent:your-name", "other-tag"]' \
-       --artifacts '["path/to/file1.md", "path/to/file2.md"]'
+       --artifacts '["path/to/file1.md", "path/to/file2.md"]' \
+       --project "side_hustle"
    ```
    Valid surfaces: cowork, code, chat, qa, security, pm, marketing, pipeline
    **Your LoreConvo summary MUST include:** (a) what you completed, (b) what you blocked on, (c) what files need committing if git was blocked, (d) questions or handoffs for other agents. This is NOT optional -- other agents and Debbie depend on this for context.
 4. Regenerate the pipeline dashboard: `python scripts/generate_pipeline_dashboard.py`
 5. If milestones were completed or product status changed, update the product roadmap (see doc-sync checklist item 7)
-6. If you created/updated significant docs, add them to LoreDocs: try `vault_add_document` MCP tool, or fallback: `python scripts/query_loredocs.py --add-doc --vault "vault name" --name "doc name" --file path/to/file.md`
+6. If you created/updated significant docs, add them to LoreDocs: try `vault_add_document` MCP tool, or fallback: `python ron_skills/loredocs/scripts/query_loredocs.py --add-doc --vault "vault name" --name "doc name" --file path/to/file.md`
 7. Move completed TODOs to docs/COMPLETED.md with date and commit hash, then DELETE the [x] lines from this file. No completed items should remain in CLAUDE.md.
 
 ## Agent Communication Protocol (ALL agents -- MANDATORY)
@@ -351,7 +352,7 @@ LoreConvo is the shared communication backbone. Every agent reads it and writes 
 
 ## Debbie's Background & Preferences
 
-**Full skill profile:** 25+ years in data analytics. Python, SQL (all dialects -- SQL Server at work, SQLite/PostgreSQL for side hustle), ETL/ELT pipelines, data warehousing, schema design, migration planning, financial analysis, dashboards, MCP servers, Claude plugins, LangGraph, agent orchestration, consulting, finance automation, rental property management, tax preparation.
+**Full skill profile:** 25+ years in data analytics. Python, SQL (all dialects -- SQL Server at work, SQLite/PostgreSQL for side hustle), cloud environments, Snowflake, Redshift, ETL/ELT pipelines, data warehousing, schema design, migration planning, financial analysis, dashboards, MCP servers, Claude plugins, LangGraph, agent orchestration, consulting, finance automation, rental property management, tax preparation.
 
 **Local dev environment:** Mac, Python, SQLite, cloud APIs. Does NOT have SQL Server installed locally. Fred Hutch machines are off-limits for side hustle work (PHI/PII).
 
