@@ -1,6 +1,6 @@
 # LoreConvo MCP Tool Catalog
 
-LoreConvo provides 12 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context.
+LoreConvo provides 13 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context.
 
 This catalog explains what each tool does, when Claude uses it, and what parameters it accepts.
 
@@ -248,3 +248,4 @@ Get proactive context suggestions based on your session history. This tool analy
 | `list_projects` | List all projects with session counts |
 | `get_skill_history` | See sessions that used a specific skill |
 | `vault_suggest` | Proactive suggestions for what context to load |
+| `get_tier` | Check current tier and license key status |
