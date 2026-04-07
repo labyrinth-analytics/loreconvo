@@ -57,6 +57,13 @@ if [ ! -f "$VENV_DIR/bin/loredocs" ]; then
 fi
 echo "[OK] Entry point verified at $VENV_DIR/bin/loredocs"
 
+# Ensure hook scripts are executable (git does not preserve execute bits)
+HOOKS_DIR="$SCRIPT_DIR/hooks/scripts"
+if [ -d "$HOOKS_DIR" ]; then
+    chmod +x "$HOOKS_DIR"/*.sh 2>/dev/null || true
+    echo "[OK] Hook scripts marked executable at hooks/scripts/"
+fi
+
 # Verify server starts
 echo "[..] Testing MCP server import..."
 "$VENV_DIR/bin/python3" -c "
