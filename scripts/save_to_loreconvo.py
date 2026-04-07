@@ -1,9 +1,9 @@
 """
 Direct LoreConvo query tool -- fallback when MCP tools are unavailable.
 
-Provides save_session, get_recent_sessions, and search_sessions operations
-directly against the LoreConvo SQLite database. Use this when the LoreConvo
-MCP server is not reachable (e.g., in scheduled tasks or batch scripts).
+Provides save_session, get_recent_sessions, search_sessions, and read_by_id
+operations directly against the LoreConvo SQLite database. Use this when the
+LoreConvo MCP server is not reachable (e.g., in scheduled tasks or batch scripts).
 
 Usage (save a session):
     python scripts/save_to_loreconvo.py \
@@ -16,6 +16,9 @@ Usage (save a session):
 Usage (read recent sessions):
     python scripts/save_to_loreconvo.py --read --limit 5
     python scripts/save_to_loreconvo.py --read --surface qa --limit 3
+
+Usage (read one session by ID):
+    python scripts/save_to_loreconvo.py --read-id e55cac21-4471-4991-bf1d-17b2883f28dc
 
 Usage (search sessions):
     python scripts/save_to_loreconvo.py --search "test suite"
@@ -147,6 +150,47 @@ def read_sessions(args):
         print()
 
 
+# -- Read one session by ID --
+
+def read_session_by_id(args):
+    """Fetch the full content of a single session by UUID."""
+    conn, db_path = _connect(args.db_path)
+
+    row = conn.execute(
+        """SELECT id, surface, project, title, summary, decisions, artifacts,
+                  open_questions, tags, datetime(created_at) as created
+           FROM sessions WHERE id = ?""",
+        (args.read_id,)
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        print(f"No session found with ID: {args.read_id}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"[{row['created']}] ({row['surface']}) {row['title']}")
+    print(f"  ID: {row['id']}")
+    if row['project']:
+        print(f"  Project: {row['project']}")
+    print()
+    print("Summary:")
+    print(row['summary'])
+    print()
+
+    for field in ("decisions", "artifacts", "open_questions", "tags"):
+        raw = row[field]
+        if raw:
+            try:
+                items = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                items = [raw]
+            if items:
+                print(f"{field.replace('_', ' ').title()}:")
+                for item in items:
+                    print(f"  - {item}")
+                print()
+
+
 # -- Search sessions --
 
 def search_sessions(args):
@@ -185,12 +229,14 @@ def main():
 
     # Mode flags
     parser.add_argument("--read", action="store_true", help="Read recent sessions instead of saving")
+    parser.add_argument("--read-id", type=str, dest="read_id",
+                        help="Read full content of one session by UUID")
     parser.add_argument("--search", type=str, help="Search sessions by keyword")
 
     # Save args
     parser.add_argument("--title", type=str, help="Session title")
     parser.add_argument("--surface", type=str,
-                        help="Surface: cowork, code, chat, qa, security, pm, marketing")
+                        help="Surface: cowork, code, chat, qa, security, pm, marketing, pipeline, error")
     parser.add_argument("--summary", type=str, help="Session summary (2-3 paragraphs)")
     parser.add_argument("--project", type=str, help="Project name")
     parser.add_argument("--decisions", type=str, help="JSON list of decisions")
@@ -205,7 +251,9 @@ def main():
 
     args = parser.parse_args()
 
-    if args.search:
+    if args.read_id:
+        read_session_by_id(args)
+    elif args.search:
         search_sessions(args)
     elif args.read:
         read_sessions(args)
