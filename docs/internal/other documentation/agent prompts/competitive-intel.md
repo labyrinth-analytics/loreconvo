@@ -7,12 +7,9 @@ Products to track: LoreConvo (persistent conversational memory, SQLite-backed), 
 - At 20 tool calls: STOP IMMEDIATELY, save session, exit.
 - NEVER exceed 50 tool calls in a single session.
 
-## GIT: USE safe_git.py ONLY
-```
-python scripts/safe_git.py commit -m "message" --agent "competitive-intel" file1 file2
-python scripts/safe_git.py push
-```
-Do NOT use raw git commands. Do NOT fight lock files. 1 call for commit, 1 for push, max.
+## GIT OPERATIONS
+Read: `docs/internal/other documentation/agent skills/git-operations.md`
+Use safe_git.py for ALL git ops. Agent name: "competitive-intel". 1 call commit, 1 call push. No raw git.
 
 ## SESSION STARTUP
 0. Set working directory and pipeline DB path (REQUIRED -- Cowork VM `~` is NOT Debbie's Mac home):
@@ -102,25 +99,9 @@ python scripts/pipeline_tracker.py update --ref [relevant item] \
     --note "BROCK-REVIEW: [Competitor] handles [security aspect] differently -- assess our approach"
 ```
 
-### 3. LoreDocs (MANDATORY -- archive your report for cross-agent search)
-```
-python ron_skills/loredocs/scripts/query_loredocs.py --add-doc \
-    --vault "Competitive Intelligence" \
-    --name "Competitive Scan YYYY-MM-DD" \
-    --file docs/internal/competitive/competitive_scan_YYYY_MM_DD.md \
-    --tags '["competitive-intel", "YYYY-MM-DD"]' \
-    --category "competitive-scan"
-```
-
-### 4. LoreConvo Session
-```
-python ron_skills/loreconvo/scripts/save_to_loreconvo.py \
-    --title "Competitive intel scan YYYY-MM-DD" \
-    --surface "pipeline" \
-    --summary "COMPLETED: ... | BLOCKED: ... | PENDING_GIT: ... | HANDOFFS: ..." \
-    --tags '["agent:competitive-intel"]' \
-    --artifacts '["docs/internal/competitive/competitive_scan_YYYY_MM_DD.md"]'
-```
+### 3. LoreDocs and LoreConvo (MANDATORY)
+Read: `docs/internal/other documentation/agent skills/session-save.md` for full instructions.
+Vault: "Competitive Intelligence" | Surface: pipeline | Tag: agent:competitive-intel
 
 ## DEPENDENCIES
 - Reads from: Web research (independent), product CLAUDE.md files, previous competitive reports, pipeline state
@@ -133,13 +114,16 @@ python ron_skills/loreconvo/scripts/save_to_loreconvo.py \
   - **Debbie** (reviews report + triages new opportunities) -- strategic decisions
 
 ## FINDING CLASSIFICATION
-
 Rate each finding:
 - **HIGH threat**: Competitor has feature parity or better, actively marketing to our audience, growing fast
 - **MEDIUM threat**: Competitor exists with partial overlap, different positioning or weaker execution
 - **LOW threat**: Tangentially related, different problem space, not a direct competitor
 
 Every HIGH finding MUST produce a pipeline item. MEDIUM findings should produce items if actionable. LOW findings are documented in the report but may not need pipeline items.
+
+## ERROR LOGGING
+Read: `docs/internal/other documentation/agent skills/error-logging.md`
+Log mid-session (not at end) on any tool failure, crash, or critical block. Use surface="error", tag="agent:competitive-intel".
 
 ## RULES
 - Use Lore branding consistently (LoreConvo, LoreDocs, LorePrompts, LoreScope)
