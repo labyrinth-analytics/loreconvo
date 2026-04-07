@@ -4,6 +4,16 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## 2026-04-06
+
+### Bug Fixes
+
+- **Install script now correctly creates the `loreconvo` entry point.** If you cloned LoreConvo and ran `install.sh` on a fresh machine, the `loreconvo` command might not have been created, causing a "module not found" error. The installer now runs `pip install .` to install the full package and entry point binary. If you hit this issue before, delete your `.venv/` folder and run `bash install.sh` again.
+
+- **Hook scripts now work after a fresh install.** The SessionStart and SessionEnd hooks (which auto-load and auto-save your Claude sessions) were silently failing if you installed by cloning the repo. This is because git does not preserve file execute permissions. The install script now explicitly sets the correct permissions. Auto-save and auto-load now work correctly after a fresh install without any manual steps.
+
+---
+
 ## 2026-04-03
 
 ### New Features
