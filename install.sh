@@ -25,29 +25,43 @@ echo "[OK] Found $PYTHON_VERSION"
 
 # Create virtual environment
 if [ -d "$VENV_DIR" ]; then
-    echo "[OK] Virtual environment already exists at .venv/"
+    # Verify the existing venv is functional (stale symlinks can occur after a rebrand or move)
+    if ! "$VENV_DIR/bin/python3" -c "import sys; print(sys.version)" &> /dev/null; then
+        echo "[..] Existing .venv appears stale -- recreating..."
+        rm -rf "$VENV_DIR"
+        python3 -m venv "$VENV_DIR"
+        echo "[OK] Virtual environment recreated at .venv/"
+    else
+        echo "[OK] Virtual environment already exists at .venv/"
+    fi
 else
     echo "[..] Creating virtual environment..."
     python3 -m venv "$VENV_DIR"
     echo "[OK] Virtual environment created at .venv/"
 fi
 
-# Install dependencies
-echo "[..] Installing dependencies..."
-"$VENV_DIR/bin/pip3" install -q -r "$SCRIPT_DIR/requirements.txt"
-echo "[OK] Dependencies installed (mcp, click)"
+# Install package and dependencies
+echo "[..] Installing LoreConvo package..."
+"$VENV_DIR/bin/pip3" install -q "$SCRIPT_DIR"
+echo "[OK] LoreConvo package installed (entry point: $VENV_DIR/bin/loreconvo)"
 
 # Create database directory
 mkdir -p "$HOME/.loreconvo"
 echo "[OK] Database directory ready at ~/.loreconvo/"
 
+# Verify entry point was created
+if [ ! -f "$VENV_DIR/bin/loreconvo" ]; then
+    echo "[ERROR] Entry point not created at $VENV_DIR/bin/loreconvo"
+    echo "        Try: $VENV_DIR/bin/pip3 install $SCRIPT_DIR"
+    exit 1
+fi
+echo "[OK] Entry point verified at $VENV_DIR/bin/loreconvo"
+
 # Verify server starts
-echo "[..] Testing MCP server..."
+echo "[..] Testing MCP server import..."
 "$VENV_DIR/bin/python3" -c "
-import sys
-sys.path.insert(0, '$SCRIPT_DIR/src')
-from core.database import SessionDatabase
-from core.config import Config
+from loreconvo.core.database import SessionDatabase
+from loreconvo.core.config import Config
 db = SessionDatabase(Config())
 print(f'[OK] Database initialized at {Config().db_path}')
 print(f'[OK] {db.session_count()} sessions in vault')
@@ -62,7 +76,7 @@ echo "  To use with Claude Code:"
 echo "    claude --plugin-dir $SCRIPT_DIR"
 echo ""
 echo "  To use the CLI:"
-echo "    $VENV_DIR/bin/python3 $SCRIPT_DIR/src/cli.py stats"
+echo "    $VENV_DIR/bin/loreconvo-cli stats"
 echo ""
 echo "  To export last session for Chat:"
 echo "    bash $SCRIPT_DIR/export-to-chat.sh"
