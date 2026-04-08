@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Labyrinth Analytics -- Architecture Review 2026-04-08</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0e0e14; color: #ccc; margin: 0; padding: 0; }
+  .header { background: linear-gradient(135deg, #1a0a2e 0%, #0e1a2e 100%); padding: 28px 40px; border-bottom: 2px solid #4a2060; }
+  .header h1 { margin: 0; font-size: 1.7em; color: #c8a0e8; letter-spacing: 1px; }
+  .header .meta { margin-top: 6px; font-size: 0.85em; color: #888; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 0.8em; font-weight: bold; margin-left: 10px; vertical-align: middle; }
+  .green { background: #1a4a1a; color: #6fd46f; border: 1px solid #3a8a3a; }
+  .yellow { background: #4a3a00; color: #f0c040; border: 1px solid #8a6a00; }
+  .red { background: #4a1010; color: #f06060; border: 1px solid #8a2020; }
+  .blue { background: #0a2040; color: #60a8f0; border: 1px solid #1a4a80; }
+  .orange { background: #3a1a00; color: #f0a040; border: 1px solid #7a3a00; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 30px 40px; }
+  .section { background: #14141e; border: 1px solid #2a2a3a; border-radius: 8px; margin-bottom: 24px; padding: 22px 26px; }
+  .section h2 { margin: 0 0 14px 0; font-size: 1.1em; color: #a080d0; border-bottom: 1px solid #2a2a3a; padding-bottom: 8px; }
+  .section h3 { margin: 16px 0 8px 0; font-size: 0.95em; color: #90b0d0; }
+  .kpi-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .kpi { background: #1a1a28; border: 1px solid #2a2a3a; border-radius: 6px; padding: 14px 18px; flex: 1; min-width: 160px; text-align: center; }
+  .kpi .label { font-size: 0.75em; color: #777; text-transform: uppercase; letter-spacing: 1px; }
+  .kpi .value { font-size: 1.6em; font-weight: bold; margin-top: 4px; }
+  .kpi .sub { font-size: 0.75em; color: #888; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88em; }
+  th { background: #1a1a2e; color: #a080d0; padding: 8px 12px; text-align: left; border-bottom: 1px solid #2a2a3a; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1e1e2e; color: #bbb; }
+  tr:hover td { background: #1a1a2a; }
+  .finding { background: #0e1a0e; border-left: 3px solid #3a8a3a; padding: 10px 14px; margin: 8px 0; border-radius: 0 4px 4px 0; font-size: 0.88em; }
+  .finding-yellow { background: #1a1400; border-left-color: #8a6a00; }
+  .finding-blue { background: #0a1420; border-left-color: #1a5090; }
+  .finding-orange { background: #1a0e00; border-left-color: #7a4a00; }
+  .tag { display: inline-block; background: #1a0a2e; color: #a080d0; border: 1px solid #4a2060; border-radius: 10px; padding: 2px 8px; font-size: 0.75em; margin: 1px; }
+  .frozen-note { background: #1a1a00; border: 1px dashed #4a4a00; border-radius: 4px; padding: 10px 14px; color: #888; font-size: 0.83em; font-style: italic; }
+  p { line-height: 1.6; margin: 8px 0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Labyrinth Analytics &mdash; Architecture Review
+    <span class="badge green">GREEN</span>
+  </h1>
+  <div class="meta">Agent: Gina (Enterprise Architect) &nbsp;|&nbsp; Run: 2026-04-08 &nbsp;|&nbsp; Scheduled: Wed/Sat 4:00 AM</div>
+</div>
+
+<div class="container">
+
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="label">Overall</div>
+      <div class="value" style="color:#6fd46f">GREEN</div>
+      <div class="sub">No blockers</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Commits Reviewed</div>
+      <div class="value" style="color:#60a8f0">2</div>
+      <div class="sub">fbfdd11, fdf6fc3</div>
+    </div>
+    <div class="kpi">
+      <div class="label">GINA-REVIEW Items</div>
+      <div class="value" style="color:#f0c040">3</div>
+      <div class="sub">All dispositioned</div>
+    </div>
+    <div class="kpi">
+      <div class="label">New Threats</div>
+      <div class="value" style="color:#f0a040">1</div>
+      <div class="sub">MemPalace</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Open Issues</div>
+      <div class="value" style="color:#6fd46f">0</div>
+      <div class="sub">Blocking</div>
+    </div>
+  </div>
+
+  <!-- Product Code Review -->
+  <div class="section">
+    <h2>Product Code Review</h2>
+    <h3>LoreConvo: DB Discovery Fix (fbfdd11) <span class="badge green">APPROVED</span></h3>
+    <div class="finding">
+      <strong>Change:</strong> <code>_find_loreconvo_db()</code> and <code>_find_loredocs_db()</code> now check
+      Cowork VM mount paths (<code>/sessions/*/mnt/</code>) <em>before</em> the VM home (<code>~</code>).
+      Fixes data-loss risk: <code>os.path.expanduser("~")</code> in a Cowork VM resolves to the ephemeral VM
+      home, not Debbie's Mac home.<br><br>
+      <strong>Assessment:</strong> Correct. Comment explains the rationale. Brock confirmed as SEC-023 INFO
+      (not a vulnerability). Meg verified 359 tests pass. Architecture is sound.
+    </div>
+    <h3>Minor Observation (Non-blocking, LOW priority)</h3>
+    <p>
+      <code>sorted(glob.glob(...))</code> gives lexicographic ordering when multiple mounted paths exist.
+      If two Cowork VMs are open simultaneously, the first by sort order wins rather than the most recently
+      active session. Recommend post-mandate: <code>sorted(..., key=os.path.getmtime, reverse=True)</code>
+      to prefer the most recently modified DB. Not a bug in current single-VM usage.
+    </p>
+  </div>
+
+  <!-- GINA-REVIEW Items -->
+  <div class="section">
+    <h2>GINA-REVIEW Items from Competitive Intel (Apr 6 Scan)</h2>
+
+    <h3>GINA-CI-001: Claude-Mem AI Compression Pattern <span class="badge blue">DEFERRED</span></h3>
+    <div class="finding finding-blue">
+      <strong>Question:</strong> Claude-Mem (21.5k stars) uses AI-powered context compression before storage.
+      Should LoreConvo evaluate this pattern?<br><br>
+      <strong>Decision: DEFERRED -- not for Phase 1.</strong> Verbatim storage is correct for LoreConvo.
+      The MemPalace/Claude-Mem AAAK compression was published with an accuracy correction acknowledging
+      underperformance vs. raw mode -- this validates our approach. Adding an LLM pass to the save path
+      introduces latency, cost, and hallucination risk. FTS5 also works best on verbatim text.
+      If storage efficiency becomes a user concern, the <code>summary</code> field (already in schema)
+      is the correct lever, not lossy body compression. Revisit at v1.x if demand warrants.
+    </div>
+
+    <h3>GINA-CI-002: Hindsight Knowledge Consolidation Pattern <span class="badge blue">DEFERRED</span></h3>
+    <div class="finding finding-blue">
+      <strong>Question:</strong> Hindsight v0.4.19 added SOTA-level automatic knowledge consolidation.
+      Should LoreConvo adopt a similar pass?<br><br>
+      <strong>Decision: DEFERRED -- non-destructive alternative proposed for v0.4.</strong> Consolidation
+      is inherently lossy and complex. LoreConvo's atomic-session model is more auditable and predictable.
+      The discoverability benefit can be achieved non-destructively via "session linking" -- auto-tagging
+      related sessions via shared tags or FTS5 overlap overlap, without merging content. File as a v0.4
+      enhancement. No Phase 1 action needed.
+    </div>
+
+    <h3>GINA-CI-003: LorePrompts Must Integrate with Lore Ecosystem <span class="badge orange">FROZEN</span></h3>
+    <div class="frozen-note">
+      FROZEN per Stability Mandate. No build work permitted until mandate resolves.<br><br>
+      Design constraint CONFIRMED for when unfrozen: LorePrompts must include first-class Lore integration
+      from day one. Prompt templates must support a <code>{lore_context}</code> injection variable backed
+      by <code>lore_get_recent_sessions()</code> and <code>vault_inject_summary()</code>. Standalone
+      usage (no other Lore products) remains supported but is not the primary value prop.
+      Standalone prompt management is a losing position; Lore-native is the moat.
+    </div>
+  </div>
+
+  <!-- MemPalace -->
+  <div class="section">
+    <h2>New Competitive Threat: MemPalace <span class="badge yellow">HIGH THREAT</span></h2>
+    <p>Source: INTAKE.md (Debbie tip, 2026-04-07) + LoreConvo session Apr 7. Not yet processed by
+    Competitive Intel agent -- Gina providing initial architectural analysis.</p>
+
+    <h3>Architectural Comparison</h3>
+    <table>
+      <tr><th>Dimension</th><th>LoreConvo</th><th>MemPalace</th></tr>
+      <tr><td>Search</td><td>FTS5 (keyword, exact)</td><td>ChromaDB (vector/semantic)</td></tr>
+      <tr><td>Storage</td><td>SQLite (flat sessions)</td><td>SQLite + knowledge graph</td></tr>
+      <tr><td>Dependencies</td><td>Zero runtime deps</td><td>ChromaDB (heavy)</td></tr>
+      <tr><td>Platform</td><td>Claude-only (plugin)</td><td>Claude, ChatGPT, Gemini, Cursor</td></tr>
+      <tr><td>License</td><td>BSL 1.1 (pro tier)</td><td>MIT (free forever)</td></tr>
+      <tr><td>Install</td><td>One-command plugin</td><td>Requires venv + ChromaDB setup</td></tr>
+      <tr><td>Compression</td><td>None (verbatim, lossless)</td><td>AAAK (lossy, underperforms raw)</td></tr>
+    </table>
+
+    <h3>Strategic Assessment</h3>
+    <div class="finding finding-yellow">
+      <strong>LoreConvo advantages:</strong> Zero dependencies, Claude-native one-click install, verbatim
+      accuracy, BSL 1.1 monetizable. MIT means MemPalace can never charge -- they are structurally unable
+      to fund continued development long-term.<br><br>
+      <strong>LoreConvo gap:</strong> FTS5 misses fuzzy/semantic queries. "What did we discuss about
+      performance?" fails if the word "performance" does not appear verbatim.<br><br>
+      <strong>Short-term recommendation:</strong> Messaging should emphasize simplicity, reliability, and
+      Claude-native integration. "Works in one click, never loses your data, no setup" beats ChromaDB
+      complexity for the Cowork user persona.<br><br>
+      <strong>Medium-term recommendation (post-mandate, v0.4):</strong> Prototype
+      <strong>sqlite-vec</strong> (github.com/asg017/sqlite-vec) as an opt-in semantic search layer.
+      This is a SQLite extension with zero additional Python dependencies -- keeps our dependency story
+      clean while closing the semantic search gap.
+    </div>
+
+    <h3>BROCK-REVIEW Flag</h3>
+    <div class="finding finding-orange">
+      <strong>BROCK-REVIEW:</strong> When sqlite-vec evaluation begins post-mandate, Brock should assess
+      the extension's supply chain, update cadence, and security posture before any adoption decision.
+      Reference: github.com/asg017/sqlite-vec
+    </div>
+  </div>
+
+  <!-- Open Items Table -->
+  <div class="section">
+    <h2>Open Architecture Items</h2>
+    <table>
+      <tr><th>ID</th><th>Status</th><th>Description</th></tr>
+      <tr><td>GINA-001</td><td><span class="badge green">RESOLVED</span></td><td>vault_set_tier bypass (Apr 5)</td></tr>
+      <tr><td>GINA-002</td><td><span class="badge green">RESOLVED</span></td><td>lore-onboard skill not packaged (Apr 5)</td></tr>
+      <tr><td>GINA-003</td><td><span class="badge green">RESOLVED</span></td><td>LoreDocs license.py env_value guard (Apr 6)</td></tr>
+      <tr><td>GINA-CI-001</td><td><span class="badge blue">DEFERRED</span></td><td>Claude-Mem AI compression pattern -- not for Phase 1</td></tr>
+      <tr><td>GINA-CI-002</td><td><span class="badge blue">DEFERRED</span></td><td>Hindsight consolidation -- session linking proposed for v0.4</td></tr>
+      <tr><td>GINA-CI-003</td><td><span class="badge orange">FROZEN</span></td><td>LorePrompts Lore integration constraint -- noted, awaiting unfreeze</td></tr>
+      <tr><td>GINA-MP-001</td><td><span class="badge yellow">NEW (LOW)</span></td><td>MemPalace: evaluate sqlite-vec hybrid search post-mandate</td></tr>
+    </table>
+  </div>
+
+  <div style="text-align:center; color:#444; font-size:0.78em; margin-top: 20px; padding-bottom: 20px;">
+    Generated by Gina (Enterprise Architect) &mdash; 2026-04-08 &mdash; Labyrinth Analytics Consulting
+  </div>
+
+</div>
+</body>
+</html>
