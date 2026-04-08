@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Labyrinth Analytics Executive Dashboard - 2026-04-08</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Raleway:wght@300;400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #1a1a2e;
+  --card: #2d2d44;
+  --border: rgba(154,148,148,0.2);
+  --text: #e8e0d4;
+  --muted: #9a9494;
+  --accent: #7b2d8e;
+  --accent-hover: #b794c7;
+  --gold: #d4a843;
+  --green: #22c55e;
+  --yellow: #eab308;
+  --red: #ef4444;
+  --orange: #f97316;
+  --blue: #3b82f6;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Raleway', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 24px;
+}
+h1, h2, h3, .section-title {
+  font-family: 'Cinzel', serif;
+}
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.header-left h1 { font-size: 1.8em; color: var(--gold); letter-spacing: 0.04em; }
+.header-left .subtitle { color: var(--muted); margin-top: 6px; font-size: 0.9em; }
+.posture-badge {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  border: 2px solid;
+}
+.posture-action { border-color: var(--red); color: var(--red); background: rgba(239,68,68,0.1); }
+.posture-review { border-color: var(--yellow); color: var(--yellow); background: rgba(234,179,8,0.1); }
+.posture-clear { border-color: var(--green); color: var(--green); background: rgba(34,197,94,0.1); }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card-full { grid-column: 1 / -1; }
+.section-title {
+  font-size: 1em;
+  color: var(--gold);
+  letter-spacing: 0.06em;
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+.section-title .toggle { color: var(--muted); font-family: monospace; font-size: 1.1em; }
+.collapsible { overflow: hidden; transition: max-height 0.3s ease; }
+
+/* Attention items */
+.attention-item {
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  border-left: 4px solid;
+}
+.attention-high { border-color: var(--red); background: rgba(239,68,68,0.06); }
+.attention-medium { border-color: var(--yellow); background: rgba(234,179,8,0.06); }
+.attention-info { border-color: var(--blue); background: rgba(59,130,246,0.06); }
+.attention-item .label { font-weight: 600; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+.attention-high .label { color: var(--red); }
+.attention-medium .label { color: var(--yellow); }
+.attention-info .label { color: var(--blue); }
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-family: 'Fira Code', monospace;
+}
+.badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
+.badge-orange { background: rgba(249,115,22,0.15); color: var(--orange); }
+.badge-yellow { background: rgba(234,179,8,0.15); color: var(--yellow); }
+.badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
+.badge-blue { background: rgba(59,130,246,0.15); color: var(--blue); }
+.badge-muted { background: rgba(136,136,160,0.15); color: var(--muted); }
+.badge-purple { background: rgba(123,45,142,0.2); color: var(--accent-hover); }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; font-size: 0.88em; }
+th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 600;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78em;
+  letter-spacing: 0.06em;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+td { padding: 8px 10px; border-bottom: 1px solid rgba(154,148,148,0.1); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+.mono { font-family: 'Fira Code', monospace; font-size: 0.9em; }
+
+/* Stat row */
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.stat-card { background: rgba(0,0,0,0.2); border-radius: 8px; padding: 14px; text-align: center; }
+.stat-value { font-size: 1.8em; font-weight: 700; color: var(--gold); font-family: 'Cinzel', serif; }
+.stat-label { font-size: 0.75em; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: 1fr; }
+  .stat-row { grid-template-columns: 1fr 1fr; }
+}
+.new-tag { font-size: 0.7em; background: rgba(239,68,68,0.2); color: var(--red); padding: 1px 6px; border-radius: 4px; margin-left: 6px; font-family: 'Fira Code', monospace; }
+.section-count { font-size: 0.75em; background: rgba(239,68,68,0.15); color: var(--red); padding: 2px 10px; border-radius: 12px; font-family: 'Fira Code', monospace; }
+</style>
+</head>
+<body>
+
+<!-- ==================== HEADER ==================== -->
+<div class="dashboard-header">
+  <div class="header-left">
+    <h1>Labyrinth Analytics &mdash; Executive Dashboard</h1>
+    <div class="subtitle">Wednesday, April 08, 2026 &nbsp;|&nbsp; Generated by Jacqueline (PM Agent)</div>
+  </div>
+  <div class="posture-badge posture-action">ACTION REQUIRED</div>
+</div>
+
+<!-- ==================== 1. ATTENTION NEEDED ==================== -->
+<div class="card card-full">
+  <div class="section-title" onclick="toggleSection('attention')">
+    ATTENTION NEEDED <span class="toggle" id="attention-toggle">&#9660;</span>
+  </div>
+  <div class="collapsible" id="attention">
+
+    <div class="attention-item attention-high">
+      <div class="label">HIGH -- Apply 8 Pending Commits</div>
+      Run from your Mac: <code>cd ~/projects/side_hustle &amp;&amp; python scripts/safe_git.py apply</code><br>
+      Includes Ron DB discovery fix (fbfdd11), Meg QA report Apr 7, Brock security report Apr 7, John INSTALL.md, Gina product review Apr 5, and governance updates.
+    </div>
+
+    <div class="attention-item attention-high">
+      <div class="label">HIGH -- Stability Mandate TODO #1 Still Open: Plugin Install Flow</div>
+      Ron's DB discovery fix (TODO #2) is complete and Meg+Brock verified it. But TODO #1 -- fixing install.sh for LoreConvo and adding install.sh for LoreDocs -- remains open. Feature freeze stays in effect. Ron's next session should fix install.sh.
+    </div>
+
+    <div class="attention-item attention-high">
+      <div class="label">HIGH -- Competitive Threat: MemPalace Added to Watch List</div>
+      Debbie reviewed MemPalace (github.com/milla-jovovich/mempalace) on Apr 7. Uses ChromaDB vector search + SQLite temporal knowledge graph, MIT license, Claude+ChatGPT+Gemini+Cursor support. Combined with Claude-Mem (21.5k stars), LoreConvo faces a crowded memory-tool landscape. Differentiation via Cowork support, vault integration, and cross-product ecosystem is critical.
+    </div>
+
+    <div class="attention-item attention-medium">
+      <div class="label">MEDIUM -- Confirm Stability Mandate TODO #2 in Cowork</div>
+      Ron fixed the DB discovery path order (fbfdd11) -- mounted paths now checked before VM home. Meg verified logic is correct; Brock confirmed security-positive. Awaiting Debbie's end-to-end confirmation: run a fallback script call in Cowork and verify it reads/writes to the Mac-backed mount (not ephemeral VM home).
+    </div>
+
+    <div class="attention-item attention-medium">
+      <div class="label">MEDIUM -- 3 Untriaged Pipeline Opportunities (OPP-011, OPP-017, OPP-018)</div>
+      OPP-011 is undetailed (requires lookup). OPP-017 (LoreEval AI Test Runner, effort 3, ~$900 MRR M12) and OPP-018 (LangGraph Workflow Inspector, effort 5, ~$700 MRR M12) need Approve / Needs Info / Defer / Reject decisions from Debbie.
+    </div>
+
+    <div class="attention-item attention-medium">
+      <div class="label">MEDIUM -- Blog Post #2 Ready for Review and Publish</div>
+      "Building a Reference Library for AI Projects: A Vault Blueprint..." -- all 3 Debbie feedback fixes applied by Madison on Apr 7 (frontmatter, version, paragraph pacing). File: <code>docs/internal/marketing/blog_drafts/blog_loredocs_vault_architecture_2026_04_03.md</code>
+    </div>
+
+    <div class="attention-item attention-info">
+      <div class="label">INFO -- Blog Post #3 Draft Ready for Review</div>
+      "Your AI's Knowledge Stack: Why LoreDocs, Obsidian, and NotebookLM Complement Each Other" -- created by Madison Apr 7. Positions LoreDocs alongside complementary tools. File: <code>docs/internal/marketing/blog_drafts/blog_knowledge_stack_venn_2026_04_07.md</code>
+    </div>
+
+    <div class="attention-item attention-info">
+      <div class="label">INFO -- Cross-Agent Advisory: Glob Sort Ambiguity (SEC-023 / MEG-053)</div>
+      Both Brock and Meg independently flagged the same edge case in the new DB discovery code: <code>sorted(glob.glob(...))</code> picks lexicographically first session dir if multiple are open simultaneously. INFO-level in single-user context. Ron should document intent or add session ID env var in a future (non-mandate) session.
+    </div>
+
+  </div>
+</div>
+
+<!-- ==================== 2. OVERNIGHT AGENT SUMMARY ==================== -->
+<div class="card card-full">
+  <div class="section-title" onclick="toggleSection('agent-summary')">
+    OVERNIGHT AGENT SUMMARY &nbsp;<span style="color:var(--muted); font-size:0.8em; font-family:Raleway">(Apr 7-8)</span>
+    <span class="toggle" id="agent-summary-toggle">&#9660;</span>
+  </div>
+  <div class="collapsible" id="agent-summary">
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-value">2</div>
+        <div class="stat-label">Ron Commits</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">359</div>
+        <div class="stat-label">Meg Tests Pass</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0</div>
+        <div class="stat-label">Brock CVEs</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">2</div>
+        <div class="stat-label">Madison Drafts</div>
+      </div>
+    </div>
+    <table>
+      <tr>
+        <th>Agent</th><th>Run Time</th><th>Status</th><th>Key Output</th>
+      </tr>
+      <tr>
+        <td>Ron</td>
+        <td class="mono">Apr 7 5:08 PM</td>
+        <td><span class="badge badge-green">OK</span></td>
+        <td>Stability Mandate TODO #2 fixed: DB discovery now checks mounted paths first (fbfdd11). Meg+Brock verified correct.</td>
+      </tr>
+      <tr>
+        <td>Meg (QA)</td>
+        <td class="mono">Apr 7 6:36 PM</td>
+        <td><span class="badge badge-yellow">YELLOW</span></td>
+        <td>359 tests pass (204 LoreConvo + 39 LoreDocs + 116 internal). MEG-052 (combined pytest collision) still open. MEG-053 (glob sort advisory) new INFO.</td>
+      </tr>
+      <tr>
+        <td>Brock (Security)</td>
+        <td class="mono">Apr 8 12:39 AM</td>
+        <td><span class="badge badge-orange">NEEDS ATTN</span></td>
+        <td>0 CVEs. SEC-023 (INFO) -- glob sort ambiguity in DB discovery. pip-audit clean on both products. Posture stable.</td>
+      </tr>
+      <tr>
+        <td>Competitive Intel</td>
+        <td class="mono">Apr 7 (Cowork)</td>
+        <td><span class="badge badge-green">OK</span></td>
+        <td>Debbie reviewed MemPalace (new HIGH threat). Claude-Mem still 21.5k stars. Hindsight upgraded to HIGH (Claude Code native). LoreScope white space confirmed.</td>
+      </tr>
+      <tr>
+        <td>John (Tech Docs)</td>
+        <td class="mono">Apr 7 4:47 AM</td>
+        <td><span class="badge badge-green">OK</span></td>
+        <td>Created LoreConvo INSTALL.md (was missing). Updated LoreConvo docs/changelogs. Full report: tech_docs_report_2026_04_07.md</td>
+      </tr>
+      <tr>
+        <td>Madison (Marketing)</td>
+        <td class="mono">Apr 7 12:40 AM</td>
+        <td><span class="badge badge-green">OK</span></td>
+        <td>Fixed Blog #2 (all 3 Debbie notes applied). Created Blog #3 draft (LoreDocs + Obsidian + NotebookLM). Content calendar updated.</td>
+      </tr>
+      <tr>
+        <td>Jacqueline (PM)</td>
+        <td class="mono">Apr 8 1:38 AM</td>
+        <td><span class="badge badge-green">THIS RUN</span></td>
+        <td>Daily executive dashboard (this file). DEBBIE_DASHBOARD.md updated.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!-- ==================== 3. DEVELOPMENT TODO TRACKER ==================== -->
+<div class="card card-full">
+  <div class="section-title" onclick="toggleSection('todos')">
+    DEVELOPMENT TODO TRACKER
+    <span class="toggle" id="todos-toggle">&#9660;</span>
+  </div>
+  <div class="collapsible" id="todos">
+
+    <p style="color:var(--red); font-size:0.85em; margin-bottom:12px; padding:8px 12px; background:rgba(239,68,68,0.06); border-radius:6px; border-left:3px solid var(--red);">
+      <strong>STABILITY MANDATE ACTIVE -- Feature Freeze in Effect.</strong>
+      No new features, CLI work, or new products until LoreConvo + LoreDocs plugin install confirmed working on Cowork. TODO #2 complete (pending Debbie confirmation). TODO #1 open.
+    </p>
+
+    <p style="color:var(--muted); font-size:0.85em; margin-bottom:12px;">RON MANDATE TODOS</p>
+    <table>
+      <tr><th>#</th><th>Task</th><th>Status</th><th>Notes</th></tr>
+      <tr>
+        <td class="mono">1</td>
+        <td>Fix plugin install.sh (LoreConvo: run pip install .; LoreDocs: add install.sh)</td>
+        <td><span class="badge badge-red">OPEN</span></td>
+        <td>Root cause: install.sh never runs pip install ., so MCP binary never installed. LoreDocs has no install.sh at all. Ron's #1 priority.</td>
+      </tr>
+      <tr>
+        <td class="mono">2</td>
+        <td>Fix DB discovery: check mounted paths before VM home (fallback scripts)</td>
+        <td><span class="badge badge-yellow">DONE / AWAITING CONFIRM</span></td>
+        <td>Ron fixed in fbfdd11 (Apr 7). Meg+Brock verified. Debbie needs to run end-to-end in Cowork to confirm.</td>
+      </tr>
+    </table>
+
+    <p style="color:var(--muted); font-size:0.85em; margin:14px 0 8px 0;">RON TODOS (FROZEN until mandate complete)</p>
+    <table>
+      <tr><th>#</th><th>Item</th><th>Priority</th><th>Status</th></tr>
+      <tr><td class="mono">RON-005</td><td>Fix SEC-014: add cryptography to pyproject.toml (both products)</td><td class="badge badge-red">P1</td><td><span class="badge badge-orange">FROZEN</span></td></tr>
+      <tr><td class="mono">RON-006</td><td>Fix GINA-001: vault_set_tier license bypass in LoreDocs</td><td class="badge badge-red">P1</td><td><span class="badge badge-orange">FROZEN</span></td></tr>
+      <tr><td class="mono">RON-007</td><td>Fix GINA-002: rebuild .plugin bundle to include /lore-onboard skill</td><td class="badge badge-red">P1</td><td><span class="badge badge-orange">FROZEN</span></td></tr>
+      <tr><td class="mono">RON-009</td><td>Add tests/ to product .gitignore (prevent leaking to public repos)</td><td class="badge badge-red">P1</td><td><span class="badge badge-orange">FROZEN</span></td></tr>
+      <tr><td class="mono">RON-001</td><td>LoreConvo CLI entry point</td><td class="badge badge-orange">P1</td><td><span class="badge badge-orange">FROZEN</span></td></tr>
+      <tr><td class="mono">RON-002</td><td>LoreDocs CLI entry point</td><td class="badge badge-yellow">P2</td><td><span class="badge badge-orange">FROZEN</span></td></tr>
+      <tr><td class="mono">RON-012</td><td>Audit Claude-Mem feature set vs LoreConvo -- document Cowork/vault differentiators</td><td class="badge badge-yellow">P2</td><td><span class="badge badge-orange">FROZEN</span></td></tr>
+    </table>
+
+    <p style="color:var(--muted); font-size:0.85em; margin:14px 0 8px 0;">DEBBIE TODOS</p>
+    <table>
+      <tr><th>Item</th><th>Priority</th><th>Status</th></tr>
+      <tr><td>Apply 8 pending commits (safe_git.py apply)</td><td><span class="badge badge-red">HIGH</span></td><td><span class="badge badge-red">NEEDED NOW</span></td></tr>
+      <tr><td>Confirm Stability Mandate TODO #2 via Cowork end-to-end test</td><td><span class="badge badge-red">HIGH</span></td><td><span class="badge badge-yellow">PENDING</span></td></tr>
+      <tr><td>Review rebuilt .plugin files (DEBBIE-003)</td><td><span class="badge badge-yellow">P2</span></td><td><span class="badge badge-yellow">PENDING</span></td></tr>
+      <tr><td>Create GitHub repo + push marketplace (DEBBIE-006)</td><td><span class="badge badge-yellow">P2</span></td><td><span class="badge badge-yellow">PENDING</span></td></tr>
+      <tr><td>Triage OPP-017 (LoreEval) and OPP-018 (LangGraph Inspector)</td><td><span class="badge badge-yellow">P2</span></td><td><span class="badge badge-red">OPEN</span></td></tr>
+      <tr><td>Review + publish blog post #2 (loredocs vault architecture)</td><td><span class="badge badge-yellow">MEDIUM</span></td><td><span class="badge badge-yellow">READY</span></td></tr>
+      <tr><td>Activate live Stripe account (DEBBIE-004)</td><td><span class="badge badge-blue">P3</span></td><td><span class="badge badge-blue">ON HOLD</span></td></tr>
+      <tr><td>File USPTO trademarks (DEBBIE-001/002)</td><td><span class="badge badge-muted">P5</span></td><td><span class="badge badge-muted">DEFERRED</span></td></tr>
+    </table>
+
+  </div>
+</div>
+
+<!-- ==================== 4. PIPELINE STATUS ==================== -->
+<div class="card card-full">
+  <div class="section-title" onclick="toggleSection('pipeline')">
+    PIPELINE STATUS
+    <span class="section-count">3 AWAITING TRIAGE</span>
+    <span class="toggle" id="pipeline-toggle">&#9660;</span>
+  </div>
+  <div class="collapsible" id="pipeline">
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="stat-value" style="color:var(--red)">3</div><div class="stat-label">New / Untriaged</div></div>
+      <div class="stat-card"><div class="stat-value" style="color:var(--green)">8</div><div class="stat-label">Approved</div></div>
+      <div class="stat-card"><div class="stat-value" style="color:var(--yellow)">3</div><div class="stat-label">Awaiting Gina</div></div>
+      <div class="stat-card"><div class="stat-value" style="color:var(--muted)">6</div><div class="stat-label">On Hold</div></div>
+    </div>
+
+    <p style="color:var(--muted); font-size:0.82em; margin-bottom:10px;">OPP-017 and OPP-018 need triage. OPP-007/009/010 awaiting Gina architecture review (Gina runs today, Apr 8 4AM).</p>
+
+    <table>
+      <tr>
+        <th>ID</th><th>Name</th><th>Triage Status</th><th>Effort</th><th>MRR M12</th><th>Assigned To</th><th>Last Updated</th>
+      </tr>
+      <!-- UNTRIAGED -->
+      <tr style="background:rgba(239,68,68,0.04)">
+        <td class="mono">OPP-011<span class="new-tag">NEW</span></td>
+        <td>Pipeline opportunity (unspecified)</td>
+        <td><span class="badge badge-red">NEW</span></td>
+        <td>--</td><td>--</td><td>Scout</td><td>2026-04-04</td>
+      </tr>
+      <tr style="background:rgba(239,68,68,0.04)">
+        <td class="mono">OPP-017<span class="new-tag">NEW</span></td>
+        <td>LoreEval -- AI Agent Test Runner</td>
+        <td><span class="badge badge-red">NEW</span></td>
+        <td>3</td><td>~$900</td><td>Scout</td><td>2026-04-03</td>
+      </tr>
+      <tr style="background:rgba(239,68,68,0.04)">
+        <td class="mono">OPP-018<span class="new-tag">NEW</span></td>
+        <td>LangGraph Workflow Inspector</td>
+        <td><span class="badge badge-red">NEW</span></td>
+        <td>5</td><td>~$700</td><td>Scout</td><td>2026-04-03</td>
+      </tr>
+      <!-- APPROVED FOR REVIEW (Gina) -->
+      <tr>
+        <td class="mono">OPP-007</td>
+        <td>Data Pipeline Test Harness MCP</td>
+        <td><span class="badge badge-yellow">AWAITING GINA</span></td>
+        <td>4</td><td>~$700</td><td>Gina</td><td>2026-04-04</td>
+      </tr>
+      <tr>
+        <td class="mono">OPP-009</td>
+        <td>Data Catalog Lite MCP</td>
+        <td><span class="badge badge-yellow">AWAITING GINA</span></td>
+        <td>3</td><td>~$900</td><td>Gina</td><td>2026-04-04</td>
+      </tr>
+      <tr>
+        <td class="mono">OPP-010</td>
+        <td>ETL Pattern Library Skill</td>
+        <td><span class="badge badge-yellow">AWAITING GINA</span></td>
+        <td>3</td><td>~$500</td><td>Gina</td><td>2026-04-04</td>
+      </tr>
+      <!-- APPROVED -->
+      <tr>
+        <td class="mono">OPP-002</td>
+        <td>AI Cost Attribution MCP</td>
+        <td><span class="badge badge-green">APPROVED</span></td>
+        <td>3</td><td>~$600</td><td>Ron (frozen)</td><td>2026-03-31</td>
+      </tr>
+      <tr>
+        <td class="mono">OPP-003</td>
+        <td>LorePrompts (Prompt Template Manager)</td>
+        <td><span class="badge badge-green">APPROVED</span></td>
+        <td>2</td><td>~$800</td><td>Ron (frozen)</td><td>2026-03-31</td>
+      </tr>
+      <tr>
+        <td class="mono">OPP-004</td>
+        <td>LoreScope (Analytics Dashboard)</td>
+        <td><span class="badge badge-green">APPROVED</span></td>
+        <td>4</td><td>~$1,000</td><td>Ron (frozen)</td><td>2026-03-31</td>
+      </tr>
+      <tr>
+        <td class="mono">OPP-015</td>
+        <td>Data Catalog Lite -- Architecture</td>
+        <td><span class="badge badge-green">APPROVED</span></td>
+        <td>3</td><td>~$900</td><td>Ron (frozen)</td><td>2026-04-04</td>
+      </tr>
+      <tr>
+        <td class="mono">OPP-019</td>
+        <td>FinNorm (Brokerage CSV Normalizer)</td>
+        <td><span class="badge badge-green">APPROVED</span></td>
+        <td>3</td><td>~$600</td><td>Ron (frozen)</td><td>2026-04-04</td>
+      </tr>
+      <tr>
+        <td class="mono">OPP-020</td>
+        <td>LoreCheck (Data Quality CLI)</td>
+        <td><span class="badge badge-green">APPROVED</span></td>
+        <td>5</td><td>~$1,200</td><td>Ron (frozen)</td><td>2026-04-04</td>
+      </tr>
+      <tr>
+        <td class="mono">OPP-021</td>
+        <td>Chain Lens (Prompt Chain Observability)</td>
+        <td><span class="badge badge-green">APPROVED</span></td>
+        <td>5</td><td>~$800</td><td>Ron (frozen)</td><td>2026-04-04</td>
+      </tr>
+      <!-- ON HOLD -->
+      <tr>
+        <td class="mono">OPP-001</td>
+        <td>SQL Query Optimizer MCP</td>
+        <td><span class="badge badge-blue">ON HOLD</span></td>
+        <td>5</td><td>--</td><td>--</td><td>2026-03-31</td>
+      </tr>
+      <tr>
+        <td class="mono">OPP-005/006</td>
+        <td>SSIS Package Analyzer</td>
+        <td><span class="badge badge-blue">ON HOLD</span></td>
+        <td>5</td><td>--</td><td>--</td><td>2026-03-31</td>
+      </tr>
+      <tr>
+        <td class="mono">OPP-008</td>
+        <td>Schema Diff &amp; Migration MCP</td>
+        <td><span class="badge badge-blue">ON HOLD</span></td>
+        <td>4</td><td>--</td><td>--</td><td>2026-03-31</td>
+      </tr>
+      <tr>
+        <td class="mono">OPP-013</td>
+        <td>Data Pipeline Test Harness -- Architecture</td>
+        <td><span class="badge badge-blue">ON HOLD</span></td>
+        <td>4</td><td>--</td><td>--</td><td>2026-04-04</td>
+      </tr>
+      <tr>
+        <td class="mono">OPP-016</td>
+        <td>ETL Pattern Library -- Architecture</td>
+        <td><span class="badge badge-blue">ON HOLD</span></td>
+        <td>3</td><td>--</td><td>--</td><td>2026-04-04</td>
+      </tr>
+    </table>
+
+  </div>
+</div>
+
+<!-- ==================== 5. CROSS-AGENT FINDINGS + PRODUCT STATUS ==================== -->
+<div class="grid">
+
+  <div class="card">
+    <div class="section-title" onclick="toggleSection('findings')">
+      CROSS-AGENT FINDINGS <span class="toggle" id="findings-toggle">&#9660;</span>
+    </div>
+    <div class="collapsible" id="findings">
+      <div class="attention-item attention-info">
+        <div class="label">CONVERGENCE -- DB Discovery Fix</div>
+        Ron (fixed), Meg (verified correct), Brock (security-positive): three agents agree fbfdd11 is the right fix for Stability Mandate TODO #2. Strong signal. Only open item is Debbie's Cowork end-to-end confirmation.
+      </div>
+      <div class="attention-item attention-medium">
+        <div class="label">ADVISORY DUPLICATION -- SEC-023 / MEG-053</div>
+        Both Brock and Meg independently flagged the glob sort ambiguity in the new DB discovery code. INFO-level, single-user context. Ron should address in a post-mandate session (add comment or env-var session ID tie).
+      </div>
+      <div class="attention-item attention-medium">
+        <div class="label">PIPELINE TASK RON-005 -- SEC-014 Still Open</div>
+        Adding cryptography to pyproject.toml is RON-005 / SEC-014 (P1). Listed in pipeline as new. Frozen per mandate -- ensure Ron addresses immediately after install.sh fix.
+      </div>
+      <div class="attention-item attention-info">
+        <div class="label">COMPETITIVE -- Two New HIGH Threats</div>
+        Claude-Mem (21.5k stars, OSS) + MemPalace (vector+temporal KG, multi-LLM). RON-012 (audit feature gap) and RON-013 (positioning content) queued. Madison should focus next blog cycle on differentiation content once mandate is resolved.
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title" onclick="toggleSection('products')">
+      PRODUCT STATUS <span class="toggle" id="products-toggle">&#9660;</span>
+    </div>
+    <div class="collapsible" id="products">
+      <table>
+        <tr><th>Product</th><th>Version</th><th>Claude Code</th><th>Cowork</th></tr>
+        <tr>
+          <td><strong>LoreConvo</strong></td>
+          <td class="mono">v0.3.0</td>
+          <td><span class="badge badge-green">WORKING</span></td>
+          <td><span class="badge badge-red">BROKEN</span></td>
+        </tr>
+        <tr>
+          <td><strong>LoreDocs</strong></td>
+          <td class="mono">v0.1.0</td>
+          <td><span class="badge badge-green">WORKING</span></td>
+          <td><span class="badge badge-red">BROKEN</span></td>
+        </tr>
+        <tr>
+          <td><strong>SQL Optimizer</strong></td>
+          <td class="mono">v0.1.0</td>
+          <td><span class="badge badge-blue">ON HOLD</span></td>
+          <td><span class="badge badge-blue">ON HOLD</span></td>
+        </tr>
+        <tr>
+          <td><strong>LorePrompts</strong></td>
+          <td>--</td>
+          <td><span class="badge badge-muted">NOT STARTED</span></td>
+          <td><span class="badge badge-muted">NOT STARTED</span></td>
+        </tr>
+        <tr>
+          <td><strong>LoreScope</strong></td>
+          <td>--</td>
+          <td><span class="badge badge-muted">NOT STARTED</span></td>
+          <td><span class="badge badge-muted">NOT STARTED</span></td>
+        </tr>
+      </table>
+      <p style="color:var(--muted); font-size:0.8em; margin-top:10px;">NOTE: "Bypass scripts" (save_to_loreconvo.py, query_loredocs.py) running successfully in Cowork are WORKAROUNDS, not evidence that the plugin is working. Cowork remains BROKEN for both products until install.sh is fixed and Debbie confirms MCP tools are callable via the plugin system.</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==================== 6. MARKETING CONTENT ==================== -->
+<div class="card card-full">
+  <div class="section-title" onclick="toggleSection('marketing')">
+    MARKETING CONTENT <span class="toggle" id="marketing-toggle">&#9660;</span>
+  </div>
+  <div class="collapsible" id="marketing">
+    <table>
+      <tr><th>Item</th><th>Status</th><th>Notes</th></tr>
+      <tr>
+        <td>Blog #1: "Stop Starting Over: Build Persistent Memory for Your AI Work"</td>
+        <td><span class="badge badge-green">PUBLISHED</span></td>
+        <td>Published Apr 2 on labyrinthanalyticsconsulting.com</td>
+      </tr>
+      <tr>
+        <td>Blog #2: "Building a Reference Library for AI Projects: A Vault Blueprint..."</td>
+        <td><span class="badge badge-yellow">READY FOR REVIEW</span></td>
+        <td>All 3 Debbie feedback items applied by Madison Apr 7. File: blog_loredocs_vault_architecture_2026_04_03.md</td>
+      </tr>
+      <tr>
+        <td>Blog #3: "Your AI's Knowledge Stack: LoreDocs, Obsidian, and NotebookLM"</td>
+        <td><span class="badge badge-yellow">DRAFT</span></td>
+        <td>Created by Madison Apr 7. Complementary tools positioning. Awaiting Debbie review.</td>
+      </tr>
+      <tr>
+        <td>RON-013: LoreConvo vs Claude-Mem positioning content</td>
+        <td><span class="badge badge-orange">QUEUED</span></td>
+        <td>Madison to draft once mandate resolved. Angle: full Lore suite vs single-feature tool.</td>
+      </tr>
+      <tr>
+        <td>RON-014: LoreConvo vs Mem0 comparison</td>
+        <td><span class="badge badge-orange">QUEUED</span></td>
+        <td>Madison to draft once mandate resolved. Angle: local-first + Cowork vs Composio cloud.</td>
+      </tr>
+    </table>
+    <p style="color:var(--muted); font-size:0.82em; margin-top:10px;">Madison next scheduled run: Friday Apr 10 at 12:31 AM.</p>
+  </div>
+</div>
+
+<!-- ==================== 7. SCHEDULE AND AGENT HEALTH SUMMARY ==================== -->
+<div class="card card-full">
+  <div class="section-title" onclick="toggleSection('schedule')">
+    SCHEDULE AND AGENT HEALTH SUMMARY <span class="toggle" id="schedule-toggle">&#9660;</span>
+  </div>
+  <div class="collapsible" id="schedule">
+    <table>
+      <tr><th>Agent</th><th>Schedule</th><th>Last Run</th><th>Status</th><th>Next Run</th><th>Notes</th></tr>
+      <tr>
+        <td>Ron</td>
+        <td>Daily 5:05 PM</td>
+        <td class="mono">Apr 7 5:08 PM</td>
+        <td><span class="badge badge-green">OK</span></td>
+        <td>Apr 8 5:05 PM</td>
+        <td>DB discovery fix shipped. TODO #1 (install.sh) is next priority.</td>
+      </tr>
+      <tr>
+        <td>Meg (QA)</td>
+        <td>Daily 6:33 PM</td>
+        <td class="mono">Apr 7 6:36 PM</td>
+        <td><span class="badge badge-green">OK</span></td>
+        <td>Apr 8 6:33 PM</td>
+        <td>YELLOW report. MEG-052 (combined pytest) still open. MEG-053 advisory.</td>
+      </tr>
+      <tr>
+        <td>Brock (Security)</td>
+        <td>Daily 11:38 PM</td>
+        <td class="mono">Apr 8 12:39 AM</td>
+        <td><span class="badge badge-green">OK</span></td>
+        <td>Apr 8 11:38 PM</td>
+        <td>NEEDS ATTENTION (stable). SEC-023 INFO. 0 CVEs. pip-audit clean.</td>
+      </tr>
+      <tr>
+        <td>Jacqueline (daily)</td>
+        <td>Daily 1:38 AM</td>
+        <td class="mono">Apr 8 1:38 AM</td>
+        <td><span class="badge badge-green">THIS RUN</span></td>
+        <td>Apr 9 1:38 AM</td>
+        <td>This dashboard.</td>
+      </tr>
+      <tr>
+        <td>Gina (Enterprise Architect)</td>
+        <td>Wed + Sat 4:00 AM</td>
+        <td class="mono">Apr 4 (Sat)</td>
+        <td><span class="badge badge-yellow">EXPECTED TODAY</span></td>
+        <td>Apr 8 4:00 AM</td>
+        <td>Scheduled AFTER Jacqueline (4AM vs 1:38AM). OPP-007/009/010 await architecture review.</td>
+      </tr>
+      <tr>
+        <td>Gina (Product Review)</td>
+        <td>Mon + Wed + Fri 4:00 AM</td>
+        <td class="mono">Apr 5 (Sun)</td>
+        <td><span class="badge badge-yellow">EXPECTED TODAY</span></td>
+        <td>Apr 8 4:00 AM</td>
+        <td>Scheduled AFTER Jacqueline. Last product review was Apr 5.</td>
+      </tr>
+      <tr>
+        <td>Scout</td>
+        <td>1st + 15th 3:00 AM</td>
+        <td class="mono">Apr 3</td>
+        <td><span class="badge badge-muted">NOT SCHEDULED</span></td>
+        <td>Apr 15 3:00 AM</td>
+        <td>Next run Apr 15. OPP-017/018 from last run still need triage.</td>
+      </tr>
+      <tr>
+        <td>Competitive Intel</td>
+        <td>Mon + Thu 3:01 PM</td>
+        <td class="mono">Apr 6 (Mon) + Apr 7 (Cowork)</td>
+        <td><span class="badge badge-green">OK</span></td>
+        <td>Apr 9 3:01 PM</td>
+        <td>Debbie ran MemPalace review in Cowork on Apr 7. Regular scan ran Apr 6.</td>
+      </tr>
+      <tr>
+        <td>Madison (Marketing)</td>
+        <td>Tue + Fri 12:31 AM</td>
+        <td class="mono">Apr 7 12:40 AM</td>
+        <td><span class="badge badge-green">OK</span></td>
+        <td>Apr 10 12:31 AM</td>
+        <td>Blog #2 fixed, Blog #3 created. Content calendar updated.</td>
+      </tr>
+      <tr>
+        <td>John (Tech Docs)</td>
+        <td>Tue + Sat 3:38 AM</td>
+        <td class="mono">Apr 7 4:47 AM</td>
+        <td><span class="badge badge-green">OK</span></td>
+        <td>Apr 11 3:38 AM</td>
+        <td>LoreConvo INSTALL.md created. Docs updated.</td>
+      </tr>
+      <tr>
+        <td>Jacqueline (roadmap)</td>
+        <td>Sat 5:05 AM</td>
+        <td class="mono">Apr 4 (Sat)</td>
+        <td><span class="badge badge-muted">NOT SCHEDULED</span></td>
+        <td>Apr 11 5:05 AM</td>
+        <td>Next weekly roadmap: Saturday Apr 11.</td>
+      </tr>
+    </table>
+    <p style="color:var(--muted); font-size:0.8em; margin-top:10px;">No error-surface LoreConvo sessions found in last 24 hours. All agents that ran overnight logged normal sessions.</p>
+  </div>
+</div>
+
+<!-- ==================== 8. SECURITY POSTURE ==================== -->
+<div class="card card-full">
+  <div class="section-title" onclick="toggleSection('security')">
+    SECURITY POSTURE -- Brock (Apr 07 / Apr 08)
+    <span class="toggle" id="security-toggle">&#9660;</span>
+  </div>
+  <div class="collapsible" id="security">
+    <div style="display:flex; gap:20px; margin-bottom:14px;">
+      <div style="padding:10px 20px; border-radius:8px; border:2px solid var(--orange); color:var(--orange); background:rgba(249,115,22,0.08); font-family:'Cinzel',serif; font-size:0.9em; font-weight:600; letter-spacing:0.06em;">NEEDS ATTENTION (Stable)</div>
+      <div style="padding:10px 18px; border-radius:8px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.3); color:var(--green); font-size:0.88em;">0 CVEs &nbsp;&nbsp;|&nbsp;&nbsp; pip-audit CLEAN &nbsp;&nbsp;|&nbsp;&nbsp; 0 New Critical/High</div>
+    </div>
+    <table>
+      <tr><th>ID</th><th>Severity</th><th>Description</th><th>Status</th></tr>
+      <tr>
+        <td class="mono">SEC-014</td>
+        <td><span class="badge badge-yellow">MEDIUM</span></td>
+        <td>cryptography package missing from pyproject.toml (both products). Pro license validation fails on fresh install.</td>
+        <td><span class="badge badge-orange">RON-005 / OPEN</span></td>
+      </tr>
+      <tr>
+        <td class="mono">SEC-022</td>
+        <td><span class="badge badge-muted">INFO</span></td>
+        <td>LoreDocs dev_mode dual-gate pattern should have docstring explaining intent.</td>
+        <td><span class="badge badge-blue">ACKNOWLEDGED</span></td>
+      </tr>
+      <tr>
+        <td class="mono">SEC-023</td>
+        <td><span class="badge badge-muted">INFO</span></td>
+        <td>Glob sort ambiguity in DB discovery: if multiple Cowork sessions mount same workspace, lexicographic first is chosen. Data routing edge case only, not a vulnerability. Single-user context: low risk.</td>
+        <td><span class="badge badge-blue">ACKNOWLEDGED</span></td>
+      </tr>
+      <tr>
+        <td class="mono">SEC-011</td>
+        <td><span class="badge badge-yellow">MEDIUM</span></td>
+        <td>TOCTOU race in LoreDocs file export (check-then-act pattern).</td>
+        <td><span class="badge badge-blue">ACKNOWLEDGED</span></td>
+      </tr>
+      <tr>
+        <td class="mono">GINA-001</td>
+        <td><span class="badge badge-yellow">MEDIUM</span></td>
+        <td>LoreDocs vault_set_tier bypasses license validation (MCP call, no key check).</td>
+        <td><span class="badge badge-orange">RON-006 / FROZEN</span></td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!-- ==================== FOOTER ==================== -->
+<div style="text-align:center; color:var(--muted); font-size:0.8em; margin-top:28px; padding-top:16px; border-top:1px solid var(--border);">
+  Generated by Jacqueline (PM Agent) &nbsp;|&nbsp; Wednesday, April 08, 2026 &nbsp;|&nbsp; Labyrinth Analytics
+</div>
+
+<script>
+function toggleSection(id) {
+  const el = document.getElementById(id);
+  const toggle = document.getElementById(id + '-toggle');
+  if (el.style.maxHeight && el.style.maxHeight !== '0px') {
+    el.style.maxHeight = '0px';
+    el.style.overflow = 'hidden';
+    toggle.textContent = '\u25B6';
+  } else {
+    el.style.maxHeight = el.scrollHeight + 2000 + 'px';
+    el.style.overflow = 'visible';
+    toggle.textContent = '\u25BC';
+  }
+}
+// Initialize all sections expanded
+document.querySelectorAll('.collapsible').forEach(function(el) {
+  el.style.maxHeight = el.scrollHeight + 2000 + 'px';
+});
+</script>
+
+</body>
+</html>

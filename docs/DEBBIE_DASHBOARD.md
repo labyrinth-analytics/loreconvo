@@ -1,30 +1,28 @@
 # Debbie's Action Dashboard
 
 Single source of truth for everything that needs Debbie's attention.
-Updated by Jacqueline (daily) or manually. Last updated: 2026-04-07 (Jacqueline daily run).
+Updated by Jacqueline (daily) or manually. Last updated: 2026-04-08 (Jacqueline daily run).
 
 ---
 
-## TODAY -- 2026-04-07 (Tuesday)
+## TODAY -- 2026-04-08 (Wednesday)
 
 ### STABILITY MANDATE: IN PROGRESS -- Feature Freeze STILL IN EFFECT
 
-CLAUDE.md has 2 open TODOs for the Stability Mandate:
-1. Fix plugin install flow end-to-end -- install.sh fixed by Ron (Apr 6) but Cowork end-to-end NOT yet confirmed by Debbie.
-2. Fix fallback script DB discovery -- _find_loreconvo_db() must check mounted paths before VM home (one-line reorder in save_to_loreconvo.py). NOT yet done.
+CLAUDE.md has 1 remaining open TODO for the Stability Mandate:
+1. Fix plugin install.sh -- LoreConvo must run `pip install .` (not just requirements.txt); LoreDocs needs install.sh added from scratch. Ron's next session priority.
+2. ~~Fix fallback script DB discovery~~ -- DONE by Ron (fbfdd11, Apr 7). Meg verified correct. Brock confirmed security-positive. **Awaiting Debbie's Cowork end-to-end confirmation.**
 
-Nothing ships until BOTH are complete AND Debbie confirms Cowork MCP tools are callable and sessions persist.
+Nothing ships until TODO #1 is complete AND Debbie confirms Cowork MCP tools are callable and sessions persist.
 
-CORRECTION NOTE: Yesterday's dashboard (Apr 6) incorrectly stated the Stability Mandate was complete and the feature freeze was lifted. That was an error corrected by Debbie (LoreConvo session 2026-04-06 agent:debbie). The mandate remains open per CLAUDE.md.
-
-**Overnight summary (agents for Apr 6-7):**
-- Ron: Ran Apr 6, 9:25 PM. Fixed GINA-003 (LoreDocs license.py env_value guard), partial MEG-050 fix, added LoreDocs INSTALL.md.
-- Meg: Ran Apr 6 (2 runs). GREEN individual suites (359 tests pass). MEG-050/052 combined pytest collision remains open -- run suites separately.
-- Brock: Ran Apr 7 00:39. NEEDS ATTENTION (stable). 0 CVEs. GINA-003 security-verified.
-- Competitive Intel: Ran Apr 6. ALERT: Claude-Mem (21.5k stars in 3 weeks) is a direct LoreConvo competitor at HIGH threat level.
-- Gina: Product review Apr 6 filed. Architecture proposals OPP-013/015/016 await your review.
-- Madison: Ran Apr 7 00:40. Fixed blog #2 (all 3 fixes applied, ready for review). Created blog #3 draft.
-- Jacqueline: Running now (Apr 7 1:38 AM)
+**Overnight summary (agents for Apr 7-8):**
+- Ron: Ran Apr 7 5:08 PM. Fixed Stability Mandate TODO #2 -- DB discovery now checks mounted paths first (fbfdd11). Meg + Brock verified.
+- Meg: Ran Apr 7 6:36 PM. YELLOW. 359 tests pass. MEG-052 (combined pytest) open. MEG-053 (glob sort advisory, INFO).
+- Brock: Ran Apr 8 12:39 AM. NEEDS ATTENTION (stable). 0 CVEs. SEC-023 (INFO, same glob sort edge case). pip-audit clean.
+- Competitive Intel: Debbie ran Cowork session Apr 7. MemPalace (ChromaDB vector + SQLite temporal KG, multi-LLM) added as HIGH threat.
+- John: Ran Apr 7 4:47 AM. Created missing LoreConvo INSTALL.md.
+- Madison: Ran Apr 7 12:40 AM. Fixed blog #2 (all 3 Debbie feedback items applied, ready for review). Created blog #3 draft.
+- Jacqueline: Running now (Apr 8 1:38 AM)
 
 ### IMMEDIATE ACTION: Apply 8 Pending Commits
 
@@ -111,14 +109,13 @@ Meg's test scripts are being tracked in git and would be included in subtree pus
 
 ### TOP PRIORITY
 
-#### [NEW] Apply 7 pending git commits
+#### Apply 8 Pending Git Commits
 Run from your Mac: `python scripts/safe_git.py apply`
-Includes Ron's MEG-043/044/045 fixes, Gina Apr 5 review, Jacqueline dashboards.
+Includes Ron's DB discovery fix (fbfdd11), Meg QA Apr 7, Brock security Apr 7, John INSTALL.md, Gina product review Apr 5, Madison blog fixes, governance updates.
 
-#### Investigate 3 Silent Agents (Ron, Meg, Brock)
-These agents show no LoreConvo sessions for April 6. Verify the scheduled task prompts
-received the cd path fix from your April 5 session (you fixed 11 agent prompt .md files --
-confirm the 12 Cowork task definitions also use the correct working directory path).
+#### [DONE] Silent Agent Investigation -- Resolved
+Ron, Meg, and Brock all ran successfully on Apr 7 with sessions logged. The cd path fix
+from your April 5 session is confirmed working. Remove this item -- no longer a concern.
 
 #### Triage 2 remaining Scout opportunities (OPP-017, OPP-018)
 OPP-019 (FinNorm), OPP-020 (LoreCheck), OPP-021 (Chain Lens) already pre-approved.
@@ -242,22 +239,22 @@ John created baseline documentation for both products:
 - SEC-014 noted in LoreDocs CHANGELOG as known issue
 - Full report: `docs/internal/technical/tech_docs_report_2026_04_04.md`
 
-### Meg QA -- 2026-04-06 Run B (YELLOW)
-359 tests pass (individual suites). Two new findings:
-- **MEG-050 (YELLOW):** Combined pytest invocation fails -- duplicate test_license.py basenames. Run suites separately.
-- **MEG-052 (YELLOW):** Ron's MEG-050 stub fix introduced namespace collision. Still open.
-- **GINA-003 (RESOLVED):** Verified Ron's license.py fix.
-- Full report: `docs/internal/qa/qa_report_2026_04_06_b.md`
+### Meg QA -- 2026-04-07 (YELLOW)
+359 tests pass (204 LoreConvo + 39 LoreDocs + 116 internal).
+- **MEG-052 (YELLOW):** Combined pytest still fails -- duplicate test_license.py basenames. Run suites separately.
+- **MEG-053 (INFO/ADVISORY):** Glob sort ambiguity in DB discovery (same as SEC-023). Low risk.
+- **DB discovery fix (fbfdd11) VERIFIED CORRECT** by Meg -- Stability Mandate TODO #2 logic confirmed.
+- Full report: `docs/internal/qa/qa_report_2026_04_07.md`
 
-### Brock Security -- 2026-04-06 (NEEDS ATTENTION, stable)
-- **SEC-022 (INFO):** Document LoreDocs dev_mode dual-gate intent in docstring. Low priority.
-- **GINA-003 (RESOLVED):** LoreDocs license.py env_value guard confirmed fixed and security-verified.
-- 0 CVEs. No new critical or high findings.
-- Full report: `docs/internal/security/security_report_2026_04_06.md`
+### Brock Security -- 2026-04-07/08 (NEEDS ATTENTION, stable)
+- **SEC-023 (INFO):** Glob sort ambiguity in DB discovery. Data routing edge case, not a vulnerability.
+- **SEC-014 (MEDIUM, open):** cryptography still missing from pyproject.toml -- RON-005. Frozen.
+- **DB discovery fix SECURITY-POSITIVE:** fbfdd11 routes writes to Mac-backed mount. Confirmed.
+- 0 CVEs. pip-audit clean on both products.
+- Full report: `docs/internal/security/security_report_2026_04_07.md`
 
-### Jacqueline PM -- 2026-04-04
-- Daily dashboard: `docs/internal/pm/executive_dashboard_2026_04_04.html`
-- Weekly roadmap: `docs/internal/pm/labyrinth_product_roadmap_2026_04_04.html`
+### Jacqueline PM -- 2026-04-08 (Today)
+- Daily dashboard: `docs/internal/pm/executive_dashboard_2026_04_08.html`
 
 ---
 
