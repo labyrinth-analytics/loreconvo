@@ -36,13 +36,19 @@ from datetime import datetime
 # -- DB discovery --
 
 def _find_loreconvo_db():
-    """Find the LoreConvo sessions.db, checking common locations."""
-    candidates = [
-        os.path.expanduser("~/.loreconvo/sessions.db"),
-    ]
-    # Cowork VM mount paths
+    """Find the LoreConvo sessions.db, checking common locations.
+
+    Mounted paths are checked FIRST. In Cowork VMs, os.path.expanduser("~")
+    resolves to the ephemeral VM home (e.g. /sessions/sharp-adoring-dijkstra/),
+    NOT Debbie's Mac home. Writing to VM ~ loses all data when the session ends.
+    Checking /sessions/*/mnt/.loreconvo/ first ensures we find the Mac-backed
+    mount when running in a Cowork VM.
+    """
+    # Cowork VM mount paths FIRST -- VM ~ is ephemeral, mount is Debbie's Mac
     import glob
-    candidates += sorted(glob.glob("/sessions/*/mnt/.loreconvo/sessions.db"))
+    candidates = sorted(glob.glob("/sessions/*/mnt/.loreconvo/sessions.db"))
+    # VM home fallback (used in Claude Code on Debbie's Mac where ~ IS the Mac home)
+    candidates += [os.path.expanduser("~/.loreconvo/sessions.db")]
 
     for path in candidates:
         if os.path.isfile(path):

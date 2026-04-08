@@ -45,12 +45,18 @@ from pathlib import Path
 # -- DB discovery --
 
 def _find_loredocs_db():
-    """Find the LoreDocs database, checking common locations."""
-    candidates = [
-        os.path.expanduser("~/.loredocs/loredocs.db"),
-    ]
-    # Cowork VM mount paths
-    candidates += sorted(glob.glob("/sessions/*/mnt/.loredocs/loredocs.db"))
+    """Find the LoreDocs database, checking common locations.
+
+    Mounted paths are checked FIRST. In Cowork VMs, os.path.expanduser("~")
+    resolves to the ephemeral VM home (e.g. /sessions/sharp-adoring-dijkstra/),
+    NOT Debbie's Mac home. Writing to VM ~ loses all data when the session ends.
+    Checking /sessions/*/mnt/.loredocs/ first ensures we find the Mac-backed
+    mount when running in a Cowork VM.
+    """
+    # Cowork VM mount paths FIRST -- VM ~ is ephemeral, mount is Debbie's Mac
+    candidates = sorted(glob.glob("/sessions/*/mnt/.loredocs/loredocs.db"))
+    # VM home fallback (used in Claude Code on Debbie's Mac where ~ IS the Mac home)
+    candidates += [os.path.expanduser("~/.loredocs/loredocs.db")]
 
     for path in candidates:
         if os.path.isfile(path):
