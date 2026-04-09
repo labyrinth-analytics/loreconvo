@@ -21,20 +21,23 @@ If you see 3.10 or higher, you are good to go.
 
 ---
 
-## Option A: Install as a Cowork Plugin (Coming Soon)
+## Option A: Install as a Cowork Plugin (Recommended)
 
-> **Note:** The Cowork plugin marketplace is not yet live. This option will be
-> available when the marketplace launches. Use Option B (developer install) in the meantime.
-
-Once the marketplace is live, install with:
+The LoreConvo plugin file is ready to install locally. In a Cowork session, run:
 
 ```
-/plugin install loreconvo@labyrinth-analytics-claude-plugins
+/plugin install ~/projects/side_hustle/marketplace/claude-plugins/plugins/loreconvo-v0.3.0.plugin
 ```
+
+Then restart Cowork. LoreConvo MCP tools will be available in your next session.
+
+> **Marketplace install (coming soon):** Once the public marketplace launches, you will
+> be able to install with `/plugin install loreconvo@labyrinth-analytics-claude-plugins`.
+> The local install above works the same way and is how to install until the marketplace is live.
 
 ---
 
-## Option B: Developer Install (Recommended for Now)
+## Option B: Developer Install
 
 Clone the repo and run the one-command installer:
 
