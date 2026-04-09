@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PKA Workflow Swimlane - Labyrinth Analytics</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; padding: 24px; }
+
+  h1 { font-size: 1.4rem; font-weight: 600; color: #a78bfa; margin-bottom: 4px; }
+  .subtitle { font-size: 0.8rem; color: #64748b; margin-bottom: 28px; }
+
+  /* Platform badge */
+  .badge {
+    display: inline-block; font-size: 0.62rem; font-weight: 600;
+    padding: 2px 6px; border-radius: 4px; letter-spacing: 0.03em;
+    vertical-align: middle; margin-left: 4px; white-space: nowrap;
+  }
+  .badge-cowork  { background: #1e3a5f; color: #60a5fa; border: 1px solid #2563eb; }
+  .badge-code    { background: #1a3a1a; color: #4ade80; border: 1px solid #16a34a; }
+  .badge-terminal{ background: #3a2a00; color: #fbbf24; border: 1px solid #d97706; }
+  .badge-auto    { background: #2d1b4e; color: #c084fc; border: 1px solid #7c3aed; }
+  .badge-browser { background: #1a2a3a; color: #94a3b8; border: 1px solid #475569; }
+
+  /* Legend */
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; align-items: center; }
+  .legend-label { font-size: 0.72rem; color: #94a3b8; }
+
+  /* Main swimlane table */
+  .swimlane-wrap { overflow-x: auto; margin-bottom: 36px; }
+  table.swimlane {
+    border-collapse: collapse; width: 100%; min-width: 900px;
+    border: 1px solid #1e2535;
+  }
+
+  /* Phase headers */
+  thead th {
+    padding: 10px 14px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: #94a3b8; background: #151821;
+    border: 1px solid #1e2535; text-align: center;
+  }
+  thead th.phase-header { border-bottom: 2px solid #334155; }
+  thead th.lane-corner  { background: #0f1117; }
+
+  /* Lane rows */
+  tbody tr { border: 1px solid #1e2535; }
+  tbody td { vertical-align: top; padding: 0; border: 1px solid #1e2535; }
+
+  /* Lane label column */
+  .lane-label {
+    padding: 16px 14px; width: 130px; min-width: 130px;
+    font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
+    text-align: right; vertical-align: middle; border-right: 2px solid #334155;
+  }
+  .lane-agents    { background: #0d1f2d; color: #60a5fa; border-right-color: #2563eb; }
+  .lane-gina-brock{ background: #1a1a2e; color: #a78bfa; border-right-color: #7c3aed; }
+  .lane-jacqueline{ background: #1a1a2e; color: #e879f9; border-right-color: #a21caf; }
+  .lane-debbie    { background: #1a2a1a; color: #4ade80; border-right-color: #16a34a; }
+  .lane-auto      { background: #1a0d2e; color: #c084fc; border-right-color: #7c3aed; }
+
+  /* Cell contents */
+  .cell { padding: 12px 14px; height: 100%; }
+  .cell-empty { background: #0d0f14; }
+
+  /* Activity boxes */
+  .activity {
+    background: #1a2035; border: 1px solid #2a3550;
+    border-radius: 6px; padding: 9px 11px; margin-bottom: 8px;
+    font-size: 0.76rem; line-height: 1.5;
+  }
+  .activity:last-child { margin-bottom: 0; }
+  .activity strong { display: block; margin-bottom: 3px; font-size: 0.78rem; color: #e2e8f0; }
+  .activity p { color: #94a3b8; font-size: 0.72rem; margin: 2px 0 0 0; }
+
+  .activity-agents    { border-left: 3px solid #2563eb; }
+  .activity-gina      { border-left: 3px solid #7c3aed; }
+  .activity-jacqueline{ border-left: 3px solid #a21caf; }
+  .activity-debbie    { border-left: 3px solid #16a34a; }
+  .activity-auto      { border-left: 3px solid #6d28d9; }
+  .activity-terminal  { border-left: 3px solid #d97706; }
+  .activity-decision  { border-left: 3px solid #0891b2; }
+
+  /* Arrow between phases */
+  .phase-arrow {
+    text-align: center; font-size: 1.1rem; color: #475569;
+    padding: 14px 4px; vertical-align: middle;
+    min-width: 28px; width: 28px;
+  }
+
+  /* Decision paths section */
+  h2 { font-size: 1rem; font-weight: 600; color: #a78bfa; margin: 32px 0 12px 0; }
+
+  .paths { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .path-card {
+    background: #151821; border: 1px solid #1e2535; border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .path-card h3 { font-size: 0.82rem; font-weight: 700; margin-bottom: 6px; }
+  .path-ignore    { border-top: 3px solid #475569; }
+  .path-ignore h3 { color: #94a3b8; }
+  .path-question  { border-top: 3px solid #0891b2; }
+  .path-question h3 { color: #38bdf8; }
+  .path-promote   { border-top: 3px solid #16a34a; }
+  .path-promote h3 { color: #4ade80; }
+  .path-direct    { border-top: 3px solid #d97706; }
+  .path-direct h3 { color: #fbbf24; }
+
+  .path-card ol { padding-left: 16px; font-size: 0.72rem; color: #94a3b8; line-height: 1.7; }
+  .path-card li { margin-bottom: 2px; }
+
+  /* Cross-agent section */
+  .crossagent { background: #151821; border: 1px solid #1e2535; border-radius: 8px; padding: 16px; margin-bottom: 28px; }
+  .crossagent-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+  .crossagent-row:last-child { margin-bottom: 0; }
+  .ca-label { min-width: 90px; font-size: 0.72rem; font-weight: 700; color: #a78bfa; padding-top: 2px; }
+  .ca-steps { font-size: 0.72rem; color: #94a3b8; line-height: 1.7; }
+  .ca-tag { display: inline-block; font-size: 0.62rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: #1a1a2e; border: 1px solid #7c3aed; color: #c084fc; }
+
+  /* Notes */
+  .note { background: #1a1f0d; border: 1px solid #2a3a10; border-radius: 6px; padding: 10px 14px; font-size: 0.73rem; color: #86a85a; margin-top: 16px; line-height: 1.6; }
+  .note strong { color: #bef264; }
+
+  footer { font-size: 0.68rem; color: #334155; margin-top: 32px; border-top: 1px solid #1e2535; padding-top: 12px; }
+</style>
+</head>
+<body>
+
+<h1>PKA Workflow Swimlane</h1>
+<div class="subtitle">Personal Knowledge Architecture — Labyrinth Analytics / Project Ron &nbsp;|&nbsp; Draft 2026-04-08</div>
+
+<div class="legend">
+  <span class="legend-label">Platform:</span>
+  <span class="badge badge-cowork">Cowork</span>
+  <span class="badge badge-code">Code</span>
+  <span class="badge badge-terminal">Terminal/Mac</span>
+  <span class="badge badge-auto">Automated</span>
+  <span class="badge badge-browser">Browser</span>
+</div>
+
+<div class="swimlane-wrap">
+<table class="swimlane">
+  <thead>
+    <tr>
+      <th class="lane-corner" style="width:130px"></th>
+      <th class="phase-header">Phase 1<br>Agent Work</th>
+      <th class="phase-header" style="width:28px"></th>
+      <th class="phase-header">Phase 2<br>Export &amp; Synthesis</th>
+      <th class="phase-header" style="width:28px"></th>
+      <th class="phase-header">Phase 3<br>Debbie Review</th>
+      <th class="phase-header" style="width:28px"></th>
+      <th class="phase-header">Phase 4<br>Promote</th>
+      <th class="phase-header" style="width:28px"></th>
+      <th class="phase-header">Phase 5<br>Archive &amp; Sync</th>
+    </tr>
+  </thead>
+  <tbody>
+
+    <!-- AGENTS ROW -->
+    <tr>
+      <td class="lane-label lane-agents">Agents<br><small style="font-weight:400;color:#475569">Ron·Meg·Brock<br>Scout·Madison<br>John·CompIntel</small></td>
+      <td class="cell">
+        <div class="activity activity-agents">
+          <strong>Complete scheduled work</strong>
+          <p>Write output to <code>raw/agents/&lt;name&gt;/YYYY/MM/</code></p>
+          <p>Save LoreConvo session</p>
+          <span class="badge badge-cowork">Cowork</span><span class="badge badge-code">Code</span>
+        </div>
+        <div class="activity activity-agents">
+          <strong>Tag items for Debbie</strong>
+          <p>Add <code>review:debbie</code> tag if Debbie's input is needed — stays in raw/, Jacqueline surfaces it</p>
+          <span class="badge badge-cowork">Cowork</span>
+        </div>
+      </td>
+      <td class="phase-arrow">→</td>
+      <td class="cell cell-empty"></td>
+      <td class="phase-arrow"></td>
+      <td class="cell cell-empty"></td>
+      <td class="phase-arrow"></td>
+      <td class="cell cell-empty"></td>
+      <td class="phase-arrow"></td>
+      <td class="cell cell-empty"></td>
+    </tr>
+
+    <!-- CROSS-AGENT ROW -->
+    <tr>
+      <td class="lane-label lane-gina-brock">Gina ↔ Brock<br><small style="font-weight:400;color:#475569">cross-handoffs</small></td>
+      <td class="cell">
+        <div class="activity activity-gina">
+          <strong>Write handoff tags in raw/ reports</strong>
+          <p>Brock tags <code>gina-review</code> in security report</p>
+          <p>Gina tags <code>brock-review</code> in architecture report</p>
+          <span class="badge badge-cowork">Cowork</span>
+        </div>
+      </td>
+      <td class="phase-arrow">→</td>
+      <td class="cell">
+        <div class="activity activity-gina">
+          <strong>Pick up cross-handoffs</strong>
+          <p>Each agent reads the other's raw/ folder on next session start</p>
+          <p>Responds in their own raw/ output — no Debbie involvement needed</p>
+          <span class="badge badge-cowork">Cowork</span>
+        </div>
+      </td>
+      <td class="phase-arrow"></td>
+      <td class="cell cell-empty"></td>
+      <td class="phase-arrow"></td>
+      <td class="cell cell-empty"></td>
+      <td class="phase-arrow"></td>
+      <td class="cell cell-empty"></td>
+    </tr>
+
+    <!-- JACQUELINE ROW -->
+    <tr>
+      <td class="lane-label lane-jacqueline">Jacqueline<br><small style="font-weight:400;color:#7e22ce">PM / Synthesizer</small></td>
+      <td class="cell cell-empty"></td>
+      <td class="phase-arrow"></td>
+      <td class="cell">
+        <div class="activity activity-jacqueline">
+          <strong>Read ALL of raw/</strong>
+          <p>Ingests every agent's output, LoreConvo exports</p>
+          <p>Surfaces flags: <code>severity:red</code>, <code>review:needed</code>, <code>review:debbie</code>, <code>posture:action-required</code></p>
+          <span class="badge badge-cowork">Cowork</span><span class="badge badge-auto">Scheduled 1:38 AM</span>
+        </div>
+        <div class="activity activity-jacqueline">
+          <strong>Build exec dashboard</strong>
+          <p>Daily HTML dashboard — prioritized action items at top, agent status, pipeline summary</p>
+          <span class="badge badge-cowork">Cowork</span>
+        </div>
+      </td>
+      <td class="phase-arrow">→</td>
+      <td class="cell cell-empty"></td>
+      <td class="phase-arrow"></td>
+      <td class="cell cell-empty"></td>
+      <td class="phase-arrow"></td>
+      <td class="cell cell-empty"></td>
+    </tr>
+
+    <!-- DEBBIE ROW -->
+    <tr>
+      <td class="lane-label lane-debbie">Debbie</td>
+      <td class="cell">
+        <div class="activity activity-debbie">
+          <strong>Drop ideas / intake</strong>
+          <p>Place <code>.md</code> file in <code>raw/inbox/</code></p>
+          <p>Optional: tag <code>agent: gina</code> to route to specific agent</p>
+          <p>Script (P3): <code>python scripts/intake.py</code></p>
+          <span class="badge badge-cowork">Cowork</span><span class="badge badge-terminal">Terminal</span>
+        </div>
+      </td>
+      <td class="phase-arrow"></td>
+      <td class="cell cell-empty"></td>
+      <td class="phase-arrow">→</td>
+      <td class="cell">
+        <div class="activity activity-debbie">
+          <strong>Open exec dashboard</strong>
+          <p>~15 min daily review loop</p>
+          <p>Skim flagged items (red, action-required, review:debbie)</p>
+          <span class="badge badge-browser">Browser</span><span class="badge badge-cowork">Cowork</span>
+        </div>
+        <div class="activity activity-decision">
+          <strong>4 decision paths — see below ↓</strong>
+          <p>Ignore / Ask question / Promote to processing / Promote straight to archive</p>
+        </div>
+      </td>
+      <td class="phase-arrow">→</td>
+      <td class="cell">
+        <div class="activity activity-terminal">
+          <strong>Promote to processing</strong>
+          <p><code>python scripts/promote.py raw/... --type decision</code></p>
+          <p>Fallback: <code>git mv</code> + manual frontmatter edit</p>
+          <span class="badge badge-terminal">Terminal/Mac</span>
+        </div>
+        <div class="activity activity-debbie">
+          <strong>Draft / finalize unit</strong>
+          <p>Decision log, spec, or ADR — fill context, options, conclusion</p>
+          <p>Agents (Gina/Ron) may draft if asked; Debbie finalizes</p>
+          <span class="badge badge-cowork">Cowork</span><span class="badge badge-terminal">Terminal</span>
+        </div>
+      </td>
+      <td class="phase-arrow">→</td>
+      <td class="cell">
+        <div class="activity activity-terminal">
+          <strong>Promote to archive</strong>
+          <p><code>git mv processing/... archive/...</code> + update frontmatter status to <code>archive</code></p>
+          <span class="badge badge-terminal">Terminal/Mac</span>
+        </div>
+        <div class="activity activity-terminal">
+          <strong>Run sync script (manual)</strong>
+          <p>Reviews diff, confirms, rewrites CLAUDE.md + DEBBIE_DASHBOARD.md sections</p>
+          <p>Flips to auto after 2 weeks of clean runs</p>
+          <span class="badge badge-terminal">Terminal/Mac</span>
+        </div>
+      </td>
+    </tr>
+
+    <!-- AUTOMATION ROW -->
+    <tr>
+      <td class="lane-label lane-auto">Automation</td>
+      <td class="cell cell-empty"></td>
+      <td class="phase-arrow"></td>
+      <td class="cell">
+        <div class="activity activity-auto">
+          <strong>LoreConvo → raw/ export</strong>
+          <p>Exports new LoreConvo sessions to <code>raw/agents/&lt;name&gt;/</code> as readable markdown</p>
+          <p>Runs <strong>twice daily</strong> — no full-day lag</p>
+          <span class="badge badge-auto">Scheduled 2x/day</span>
+        </div>
+        <div class="activity activity-auto">
+          <strong>raw/ pruning</strong>
+          <p>Items older than 90 days and never promoted are deleted</p>
+          <p>Promotes stay regardless of age</p>
+          <span class="badge badge-auto">Scheduled</span>
+        </div>
+      </td>
+      <td class="phase-arrow"></td>
+      <td class="cell cell-empty"></td>
+      <td class="phase-arrow"></td>
+      <td class="cell cell-empty"></td>
+      <td class="phase-arrow"></td>
+      <td class="cell">
+        <div class="activity activity-auto">
+          <strong>archive/index.md refresh</strong>
+          <p>Auto-regenerated table of contents after any new archive entry</p>
+          <span class="badge badge-auto">Triggered on promote</span>
+        </div>
+      </td>
+    </tr>
+
+  </tbody>
+</table>
+</div>
+
+<!-- DECISION PATHS -->
+<h2>Debbie's 4 Decision Paths (Phase 3 → 4)</h2>
+<div class="paths">
+  <div class="path-card path-ignore">
+    <h3>1. Ignore</h3>
+    <ol>
+      <li>Leave item in raw/</li>
+      <li>No action taken</li>
+      <li>Auto-pruned at 90 days</li>
+      <li>Most agent reports end here</li>
+    </ol>
+  </div>
+  <div class="path-card path-question">
+    <h3>2. Need More Info</h3>
+    <ol>
+      <li>Ask question in Cowork session</li>
+      <li>OR: drop question file in <code>raw/inbox/</code> with <code>agent: gina</code></li>
+      <li>Agent responds via their own raw/ folder, tagged <code>review:debbie</code></li>
+      <li>Jacqueline surfaces response in next dashboard</li>
+      <li>Return to decision loop when answered</li>
+    </ol>
+  </div>
+  <div class="path-card path-promote">
+    <h3>3. Promote to Processing</h3>
+    <ol>
+      <li>Run promote CLI (or git mv)</li>
+      <li>Assign ID + type (DEC/SPEC/ADR)</li>
+      <li>Fill in decision context + options</li>
+      <li>Finalize conclusion</li>
+      <li>Promote to archive when stable</li>
+    </ol>
+  </div>
+  <div class="path-card path-direct">
+    <h3>4. Direct to Archive</h3>
+    <ol>
+      <li>Conclusion is already clear</li>
+      <li>Run promote CLI with <code>--to archive</code></li>
+      <li>Skips processing/ entirely</li>
+      <li>Use for historical decisions already made</li>
+    </ol>
+  </div>
+</div>
+
+<!-- CROSS-AGENT DETAIL -->
+<h2>Cross-Agent Handoff Detail</h2>
+<div class="crossagent">
+  <div class="crossagent-row">
+    <div class="ca-label">Brock → Gina</div>
+    <div class="ca-steps">
+      Brock writes security report to <code>raw/agents/brock/</code> &nbsp;·&nbsp;
+      Tags architectural items <span class="ca-tag">gina-review</span> in the report &nbsp;·&nbsp;
+      Gina reads <code>raw/agents/brock/</code> at her next session start &nbsp;·&nbsp;
+      Gina addresses items in her own <code>raw/agents/gina/</code> output &nbsp;·&nbsp;
+      <strong>No Debbie step required</strong>
+    </div>
+  </div>
+  <div class="crossagent-row">
+    <div class="ca-label">Gina → Brock</div>
+    <div class="ca-steps">
+      Gina writes architecture review to <code>raw/agents/gina/</code> &nbsp;·&nbsp;
+      Tags security items <span class="ca-tag">brock-review</span> &nbsp;·&nbsp;
+      Brock reads <code>raw/agents/gina/</code> at his next session start &nbsp;·&nbsp;
+      Brock responds in <code>raw/agents/brock/</code> &nbsp;·&nbsp;
+      <strong>No Debbie step required</strong>
+    </div>
+  </div>
+  <div class="crossagent-row">
+    <div class="ca-label">Agent → Debbie</div>
+    <div class="ca-steps">
+      Agent writes question to <code>raw/agents/&lt;name&gt;/</code> tagged <span class="ca-tag">review:debbie</span> &nbsp;·&nbsp;
+      Jacqueline surfaces it in exec dashboard &nbsp;·&nbsp;
+      Debbie answers in Cowork session or drops response in <code>raw/inbox/</code> &nbsp;·&nbsp;
+      <strong>Agents never write to processing/ — all questions route through raw/</strong>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <strong>Platform reminder:</strong> File writes to raw/ by agents work in both Cowork and Code. The promote CLI and sync script run from Terminal on Debbie's Mac — they are NOT hooks and do NOT require Code or Cowork to be open. The archive → CLAUDE.md sync is manual with diff-preview during P1–P2; auto after 2 weeks of clean runs.
+</div>
+
+<footer>
+  Labyrinth Analytics / Project Ron &nbsp;·&nbsp; PKA Workflow Swimlane &nbsp;·&nbsp; Draft 2026-04-08 &nbsp;·&nbsp; Awaiting ADR-00009 finalization by Gina
+</footer>
+
+</body>
+</html>

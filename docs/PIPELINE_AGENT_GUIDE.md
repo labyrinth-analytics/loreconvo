@@ -157,6 +157,100 @@ to Gina's scheduled task are needed. Ron also picks them up via the existing
    docs/internal/competitive/competitive_scan_YYYY_MM_DD.md
    ```
 
+6. **Product Gap Recommendations table (MANDATORY).** Every scan report MUST end with this section.
+   Translate competitive findings into explicit product actions:
+
+   ```markdown
+   ### Product Gap Recommendations
+
+   | Product | Gap | Competitor(s) | Priority | Effort | Recommended Action |
+   |---------|-----|---------------|----------|--------|--------------------|
+   | LoreConvo | Semantic/vector search | MemPalace, Hindsight | P2 | Medium | GINA-REVIEW: Evaluate sqlite-vec hybrid alongside FTS5 |
+   | LoreDocs | Knowledge graph nav | Basic Memory | P2 | High | GINA-REVIEW: SQLite graph layer for vault traversal |
+   ```
+
+   Rules:
+   - Only include gaps where a competitor demonstrably has the feature and we don't
+   - HIGH-threat competitor gaps = P1/P2, MEDIUM = P2/P3, LOW = P3
+   - Effort: Low (1 sprint), Medium (2-4 sprints), High (major feature)
+   - Recommended Action MUST include the agent tag prefix (RON:, GINA-REVIEW:, MADISON:, etc.)
+   - If the gap is already a pipeline item, note the ref ID -- do not create a duplicate
+   - During the stability mandate: tag Ron tasks as [FROZEN - post mandate] but still create pipeline items
+
+   After writing the table, create pipeline items for any P1 or P2 gaps not already tracked:
+   ```bash
+   python scripts/pipeline_tracker.py add --type architecture \
+       --desc "GINA-REVIEW: [gap] -- competitive gap vs [competitor]" \
+       --agent competitive-intel --priority P2 --product [product]
+   ```
+
+7. **Process INTAKE.md entries.** For each entry under "Pending Review":
+   - Research thoroughly and include detailed analysis in the scan report
+   - Move the entry from "Pending Review" to "Processed" in INTAKE.md, adding:
+     `**Processed:** YYYY-MM-DD -- see competitive_scan_YYYY_MM_DD.md ([threat level], [N] pipeline items created)`
+
+---
+
+### Gina Product Review (gina-product-review)
+
+**MUST DO on every run:**
+
+1. **Load competitive context.** Read the most recent competitive scan:
+   ```bash
+   ls -t docs/internal/competitive/competitive_scan_*.md | head -1
+   # then read that file -- focus on the "Product Gap Recommendations" table
+   ```
+
+2. **Check for architecture items from competitive intel:**
+   ```bash
+   python scripts/pipeline_tracker.py list --type architecture --agent competitive-intel
+   ```
+
+3. **Check for Brock GINA-REVIEW cross-refs:**
+   ```bash
+   python scripts/pipeline_tracker.py list --agent gina
+   # look for GINA-REVIEW: tagged notes from Brock
+   ```
+
+4. **Review recent changes to ron_skills/** (check git log for what Ron changed since last review).
+   Assess architectural quality, correctness, cross-product consistency.
+
+5. **Stability Assessment** (current focus during mandate): Are install scripts correct?
+   Does the MCP server start cleanly? Any architectural blockers for the Cowork install flow?
+
+6. **Competitive Gap Assessment (MANDATORY -- NEW).** For each product reviewed:
+   - Cross-reference the "Product Gap Recommendations" table from the latest competitive scan
+   - For each gap tagged GINA-REVIEW: for this product:
+     - Is the gap real given our current architecture?
+     - What is the lowest-effort path to closing it?
+     - Write a brief architectural recommendation (1-3 paragraphs)
+   - Produce a "Competitive Gap Assessment" table in your review output:
+
+   ```markdown
+   | Gap | Competitor | Our Current State | Architectural Path | Effort | Recommendation |
+   |-----|------------|-------------------|--------------------|--------|----------------|
+   ```
+
+   - For P1/P2 gaps with a clear path, create pipeline items:
+   ```bash
+   python scripts/pipeline_tracker.py add --type enhancement \
+       --desc "GINA: [gap] -- architectural path: [approach]" \
+       --agent gina --priority P2 --product [product] \
+       --status approved-for-review
+   ```
+   During the stability mandate, add [FROZEN] to the description but still create the item.
+
+7. **Tag security concerns for Brock:**
+   ```bash
+   python scripts/pipeline_tracker.py update --ref [item] \
+       --agent gina --note "BROCK-REVIEW: [concern]"
+   ```
+
+8. **Save product review report:**
+   ```
+   docs/internal/architecture/product_review_YYYY_MM_DD.md
+   ```
+
 ---
 
 ### Gina (enterprise-architect-gina)

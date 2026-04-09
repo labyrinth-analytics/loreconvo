@@ -20,7 +20,11 @@ and reference to the competitive scan report or pipeline item created.
 
 ## Pending Review
 
-(none)
+### MemPalace (milla-jovovich/mempalace)
+- **Source:** Debbie -- direct tip
+- **URL:** https://github.com/milla-jovovich/mempalace
+- **Notes:** Local AI memory system with ChromaDB vector search + SQLite temporal knowledge graph. MIT license (fully free). MCP server for Claude, ChatGPT, Gemini, Cursor. Claims 96.6% R@5 on LongMemEval (raw verbatim mode). Palace metaphor: Wings (projects/people) > Rooms (topics) > Tunnels (cross-references). Can mine existing Claude/ChatGPT/Slack chat exports retroactively. Multi-platform is their key differentiator vs. LoreConvo's Claude-only focus. AAAK compression feature is lossy and currently underperforms raw mode -- authors published a transparency correction on this. Key threat: free forever + semantic search beats FTS5 for fuzzy queries. Key weakness vs Lore: heavier install (ChromaDB dependency), no plugin packaging, not Claude-native.
+- **Date added:** 2026-04-07
 
 ---
 

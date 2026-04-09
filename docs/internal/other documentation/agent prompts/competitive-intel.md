@@ -60,8 +60,36 @@ Structure:
 - Per-product competitor table (name, pricing, threat level, feature overlap)
 - Detailed analysis per competitor
 - Actionable recommendations (each one maps to a pipeline item)
+- **Product Gap Recommendations table (MANDATORY -- see section below)**
 
-### 2. Pipeline Items (MANDATORY -- every finding must become a tracked item)
+### 2. Product Gap Recommendations (MANDATORY -- every scan)
+
+After completing competitor analysis, write a "Product Gap Recommendations" section at the end of the scan report. This table is the primary handoff to Gina's product review sessions.
+
+```markdown
+### Product Gap Recommendations
+
+| Product | Gap | Competitor(s) | Priority | Effort | Recommended Action |
+|---------|-----|---------------|----------|--------|--------------------|
+| LoreConvo | [feature we lack] | [who has it] | P1-P3 | Low/Medium/High | [GINA-REVIEW:/RON:/MADISON: action] |
+```
+
+Rules:
+- Only include gaps where a competitor demonstrably has the feature and we don't
+- HIGH-threat competitor gaps = P1/P2, MEDIUM = P2/P3, LOW = P3
+- Effort: Low (1 sprint), Medium (2-4 sprints), High (major feature)
+- Recommended Action MUST include the agent tag prefix (RON:, GINA-REVIEW:, MADISON:, etc.)
+- If the gap is already a pipeline item, note the ref ID -- do not create a duplicate
+- During stability mandate: tag Ron tasks [FROZEN - post mandate] but still create pipeline items
+
+After writing the table, create pipeline items for any P1 or P2 gaps not already tracked:
+```
+python scripts/pipeline_tracker.py add --type architecture \
+    --desc "GINA-REVIEW: [gap] -- competitive gap vs [competitor]" \
+    --agent competitive-intel --priority P2 --product [product]
+```
+
+### 3. Pipeline Items (MANDATORY -- every finding must become a tracked item)
 For EACH actionable finding, create a pipeline item. This is what closes the feedback loop.
 
 **Feature gap Ron should close:**
@@ -99,7 +127,7 @@ python scripts/pipeline_tracker.py update --ref [relevant item] \
     --note "BROCK-REVIEW: [Competitor] handles [security aspect] differently -- assess our approach"
 ```
 
-### 3. LoreDocs and LoreConvo (MANDATORY)
+### 4. LoreDocs and LoreConvo (MANDATORY)
 Read: `docs/internal/other documentation/agent skills/session-save.md` for full instructions.
 Vault: "Competitive Intelligence" | Surface: pipeline | Tag: agent:competitive-intel
 

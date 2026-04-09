@@ -102,8 +102,14 @@ Gina (architecture) ---> reads pipeline + Ron's code, produces docs/internal/arc
 Scout (research) ---> reads market, produces Opportunities/ reports
   |
 Competitive Intel ---> reads market + products, produces docs/internal/competitive/
-  |                    feeds into: Ron (tasks), Madison (messaging), Gina (arch),
+  |                    MANDATORY: "Product Gap Recommendations" table in every scan
+  |                    feeds into: Ron (tasks), Madison (messaging), Gina (arch + product-review),
   |                    Brock (security), Jacqueline (dashboard)
+  |
+  v
+Gina (product-review) ---> reads competitive gaps + recent code, produces product_review_YYYY_MM_DD.md
+  |                         MANDATORY: "Competitive Gap Assessment" per product
+  |                         feeds into: Ron (enhancement queue), Brock (BROCK-REVIEW tags)
   v
 Jacqueline (PM) ---> reads ALL of the above, produces:
   |                   - docs/internal/pm/executive_dashboard_YYYY_MM_DD.html (daily)
@@ -164,9 +170,14 @@ Debbie (reviews dashboards, makes decisions, cycle repeats)
 - Produces: docs/internal/marketing/blog_drafts/*.md, docs/internal/marketing/promo/*.md, docs/internal/marketing/content_calendar_madison.md, LoreConvo (surface: marketing)
 
 **Competitive Intel**
-- Reads: Web research, product CLAUDE.md files, previous reports in docs/internal/competitive/, pipeline state
-- Produces: docs/internal/competitive/competitive_scan_YYYY_MM_DD.md, pipeline items (tasks for Ron, opportunities, architecture items for Gina, MADISON: notes on PROD items), LoreConvo (surface: pipeline)
-- Feeds into: Ron (RON: tasks), Madison (MADISON: notes), Gina (GINA-REVIEW: arch items), Brock (BROCK-REVIEW: notes), Jacqueline (dashboard), Debbie (new opportunities to triage)
+- Reads: Web research, product CLAUDE.md files, previous reports in docs/internal/competitive/, pipeline state, INTAKE.md (Debbie tips)
+- Produces: docs/internal/competitive/competitive_scan_YYYY_MM_DD.md (includes mandatory "Product Gap Recommendations" table), pipeline items (tasks for Ron, opportunities, architecture items for Gina, MADISON: notes on PROD items), LoreConvo (surface: pipeline)
+- Feeds into: Ron (RON: tasks), Madison (MADISON: notes), Gina product review (Product Gap Recommendations table + GINA-REVIEW: arch items), Brock (BROCK-REVIEW: notes), Jacqueline (dashboard), Debbie (new opportunities to triage)
+
+**Gina (product review -- gina-product-review)**
+- Reads: Latest competitive scan "Product Gap Recommendations" table, pipeline architecture items from competitive-intel, GINA-REVIEW cross-refs from Brock, recent commits to ron_skills/, Meg QA reports
+- Produces: docs/internal/architecture/product_review_YYYY_MM_DD.md (includes mandatory "Competitive Gap Assessment" table per product), pipeline enhancement items for P1/P2 gaps, LoreConvo session (surface: cowork)
+- Feeds into: Ron (queued enhancement items), Brock (BROCK-REVIEW tags), Jacqueline (dashboard)
 
 **John**
 - Reads: Meg-verified code in ron_skills/, existing docs in ron_skills/*/docs/

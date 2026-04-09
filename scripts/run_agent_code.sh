@@ -62,17 +62,19 @@ fi
     echo "================================================================"
 } >> "$LOG_FILE"
 
-PROMPT=$(cat "$SKILL_FILE")
-
 cd "$PROJECT_DIR"
 
-"$CLAUDE_BIN" \
-    -p "$PROMPT" \
+timeout 3600 "$CLAUDE_BIN" \
+    --print \
     --permission-mode bypassPermissions \
     --output-format text \
+    < "$SKILL_FILE" \
     >> "$LOG_FILE" 2>&1
 
 EXIT_CODE=$?
+if [ $EXIT_CODE -eq 124 ]; then
+    echo "TIMEOUT: agent exceeded time limit" >> "$LOG_FILE"
+fi
 
 {
     echo "================================================================"
