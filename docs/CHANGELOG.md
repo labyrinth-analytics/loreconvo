@@ -4,6 +4,14 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## 2026-04-08
+
+### Bug Fixes
+
+- **Sessions now save reliably in Cowork.** Previously, when running inside a Cowork VM, the fallback save script (`save_to_loreconvo.py`) could write sessions to a temporary directory that disappears when the VM ends -- meaning any session saved there was silently lost. The script now checks your persistent mounted data path first and only falls back to the local VM directory if no persistent path is found. If you have been running agents in Cowork and noticed sessions not appearing, update to this version and your sessions will persist correctly going forward.
+
+---
+
 ## 2026-04-06
 
 ### Bug Fixes
