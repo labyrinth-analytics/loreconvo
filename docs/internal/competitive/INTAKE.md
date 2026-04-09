@@ -20,15 +20,18 @@ and reference to the competitive scan report or pipeline item created.
 
 ## Pending Review
 
+*(none)*
+
+---
+
+## Processed
+
 ### MemPalace (milla-jovovich/mempalace)
 - **Source:** Debbie -- direct tip
 - **URL:** https://github.com/milla-jovovich/mempalace
 - **Notes:** Local AI memory system with ChromaDB vector search + SQLite temporal knowledge graph. MIT license (fully free). MCP server for Claude, ChatGPT, Gemini, Cursor. Claims 96.6% R@5 on LongMemEval (raw verbatim mode). Palace metaphor: Wings (projects/people) > Rooms (topics) > Tunnels (cross-references). Can mine existing Claude/ChatGPT/Slack chat exports retroactively. Multi-platform is their key differentiator vs. LoreConvo's Claude-only focus. AAAK compression feature is lossy and currently underperforms raw mode -- authors published a transparency correction on this. Key threat: free forever + semantic search beats FTS5 for fuzzy queries. Key weakness vs Lore: heavier install (ChromaDB dependency), no plugin packaging, not Claude-native.
 - **Date added:** 2026-04-07
-
----
-
-## Processed
+- **Processed:** 2026-04-09 -- see competitive_scan_2026_04_09.md (HIGH threat, 2 pipeline items created: GINA-001 semantic search gap, GINA-002 retroactive import)
 
 ### Hindsight (vectorize-io/hindsight)
 - **Source:** Reddit -- someone shared their repo in response to a Lore post
