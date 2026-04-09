@@ -46,12 +46,28 @@ Action items (Ron's ONLY work until these are done, in order):
      to check /sessions/*/mnt/ mounted paths FIRST before VM ~ home. Both scripts now resolve
      to Debbie's Mac-backed mount in Cowork. Pending Debbie's Cowork end-to-end confirmation. -->
 
-Ron has completed all action items. Feature freeze remains until Debbie confirms
-Cowork end-to-end: install .plugin, call MCP tools, sessions persist and are retrievable.
+Ron has one remaining action item before Debbie can test end-to-end:
 
-Definition of done for this mandate: Debbie can install LoreConvo AND LoreDocs as
-plugins in Cowork, MCP tools are callable in Cowork sessions, and sessions persist
-and are retrievable. (Code is already working.) Until Cowork is confirmed, nothing else ships.
+1. [ ] Build local-testing .plugin files for LoreConvo and LoreDocs.
+   - Root cause: current .plugin files use `uvx loreconvo` / `uvx loredocs` in .mcp.json,
+     which requires the packages to be on PyPI -- they are not yet.
+   - marketplace.json uses `"source": "github"` pointing to repos that don't exist yet,
+     so `/plugin install` tries to SSH-clone from GitHub and fails.
+   - Fix: create `marketplace/claude-plugins/plugins/loreconvo-test.plugin` and
+     `loredocs-test.plugin` with .mcp.json pointing to the local venv binary:
+       LoreConvo: `ron_skills/loreconvo/.venv/bin/loreconvo`
+       LoreDocs:  `ron_skills/loredocs/.venv/bin/loredocs`
+     Use absolute paths (no ~ expansion in .mcp.json).
+   - Also update `marketplace/claude-plugins/.claude-plugin/marketplace.json` to add
+     test entries with `"source": {"source": "path", "path": "plugins/loreconvo-test.plugin"}`
+     (or whichever local source format Claude Code accepts -- try "path" first).
+   - Keep the release entries (github source) as-is for when the repos go live.
+   - Verify: after `install.sh` runs, the venv binaries exist at the expected paths.
+   - Document the test install commands in INSTALL.md under a "Testing locally" note.
+
+Definition of done for this mandate: Debbie can run `/plugin marketplace add` + `/plugin install`
+in a Claude Code session, MCP tools are callable, and sessions persist and are retrievable.
+(Code mcpServers path is already working.) Until local plugin install is confirmed, nothing else ships.
 ---
 
 ### FROZEN -- Do not start until Stability Mandate is resolved
