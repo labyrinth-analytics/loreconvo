@@ -133,7 +133,7 @@ After running `install.sh`, add the hooks to `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/YOUR_USERNAME/projects/loreconvo/hooks/SessionStart.sh"
+            "command": "/Users/YOUR_USERNAME/projects/loreconvo/hooks/on_session_start.sh"
           }
         ]
       }
@@ -144,7 +144,7 @@ After running `install.sh`, add the hooks to `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/YOUR_USERNAME/projects/loreconvo/hooks/SessionEnd.sh"
+            "command": "/Users/YOUR_USERNAME/projects/loreconvo/hooks/on_session_end.sh"
           }
         ]
       }
@@ -204,12 +204,12 @@ Check that the hook scripts have execute permission:
 ls -la /path/to/loreconvo/hooks/
 ```
 
-You should see `-rwxr-xr-x` for `SessionStart.sh` and `SessionEnd.sh`. If you see
+You should see `-rwxr-xr-x` for `on_session_start.sh` and `on_session_end.sh`. If you see
 `-rw-r--r--` (no `x`), run:
 
 ```bash
-chmod +x /path/to/loreconvo/hooks/SessionStart.sh
-chmod +x /path/to/loreconvo/hooks/SessionEnd.sh
+chmod +x /path/to/loreconvo/hooks/on_session_start.sh
+chmod +x /path/to/loreconvo/hooks/on_session_end.sh
 ```
 
 Or simply re-run `bash install.sh` -- it sets the permissions automatically.
@@ -254,5 +254,5 @@ to any cloud service. You own your data.
 
 - [Quickstart Guide](docs/quickstart.md) -- get up and running in 5 minutes
 - [CLI Reference](docs/cli_reference.md) -- manage sessions from the terminal
-- [MCP Tool Catalog](docs/mcp_tool_catalog.md) -- all 12 tools explained in plain English
+- [MCP Tool Catalog](docs/mcp_tool_catalog.md) -- all 13 tools explained in plain English
 - [Changelog](docs/CHANGELOG.md) -- what changed in each release
