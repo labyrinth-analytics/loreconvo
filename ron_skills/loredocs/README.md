@@ -169,7 +169,7 @@ LoreDocs provides 35 MCP tools organized by function:
 | `vault_link_doc` | Create a link between two documents |
 | `vault_unlink_doc` | Remove a link between documents |
 
-### Administration (2 tools)
+### Administration (3 tools)
 | Tool | What it does |
 |------|-------------|
 | `vault_tier_status` | Check current tier limits and usage |
