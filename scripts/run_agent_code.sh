@@ -62,7 +62,17 @@ fi
     echo "================================================================"
 } >> "$LOG_FILE"
 
+# Diagnostic: log environment so failures are traceable
+{
+    echo "DIAG: PATH=$PATH"
+    echo "DIAG: HOME=$HOME"
+    echo "DIAG: CLAUDE_BIN=$CLAUDE_BIN"
+    echo "DIAG: claude version: $("$CLAUDE_BIN" --version 2>&1 || echo '[version check failed]')"
+} >> "$LOG_FILE"
+
+echo "DIAG: [step] cd to project dir" >> "$LOG_FILE"
 cd "$PROJECT_DIR"
+echo "DIAG: [step] cd OK -- pwd=$(pwd)" >> "$LOG_FILE"
 
 # macOS does not ship GNU timeout; Homebrew coreutils provides gtimeout.
 # Detect whichever is available; run without time limit if neither is found.
@@ -72,9 +82,11 @@ if command -v timeout &>/dev/null; then
 elif command -v gtimeout &>/dev/null; then
     TIMEOUT_CMD="gtimeout"
 else
-    echo "WARNING: timeout/gtimeout not found -- running without time limit (brew install coreutils to fix)" >> "$LOG_FILE"
+    echo "DIAG: WARNING -- timeout/gtimeout not found, running without time limit (brew install coreutils to fix)" >> "$LOG_FILE"
 fi
+echo "DIAG: TIMEOUT_CMD=${TIMEOUT_CMD:-[none -- running without limit]}" >> "$LOG_FILE"
 
+echo "DIAG: [step] launching claude" >> "$LOG_FILE"
 if [ -n "$TIMEOUT_CMD" ]; then
     "$TIMEOUT_CMD" 3600 "$CLAUDE_BIN" \
         --print \
