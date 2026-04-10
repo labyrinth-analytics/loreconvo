@@ -46,24 +46,15 @@ Action items (Ron's ONLY work until these are done, in order):
      to check /sessions/*/mnt/ mounted paths FIRST before VM ~ home. Both scripts now resolve
      to Debbie's Mac-backed mount in Cowork. Pending Debbie's Cowork end-to-end confirmation. -->
 
-Ron has one remaining action item before Debbie can test end-to-end:
+<!-- 3. DONE 2026-04-09 (Ron, commit 178f499): Built local-testing .plugin files.
+     loreconvo-test.plugin and loredocs-test.plugin created in marketplace/claude-plugins/plugins/.
+     Both .mcp.json files use absolute venv binary paths (no uvx, no PyPI required).
+     marketplace.json updated with "path" source entries for both test plugins.
+     INSTALL.md updated with "Testing locally" section.
+     Also in same commit: SEC-024 fix -- cryptography bumped to 46.0.7 in both lock files.
+     Pending Debbie's end-to-end confirmation that /plugin install + MCP tools work. -->
 
-1. [ ] Build local-testing .plugin files for LoreConvo and LoreDocs.
-   - Root cause: current .plugin files use `uvx loreconvo` / `uvx loredocs` in .mcp.json,
-     which requires the packages to be on PyPI -- they are not yet.
-   - marketplace.json uses `"source": "github"` pointing to repos that don't exist yet,
-     so `/plugin install` tries to SSH-clone from GitHub and fails.
-   - Fix: create `marketplace/claude-plugins/plugins/loreconvo-test.plugin` and
-     `loredocs-test.plugin` with .mcp.json pointing to the local venv binary:
-       LoreConvo: `ron_skills/loreconvo/.venv/bin/loreconvo`
-       LoreDocs:  `ron_skills/loredocs/.venv/bin/loredocs`
-     Use absolute paths (no ~ expansion in .mcp.json).
-   - Also update `marketplace/claude-plugins/.claude-plugin/marketplace.json` to add
-     test entries with `"source": {"source": "path", "path": "plugins/loreconvo-test.plugin"}`
-     (or whichever local source format Claude Code accepts -- try "path" first).
-   - Keep the release entries (github source) as-is for when the repos go live.
-   - Verify: after `install.sh` runs, the venv binaries exist at the expected paths.
-   - Document the test install commands in INSTALL.md under a "Testing locally" note.
+All Ron action items for the Stability Mandate are complete. Awaiting Debbie's Cowork end-to-end test.
 
 Definition of done for this mandate: Debbie can run `/plugin marketplace add` + `/plugin install`
 in a Claude Code session, MCP tools are callable, and sessions persist and are retrievable.

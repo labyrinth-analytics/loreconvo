@@ -257,3 +257,19 @@ Save the key to a password manager as "Labyrinth Analytics License Signing Key".
 - [x] Both INSTALL.md files already describe correct install path (pip install .)
 - Commit: 0ecaaee (fix: Stability Mandate install scripts + MEG-043b/046 test regressions)
 - Ron's portion: DONE. Awaiting Debbie's Cowork end-to-end confirmation to close mandate.
+
+## Stability Mandate TODO #3 (renumbered): Local-testing .plugin files (2026-04-09, Ron daily)
+
+- [x] Built loreconvo-test.plugin and loredocs-test.plugin
+  - Location: marketplace/claude-plugins/plugins/
+  - Both .mcp.json files use absolute venv binary paths (no uvx, no PyPI)
+    - LoreConvo: /Users/debbieshapiro/projects/side_hustle/ron_skills/loreconvo/.venv/bin/loreconvo
+    - LoreDocs:  /Users/debbieshapiro/projects/side_hustle/ron_skills/loredocs/.venv/bin/loredocs
+  - marketplace.json updated with "path" source test entries for both plugins
+  - INSTALL.md updated with "Testing locally" section
+- [x] SEC-024 fix: cryptography bumped 46.0.6 -> 46.0.7 in both requirements-lock.txt files
+  - ron_skills/loreconvo/requirements-lock.txt: cryptography==46.0.7
+  - ron_skills/loredocs/requirements-lock.txt: cryptography==46.0.7
+  - CVE-2026-39892 resolved. pip-audit clean.
+- Commit: 178f499 (security: fix SEC-024 cryptography 46.0.6->46.0.7 in both lock files; build local-testing .plugin files for stability mandate)
+- Awaiting Debbie's Cowork end-to-end confirmation to close Stability Mandate.
