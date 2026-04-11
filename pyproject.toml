@@ -1,6 +1,6 @@
 [project]
 name = "loreconvo"
-version = "0.3.0"
+version = "0.3.2"
 description = "Cross-surface persistent memory for Claude sessions. Vault conversations from Code, Cowork, and Chat -- recall decisions, artifacts, and context in any future session."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -47,8 +47,9 @@ build-backend = "setuptools.build_meta"
 
 # src/ IS the loreconvo package (flat structure: src/server.py, src/core/, etc.)
 # This maps `loreconvo` -> src/ so that `loreconvo.server:main` resolves correctly.
-[tool.setuptools.packages]
-find = { where = ["."] }
+[tool.setuptools]
+packages = ["loreconvo", "loreconvo.core"]
 
 [tool.setuptools.package-dir]
 "loreconvo" = "src"
+"loreconvo.core" = "src/core"
