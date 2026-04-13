@@ -252,14 +252,27 @@ class SessionDatabase:
 
     @staticmethod
     def _sanitize_fts_query(query: str) -> str:
-        """Wrap user query in double quotes to force FTS5 phrase matching.
+        """Sanitize user input for FTS5 MATCH without changing search semantics.
 
-        Prevents FTS5 operators (AND, OR, NOT, NEAR, column:) from being
-        interpreted as syntax. Hyphens, colons, and other special characters
-        are safely treated as literal text inside a quoted phrase.
+        Strategy: quote each individual token so hyphens, colons, and other
+        FTS5 operators inside a token are treated as literals, but multiple
+        tokens are implicitly ANDed (the FTS5 default). This preserves the
+        original behavior where "stripe billing integration" matches sessions
+        containing all three words anywhere, not just as a consecutive phrase.
+
+        Examples:
+            "stripe billing"     -> '"stripe" "billing"'      (AND, not phrase)
+            "fts-migration"      -> '"fts-migration"'         (hyphen is literal)
+            "agent:ron"          -> '"agent:ron"'              (colon is literal)
+            "K-1 parser waiting" -> '"K-1" "parser" "waiting"' (mixed)
         """
-        safe = query.strip().replace('"', ' ')
-        return f'"{safe}"' if safe else '""'
+        safe = query.strip()
+        if not safe:
+            return '""'
+        # Split on whitespace, quote each token individually
+        tokens = safe.split()
+        quoted = ['"' + t.replace('"', '') + '"' for t in tokens if t.replace('"', '')]
+        return ' '.join(quoted) if quoted else '""'
 
     def search_sessions(
         self, query: str, persona: Optional[str] = None,
