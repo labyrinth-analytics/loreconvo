@@ -68,19 +68,21 @@ CREATE TABLE IF NOT EXISTS session_links (
 
 FTS_SQL = """
 CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts USING fts5(
-    title, summary, decisions, content=sessions, content_rowid=rowid
+    title, summary, decisions, tags, open_questions,
+    content=sessions, content_rowid=rowid
 );
 """
 
 FTS_TRIGGERS = """
 CREATE TRIGGER IF NOT EXISTS sessions_ai AFTER INSERT ON sessions BEGIN
-    INSERT INTO sessions_fts(rowid, title, summary, decisions)
-    VALUES (new.rowid, new.title, new.summary, new.decisions);
+    INSERT INTO sessions_fts(rowid, title, summary, decisions, tags, open_questions)
+    VALUES (new.rowid, new.title, new.summary, new.decisions, new.tags, new.open_questions);
 END;
 
 CREATE TRIGGER IF NOT EXISTS sessions_au AFTER UPDATE ON sessions BEGIN
     UPDATE sessions_fts SET title = new.title, summary = new.summary,
-        decisions = new.decisions WHERE rowid = old.rowid;
+        decisions = new.decisions, tags = new.tags,
+        open_questions = new.open_questions WHERE rowid = old.rowid;
 END;
 
 CREATE TRIGGER IF NOT EXISTS sessions_ad AFTER DELETE ON sessions BEGIN
@@ -101,8 +103,7 @@ class SessionDatabase:
 
     def _init_schema(self):
         self.conn.executescript(SCHEMA_SQL)
-        self.conn.executescript(FTS_SQL)
-        self.conn.executescript(FTS_TRIGGERS)
+        self._migrate_fts_v2()
         self.conn.commit()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
@@ -118,6 +119,54 @@ class SessionDatabase:
                     (new_id, row['rowid'])
                 )
             self.conn.commit()
+
+    def _migrate_fts_v2(self):
+        """Migrate FTS5 index to v2: add tags and open_questions columns.
+
+        The original FTS5 table indexed only (title, summary, decisions).
+        v2 adds (tags, open_questions) so searches match tag keywords and
+        unresolved questions. This runs on every startup but only rebuilds
+        once -- after that the IF NOT EXISTS in FTS_SQL is a no-op.
+        """
+        needs_rebuild = False
+        try:
+            cursor = self.conn.execute("SELECT * FROM sessions_fts LIMIT 0")
+            col_names = [desc[0] for desc in cursor.description]
+            if 'tags' not in col_names:
+                needs_rebuild = True
+        except sqlite3.OperationalError:
+            # FTS table does not exist yet -- fresh install, just create it
+            needs_rebuild = False
+            self.conn.executescript(FTS_SQL)
+            self.conn.executescript(FTS_TRIGGERS)
+            return
+
+        if not needs_rebuild:
+            # Already on v2 schema -- ensure triggers exist (idempotent)
+            self.conn.executescript(FTS_SQL)
+            self.conn.executescript(FTS_TRIGGERS)
+            return
+
+        # --- Rebuild: drop old FTS table and triggers, recreate with v2 schema ---
+        self.conn.executescript("""
+            DROP TRIGGER IF EXISTS sessions_ai;
+            DROP TRIGGER IF EXISTS sessions_au;
+            DROP TRIGGER IF EXISTS sessions_ad;
+            DROP TABLE IF EXISTS sessions_fts;
+        """)
+
+        # Create the new FTS5 table with expanded columns
+        self.conn.executescript(FTS_SQL)
+
+        # Repopulate from existing sessions
+        self.conn.execute("""
+            INSERT INTO sessions_fts(rowid, title, summary, decisions, tags, open_questions)
+            SELECT rowid, title, summary, decisions, tags, open_questions
+            FROM sessions
+        """)
+
+        # Recreate triggers for the new column set
+        self.conn.executescript(FTS_TRIGGERS)
 
     def close(self):
         self.conn.close()
@@ -201,12 +250,23 @@ class SessionDatabase:
         rows = self.conn.execute(query, params).fetchall()
         return [self._row_to_session(r) for r in rows]
 
+    @staticmethod
+    def _sanitize_fts_query(query: str) -> str:
+        """Wrap user query in double quotes to force FTS5 phrase matching.
+
+        Prevents FTS5 operators (AND, OR, NOT, NEAR, column:) from being
+        interpreted as syntax. Hyphens, colons, and other special characters
+        are safely treated as literal text inside a quoted phrase.
+        """
+        safe = query.strip().replace('"', ' ')
+        return f'"{safe}"' if safe else '""'
+
     def search_sessions(
         self, query: str, persona: Optional[str] = None,
         tags: Optional[List[str]] = None, skills: Optional[List[str]] = None,
         project: Optional[str] = None, limit: int = 10
     ) -> List[SearchResult]:
-        fts_query = query.replace('"', '""')
+        fts_query = self._sanitize_fts_query(query)
         sql = """
             SELECT s.*, sessions_fts.rank
             FROM sessions s
