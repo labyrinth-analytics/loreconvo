@@ -4,6 +4,16 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## 2026-04-13
+
+### Improvements
+
+- **Multi-word search now finds more results.** When you searched for two-word phrases like "stripe billing," LoreConvo was treating them as an exact phrase match -- so a session that mentioned "stripe" and "billing" in separate sentences would not show up. LoreConvo now treats each word as an independent search term and returns sessions that contain all the words anywhere in the text. This significantly improves recall for multi-word queries.
+
+- **Faster database queries.** Three new indexes were added to the session database to speed up lookups by date, project, and persona. The query that lists all projects was also rewritten to use a single database call instead of one per project. No visible changes -- queries simply complete faster as your session count grows.
+
+---
+
 ## 2026-04-08
 
 ### Bug Fixes
