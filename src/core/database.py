@@ -64,6 +64,10 @@ CREATE TABLE IF NOT EXISTS session_links (
     link_type       TEXT DEFAULT 'continues',
     PRIMARY KEY (from_session_id, to_session_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_sessions_start_date ON sessions(start_date);
+CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project);
+CREATE INDEX IF NOT EXISTS idx_persona_sessions_name ON persona_sessions(persona_name);
 """
 
 FTS_SQL = """
@@ -460,19 +464,22 @@ class SessionDatabase:
         }
 
     def list_projects(self) -> List[dict]:
-        rows = self.conn.execute("SELECT * FROM projects ORDER BY name").fetchall()
-        results = []
-        for row in rows:
-            count = self.conn.execute(
-                "SELECT COUNT(*) as c FROM sessions WHERE project = ?",
-                (row["name"],)
-            ).fetchone()
-            results.append({
+        rows = self.conn.execute("""
+            SELECT p.name, p.description,
+                   COUNT(s.id) AS session_count
+            FROM projects p
+            LEFT JOIN sessions s ON s.project = p.name
+            GROUP BY p.name, p.description
+            ORDER BY p.name
+        """).fetchall()
+        return [
+            {
                 "name": row["name"],
                 "description": row["description"],
-                "session_count": count["c"]
-            })
-        return results
+                "session_count": row["session_count"]
+            }
+            for row in rows
+        ]
 
     # -- Suggestions --
 
