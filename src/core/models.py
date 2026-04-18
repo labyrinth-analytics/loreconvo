@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 
@@ -12,7 +12,7 @@ class Session:
     title: str = ""
     surface: str = ""  # 'cowork', 'code', 'chat'
     project: Optional[str] = None
-    start_date: str = field(default_factory=lambda: datetime.now().isoformat())
+    start_date: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     end_date: Optional[str] = None
     summary: str = ""
     decisions: List[str] = field(default_factory=list)
@@ -20,7 +20,7 @@ class Session:
     open_questions: List[str] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     skills_used: List[str] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 @dataclass
@@ -29,7 +29,7 @@ class Project:
     description: str = ""
     expected_skills: List[str] = field(default_factory=list)
     default_persona: Optional[str] = None
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 @dataclass
