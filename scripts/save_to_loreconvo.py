@@ -30,7 +30,7 @@ import os
 import sqlite3
 import sys
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # -- DB discovery --
@@ -74,7 +74,7 @@ def save_session(args):
     conn, db_path = _connect(args.db_path)
 
     session_id = str(uuid.uuid4())
-    now = datetime.now().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
 
     # Parse JSON list args (accept both JSON strings and plain strings)
     def parse_list(val):
@@ -203,13 +203,30 @@ def search_sessions(args):
     """Search sessions by keyword in title/summary."""
     conn, db_path = _connect(args.db_path)
 
-    query = """SELECT id, surface, title, substr(summary, 1, 300) as summary_preview,
-               datetime(created_at) as created
+    try:
+        # Use FTS5 MATCH for performance and relevance
+        rows = conn.execute(
+            """SELECT s.id, s.surface, s.title,
+                      substr(s.summary, 1, 300) as summary_preview,
+                      datetime(s.created_at) as created
+               FROM sessions_fts f
+               JOIN sessions s ON s.rowid = f.rowid
+               WHERE sessions_fts MATCH ?
+               ORDER BY s.created_at DESC LIMIT ?""",
+            (args.search, args.limit)
+        ).fetchall()
+    except sqlite3.OperationalError:
+        # FTS parse failed (e.g. hyphenated term) -- fall back to LIKE
+        pattern = f"%{args.search}%"
+        rows = conn.execute(
+            """SELECT id, surface, title,
+                      substr(summary, 1, 300) as summary_preview,
+                      datetime(created_at) as created
                FROM sessions
                WHERE title LIKE ? OR summary LIKE ?
-               ORDER BY created_at DESC LIMIT ?"""
-    pattern = f"%{args.search}%"
-    rows = conn.execute(query, (pattern, pattern, args.limit)).fetchall()
+               ORDER BY created_at DESC LIMIT ?""",
+            (pattern, pattern, args.limit)
+        ).fetchall()
     conn.close()
 
     if not rows:

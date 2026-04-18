@@ -2,7 +2,7 @@
 
 import json
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from .config import Config
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     artifacts       TEXT,
     open_questions  TEXT,
     tags            TEXT,
-    created_at      TEXT DEFAULT (datetime('now'))
+    created_at      TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
 CREATE TABLE IF NOT EXISTS session_skills (
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS projects (
     description     TEXT,
     expected_skills TEXT,
     default_persona TEXT,
-    created_at      TEXT DEFAULT (datetime('now'))
+    created_at      TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
 CREATE TABLE IF NOT EXISTS persona_sessions (
@@ -236,7 +236,7 @@ class SessionDatabase:
         self, limit: int = 10, days_back: int = 30,
         project: Optional[str] = None, skill: Optional[str] = None
     ) -> List[Session]:
-        cutoff = (datetime.now() - timedelta(days=days_back)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat()
         query = "SELECT * FROM sessions WHERE start_date >= ?"
         params = [cutoff]
 
@@ -341,7 +341,7 @@ class SessionDatabase:
     def get_skill_history(
         self, skill_name: str, days_back: int = 90
     ) -> List[Session]:
-        cutoff = (datetime.now() - timedelta(days=days_back)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat()
         rows = self.conn.execute(
             """SELECT s.* FROM sessions s
                JOIN session_skills sk ON s.id = sk.session_id
@@ -495,7 +495,7 @@ class SessionDatabase:
         - Recent decisions that may need follow-up
         - Skill gaps (expected by project but not used recently)
         """
-        cutoff = (datetime.now() - timedelta(days=days_back)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat()
         suggestions = []
 
         # 1. Sessions with open questions (highest priority)
