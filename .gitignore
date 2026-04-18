@@ -17,3 +17,4 @@ venv/
 *.sqlite
 *.log
 .DS_Store
+tests/
