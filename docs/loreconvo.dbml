@@ -1,0 +1,92 @@
+// LoreConvo Data Model (sessions.db)
+// Cross-surface persistent memory for Claude sessions
+// Product: LoreConvo v0.3.2
+// Generated: 2026-04-17
+
+Project LoreConvo {
+  database_type: 'SQLite'
+  Note: '''
+    Session memory system that captures decisions, artifacts,
+    and context across Claude Code, Cowork, and API surfaces.
+    FTS5 full-text search on sessions for fast recall.
+  '''
+}
+
+Table sessions {
+  id              text [pk, note: 'UUID v4']
+  title           text [not null, note: 'Short descriptive title for the session']
+  surface         text [not null, note: 'Claude surface: code, cowork, api, pipeline']
+  project         text [note: 'Project tag (snake_case dir name), e.g. side_hustle']
+  start_date      text [not null, note: 'ISO 8601 datetime']
+  end_date        text [note: 'ISO 8601 datetime, NULL if session still open']
+  summary         text [note: 'Narrative summary of what happened in the session']
+  decisions       text [note: 'JSON array of decision strings']
+  artifacts       text [note: 'JSON array of artifact references (paths, URLs)']
+  open_questions  text [note: 'JSON array of unresolved questions']
+  tags            text [note: 'JSON array of string tags for categorization']
+  created_at      text [note: 'Auto-set on insert: datetime(now)']
+
+  indexes {
+    project [name: 'idx_sessions_project']
+    start_date [name: 'idx_sessions_start_date']
+  }
+
+  Note: '''
+    Core table. Each row = one Claude session.
+    FTS5 virtual table (sessions_fts) mirrors title, summary,
+    decisions, tags, open_questions for full-text search.
+    Triggers (sessions_ai, sessions_au, sessions_ad) keep FTS in sync.
+  '''
+}
+
+Table projects {
+  name            text [pk, note: 'snake_case project identifier']
+  description     text [note: 'Human-readable project description']
+  expected_skills text [note: 'JSON array of skill names relevant to this project']
+  default_persona text [note: 'Default persona name for sessions in this project']
+  created_at      text [note: 'Auto-set on insert: datetime(now)']
+
+  Note: 'Project registry. Links sessions to a named project context.'
+}
+
+Table session_skills {
+  session_id       text [not null, ref: > sessions.id]
+  skill_name       text [not null, note: 'Name of the skill/command invoked']
+  skill_source     text [note: 'Where the skill came from (plugin name, built-in, etc.)']
+  invocation_count integer [default: 1, note: 'How many times the skill was called in this session']
+
+  indexes {
+    (session_id, skill_name) [pk]
+  }
+
+  Note: 'Tracks which skills/commands were used in each session and how often.'
+}
+
+Table session_links {
+  from_session_id text [not null, ref: > sessions.id]
+  to_session_id   text [not null, ref: > sessions.id]
+  link_type       text [default: 'continues', note: 'Relationship type: continues, references, supersedes']
+
+  indexes {
+    (from_session_id, to_session_id) [pk]
+  }
+
+  Note: 'Directed graph of session-to-session relationships for threading context.'
+}
+
+Table persona_sessions {
+  persona_name    text [not null, note: 'Named persona (e.g. ron, meg, brock)']
+  session_id      text [not null, ref: > sessions.id]
+  relevance_note  text [note: 'Why this session is relevant to this persona']
+
+  indexes {
+    (persona_name, session_id) [pk]
+    persona_name [name: 'idx_persona_sessions_name']
+  }
+
+  Note: 'Associates sessions with agent/persona identities for filtered recall.'
+}
+
+// Implicit: sessions_fts (FTS5 virtual table)
+// Columns: title, summary, decisions, tags, open_questions
+// Kept in sync via AFTER INSERT/UPDATE/DELETE triggers on sessions
