@@ -2,7 +2,7 @@
 
 LoreConvo includes a command-line interface (CLI) for managing session memory from your terminal. Use it when you want to save, search, or export sessions without going through Claude.
 
-**Version:** 0.3.0
+**Version:** 0.3.2
 
 ---
 
@@ -24,7 +24,7 @@ Check your version:
 
 ```
 $ python src/cli.py --version
-loreconvo, version 0.3.0
+loreconvo, version 0.3.2
 ```
 
 ---
