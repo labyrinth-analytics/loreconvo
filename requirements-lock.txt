@@ -1,4 +1,4 @@
-# LoreConvo v0.3.0 - Pinned dependencies (generated from .venv 2026-03-31)
+# LoreConvo v0.3.2 - Pinned dependencies (generated from .venv 2026-03-31)
 # Python 3.13 on macOS
 annotated-types==0.7.0
 anyio==4.12.1
