@@ -4,6 +4,18 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## 2026-04-18
+
+### Bug Fixes
+
+- **Search now returns accurate results for more query terms.** The fallback search script (`save_to_loreconvo.py --search`) was using slow keyword matching for all queries. It now uses LoreConvo's full-text search engine first, which is faster and understands word boundaries correctly. If your search term contains special characters that the full-text engine cannot parse (such as hyphenated words like "build-time"), the script automatically retries with keyword matching instead. You do not need to do anything differently -- searches just work better now.
+
+### Improvements
+
+- **Session timestamps are now stored in a consistent UTC format.** LoreConvo now saves all session timestamps as UTC ISO 8601 strings (for example: `2026-04-18T14:30:00Z`). This aligns with the format LoreDocs uses and prepares both products for future cross-product time comparisons and cloud sync. Existing sessions are not affected -- they were already recorded in UTC, just without the explicit timezone marker.
+
+---
+
 ## 2026-04-13
 
 ### Improvements
