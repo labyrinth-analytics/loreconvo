@@ -18,3 +18,4 @@ venv/
 *.log
 .DS_Store
 tests/
+test_*.py
