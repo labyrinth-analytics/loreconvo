@@ -1,8 +1,30 @@
 """Session Bridge configuration."""
 
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
+
+_VALID_TIERS = {"free", "pro"}
+
+
+def set_tier(db_dir: Path, tier: str) -> None:
+    """Persist a tier change to config.json in the database directory.
+
+    Called by the vault_set_tier MCP tool after license validation.
+    """
+    if tier not in _VALID_TIERS:
+        raise ValueError(f"Invalid tier '{tier}'. Valid: {sorted(_VALID_TIERS)}")
+    config_path = db_dir / "config.json"
+    config: dict = {}
+    if config_path.exists():
+        try:
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    config["tier"] = tier
+    config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
 
 
 @dataclass
