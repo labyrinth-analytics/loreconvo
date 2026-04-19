@@ -236,7 +236,7 @@ class SessionDatabase:
         self, limit: int = 10, days_back: int = 30,
         project: Optional[str] = None, skill: Optional[str] = None
     ) -> List[Session]:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
         query = "SELECT * FROM sessions WHERE start_date >= ?"
         params = [cutoff]
 
@@ -341,7 +341,7 @@ class SessionDatabase:
     def get_skill_history(
         self, skill_name: str, days_back: int = 90
     ) -> List[Session]:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
         rows = self.conn.execute(
             """SELECT s.* FROM sessions s
                JOIN session_skills sk ON s.id = sk.session_id
@@ -495,7 +495,7 @@ class SessionDatabase:
         - Recent decisions that may need follow-up
         - Skill gaps (expected by project but not used recently)
         """
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
         suggestions = []
 
         # 1. Sessions with open questions (highest priority)

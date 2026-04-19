@@ -74,7 +74,7 @@ def save_session(args):
     conn, db_path = _connect(args.db_path)
 
     session_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
     # Parse JSON list args (accept both JSON strings and plain strings)
     def parse_list(val):
