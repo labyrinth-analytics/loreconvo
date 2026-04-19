@@ -3,13 +3,15 @@
 import json
 import sys
 import os
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel, ConfigDict, Field
 from core.models import Session
 from core.database import SessionDatabase, SessionLimitReachedError
-from core.config import Config
+from core.config import Config, set_tier as _set_tier_config
 from core.license import get_license_status
 
 mcp = FastMCP(
@@ -351,6 +353,58 @@ def get_tier() -> dict:
         error   -- error message (if mode is "invalid_key")
     """
     return get_license_status()
+
+
+class VaultSetTierInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    tier: str = Field(
+        ...,
+        description="Tier to activate: 'free' or 'pro'",
+        pattern="^(free|pro)$"
+    )
+
+
+@mcp.tool(
+    name="vault_set_tier",
+    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+)
+def vault_set_tier(params: VaultSetTierInput) -> str:
+    """Activate a tier (free or pro) for LoreConvo.
+
+    Pro tier removes the free-tier session limit (default: 50 sessions).
+    After purchasing a Pro license, set LORECONVO_PRO=<your-license-key> in
+    your environment and restart the server, then call this tool with tier='pro'
+    to confirm Pro is active. Reverting to tier='free' re-enables limits (existing
+    sessions are preserved -- only new saves are blocked once the limit is hit).
+    """
+    if params.tier == "pro":
+        status = get_license_status()
+        if not status["is_pro"]:
+            if status.get("mode") == "invalid_key":
+                return (
+                    "Error: Invalid or expired license key in LORECONVO_PRO. "
+                    + status.get("error", "")
+                    + " Get a new key at labyrinthanalyticsconsulting.com."
+                )
+            return (
+                "Error: No Pro license key found. "
+                "Set LORECONVO_PRO=<your-license-key> in your environment and "
+                "restart the server, then call vault_set_tier again. "
+                "Get a license key at labyrinthanalyticsconsulting.com."
+            )
+
+    db_dir = Path(db.config.db_path).parent
+    try:
+        _set_tier_config(db_dir, params.tier)
+    except ValueError as exc:
+        return f"Error: {exc}"
+
+    if params.tier == "pro":
+        return "[OK] Tier set to 'pro'. All limits removed. Enjoy unlimited sessions."
+    return (
+        f"[OK] Tier set to 'free'. Free tier active. "
+        f"Limit: {db.config.max_free_sessions} sessions."
+    )
 
 
 def main():
