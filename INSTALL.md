@@ -163,6 +163,45 @@ Replace `YOUR_USERNAME` with your actual Mac username.
 > release. The install script now sets the correct execute permissions. If you installed
 > before that fix, run `bash install.sh` again from your loreconvo directory to fix it.
 
+### PreCompact Hook (Recommended)
+
+LoreConvo can also save your session before Claude Code compresses the context window.
+This fires both when you manually run `/compact` and when Claude Code automatically
+compresses because the context limit was reached. No session context is lost.
+
+Add the PreCompact hook to your `~/.claude/settings.json` alongside the SessionStart
+and SessionEnd hooks above:
+
+```json
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/YOUR_USERNAME/projects/loreconvo/hooks/scripts/on_pre_compact.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Replace `YOUR_USERNAME` with your actual Mac username.
+
+After adding this hook, restart Claude Code. You can verify it is working by running
+`/compact` and then checking `~/.loreconvo/hook.log` for a line like:
+
+```
+[Mon Apr 21 10:00:00 PDT 2026] pre-compact (manual): <session-id>
+```
+
+If you see that line, the hook is saving your session before compaction.
+
 ---
 
 ## Verifying the Installation
@@ -208,12 +247,12 @@ Check that the hook scripts have execute permission:
 ls -la /path/to/loreconvo/hooks/
 ```
 
-You should see `-rwxr-xr-x` for `on_session_start.sh` and `on_session_end.sh`. If you see
-`-rw-r--r--` (no `x`), run:
+You should see `-rwxr-xr-x` for the `.sh` files. If you see `-rw-r--r--` (no `x`), run:
 
 ```bash
 chmod +x /path/to/loreconvo/hooks/on_session_start.sh
 chmod +x /path/to/loreconvo/hooks/on_session_end.sh
+chmod +x /path/to/loreconvo/hooks/scripts/on_pre_compact.sh
 ```
 
 Or simply re-run `bash install.sh` -- it sets the permissions automatically.
