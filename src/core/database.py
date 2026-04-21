@@ -302,7 +302,7 @@ class SessionDatabase:
         Processing steps:
         1. Split on whitespace into raw tokens.
         2. Expand compound tokens (camelCase, snake_case) into parts.
-        3. Apply prefix matching (trailing *) for short tokens (<=4 chars)
+        3. Apply prefix matching (trailing *) for short alpha tokens (<=7 chars)
            so partial terms like "precomp" match "PreCompact".
         4. Quote each token to escape FTS5 operators (hyphens, colons).
         5. Implicit AND across all tokens (FTS5 default).
