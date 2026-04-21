@@ -232,6 +232,44 @@ Get proactive context suggestions based on your session history. This tool analy
 
 ---
 
+## Licensing
+
+### `get_tier`
+
+Check your current LoreConvo license tier and status. Returns whether Pro is active, the license mode, and key details.
+
+**When Claude uses it:** When you ask "am I on the free tier?" or "check my LoreConvo license."
+
+**Parameters:** None.
+
+**Returns:** A dict with keys: `is_pro` (true/false), `mode` ("licensed", "dev_bypass", "free", or "invalid_key"), `product`, `exp` (expiry date), `email` (if present), and `error` (if invalid key).
+
+---
+
+### `vault_set_tier`
+
+Activate a tier (free or pro) for LoreConvo. Pro tier removes the free-tier session limit (default: 50 sessions).
+
+**When Claude uses it:** After you purchase a Pro license and set the `LORECONVO_PRO` environment variable.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `tier` | text | yes | Tier to activate: `free` or `pro` |
+
+**Returns:** A confirmation message with your tier status.
+
+**Setup steps:**
+1. Purchase a Pro license at [labyrinthanalyticsconsulting.com](https://labyrinthanalyticsconsulting.com)
+2. Set `LORECONVO_PRO=<your-license-key>` in your environment
+3. Restart the MCP server
+4. Ask Claude to "activate Pro tier" -- Claude will call `vault_set_tier` with `tier='pro'`
+
+**Note:** Reverting to `free` re-enables limits but preserves all existing sessions.
+
+---
+
 ## Quick Reference
 
 | Tool | One-line summary |
@@ -249,3 +287,4 @@ Get proactive context suggestions based on your session history. This tool analy
 | `get_skill_history` | See sessions that used a specific skill |
 | `vault_suggest` | Proactive suggestions for what context to load |
 | `get_tier` | Check current tier and license key status |
+| `vault_set_tier` | Activate free or Pro tier |
