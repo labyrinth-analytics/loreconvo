@@ -1,6 +1,6 @@
 {
   "name": "loreconvo",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Vault your Claude conversations. Captures session decisions, artifacts, and context across Code, Cowork, and Chat. Organizes memory by project, skill, and persona. Never re-explain yourself again.",
   "author": {
     "name": "Labyrinth Analytics Consulting",

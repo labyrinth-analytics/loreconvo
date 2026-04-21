@@ -1,6 +1,7 @@
 """SQLite database operations with FTS5 search."""
 
 import json
+import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -255,28 +256,104 @@ class SessionDatabase:
         return [self._row_to_session(r) for r in rows]
 
     @staticmethod
-    def _sanitize_fts_query(query: str) -> str:
-        """Sanitize user input for FTS5 MATCH without changing search semantics.
+    def _expand_compound_token(token: str) -> List[str]:
+        """Split a compound token (camelCase, PascalCase, snake_case) into parts.
 
-        Strategy: quote each individual token so hyphens, colons, and other
-        FTS5 operators inside a token are treated as literals, but multiple
-        tokens are implicitly ANDed (the FTS5 default). This preserves the
-        original behavior where "stripe billing integration" matches sessions
-        containing all three words anywhere, not just as a consecutive phrase.
+        Returns the original token plus its constituent parts so FTS5 matches
+        both the compound form and individual words.
+
+        Only expands tokens that are purely alphanumeric (plus underscores).
+        Tokens with hyphens, colons, or other special chars are left as-is
+        since those are not compound identifiers.
 
         Examples:
-            "stripe billing"     -> '"stripe" "billing"'      (AND, not phrase)
-            "fts-migration"      -> '"fts-migration"'         (hyphen is literal)
-            "agent:ron"          -> '"agent:ron"'              (colon is literal)
-            "K-1 parser waiting" -> '"K-1" "parser" "waiting"' (mixed)
+            "autoSave"      -> ["autoSave", "auto", "Save"]
+            "PreCompact"    -> ["PreCompact", "Pre", "Compact"]
+            "snake_case"    -> ["snake_case", "snake", "case"]
+            "simple"        -> ["simple"]
+            "agent:ron"     -> ["agent:ron"]  (colon = not a compound)
+            "K-1"           -> ["K-1"]        (hyphen = not a compound)
+        """
+        # Only attempt expansion on tokens that look like identifiers
+        # (alphanumeric + underscores only)
+        if not re.match(r'^[A-Za-z0-9_]+$', token):
+            return [token]
+
+        parts = []
+        # snake_case / SCREAMING_SNAKE: split on underscores
+        if '_' in token:
+            parts = [p for p in token.split('_') if p]
+        else:
+            # camelCase / PascalCase: split on case transitions
+            # "autoSave" -> ["auto", "Save"], "HTMLParser" -> ["HTML", "Parser"]
+            camel_parts = re.findall(r'[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+', token)
+            if len(camel_parts) > 1:
+                parts = camel_parts
+
+        if not parts:
+            return [token]
+        # Return original token first (for exact match), then expanded parts
+        return [token] + parts
+
+    @staticmethod
+    def _sanitize_fts_query(query: str) -> str:
+        """Sanitize and preprocess user input for FTS5 MATCH.
+
+        Processing steps:
+        1. Split on whitespace into raw tokens.
+        2. Expand compound tokens (camelCase, snake_case) into parts.
+        3. Apply prefix matching (trailing *) for short tokens (<=4 chars)
+           so partial terms like "precomp" match "PreCompact".
+        4. Quote each token to escape FTS5 operators (hyphens, colons).
+        5. Implicit AND across all tokens (FTS5 default).
+
+        Examples:
+            "stripe billing"     -> '"stripe" "billing"'
+            "autoSave"           -> '"autoSave" OR "auto" OR "Save"'
+            "snake_case"         -> '"snake_case" OR "snake" OR "case"'
+            "precomp"            -> '"precomp"*'
+            "fts-migration"      -> '"fts-migration"'
+            "agent:ron"          -> '"agent:ron"'
+            "K-1 parser waiting" -> '"K-1" "parser" "waiting"'
         """
         safe = query.strip()
         if not safe:
             return '""'
-        # Split on whitespace, quote each token individually
-        tokens = safe.split()
-        quoted = ['"' + t.replace('"', '') + '"' for t in tokens if t.replace('"', '')]
-        return ' '.join(quoted) if quoted else '""'
+
+        raw_tokens = safe.split()
+        fts_groups = []
+        has_or_group = False
+
+        for token in raw_tokens:
+            clean = token.replace('"', '')
+            if not clean:
+                continue
+
+            expanded = SessionDatabase._expand_compound_token(clean)
+
+            if len(expanded) > 1:
+                # Compound token: OR the original with its parts
+                parts = ['"' + p + '"' for p in expanded]
+                fts_groups.append('(' + ' OR '.join(parts) + ')')
+                has_or_group = True
+            else:
+                # Single token: apply prefix matching for short terms
+                # Tokens <= 7 chars that are purely alphabetic are likely
+                # abbreviations or partial words (e.g., "precomp" -> PreCompact)
+                t = expanded[0]
+                if len(t) <= 7 and t.isalpha():
+                    # Short alphabetic token -- prefix match
+                    fts_groups.append('"' + t + '"*')
+                else:
+                    fts_groups.append('"' + t + '"')
+
+        if not fts_groups:
+            return '""'
+
+        # FTS5 requires explicit AND when combining parenthesized OR-groups
+        # with other terms. Implicit AND only works between simple tokens.
+        joiner = ' AND ' if has_or_group else ' '
+        return joiner.join(fts_groups)
 
     def search_sessions(
         self, query: str, persona: Optional[str] = None,

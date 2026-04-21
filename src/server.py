@@ -205,6 +205,7 @@ def get_context_for(topic: str, max_results: int = 5) -> list[dict]:
             "summary": r.session.summary,
             "decisions": r.session.decisions,
             "open_questions": r.session.open_questions,
+            "match_score": r.match_score,
         }
         for r in results
     ]
