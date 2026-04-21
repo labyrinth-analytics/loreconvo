@@ -6,7 +6,7 @@ description: >
   cycle. Use when the user says "set up loreconvo", "onboard", "/lore-onboard",
   "verify loreconvo", "test loreconvo setup", or after first installing the plugin.
 metadata:
-  version: "0.3.2"
+  version: "0.3.3"
   author: "Labyrinth Analytics Consulting"
 ---
 
