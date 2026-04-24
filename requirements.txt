@@ -1,4 +1,4 @@
-# LoreConvo v0.3.2 - Pinned direct dependencies
+# LoreConvo v0.3.3 - Pinned direct dependencies
 # Exact versions required for Anthropic marketplace compliance
 mcp==1.26.0
 click==8.3.1

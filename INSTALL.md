@@ -33,8 +33,9 @@ then install from it -- this is the same flow as the eventual public marketplace
 
 Then restart Cowork. LoreConvo MCP tools will be available in your next session.
 
-> **Public marketplace (coming soon):** Once the marketplace launches publicly, the
-> `/plugin marketplace add` step will not be needed -- the second command will work on its own.
+> **Anthropic marketplace:** Once the plugin is listed on the Anthropic marketplace,
+> the `/plugin marketplace add` step will not be needed -- install directly with the
+> second command.
 
 ---
 
