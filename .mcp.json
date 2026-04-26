@@ -6,9 +6,7 @@
         "${CLAUDE_PLUGIN_ROOT}/src/server.py"
       ],
       "env": {
-        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}/src",
-        "LORECONVO_PRO": "1",
-        "LAB_DEV_MODE": "1"
+        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}/src"
       }
     }
   }
