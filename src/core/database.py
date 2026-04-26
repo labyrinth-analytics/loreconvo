@@ -820,6 +820,10 @@ class SessionDatabase:
                 session.created_at,
             )
         )
+        if existing:
+            self.conn.execute(
+                "DELETE FROM session_skills WHERE session_id = ?", (session.id,)
+            )
         if session.skills_used:
             for skill_name in session.skills_used:
                 self.conn.execute(
