@@ -522,6 +522,9 @@ def import_sessions(
         wrapper = json.loads(raw)
         if "loreconvo_export" in wrapper:
             raw_sessions = wrapper["loreconvo_export"]["sessions"]
+        elif isinstance(wrapper, dict) and ("id" in wrapper or "title" in wrapper):
+            # Single-session JSONL: one JSON object that is valid JSON on its own
+            raw_sessions = [wrapper]
         else:
             return {"error": "Invalid export file: missing 'loreconvo_export' key"}
     except json.JSONDecodeError:
@@ -561,7 +564,16 @@ def import_sessions(
             continue
 
         if dry_run:
-            skipped += 1
+            exists = db.conn.execute(
+                "SELECT id FROM sessions WHERE id = ?", (session.id,)
+            ).fetchone()
+            if exists:
+                if on_conflict == "replace":
+                    replaced += 1
+                else:
+                    skipped += 1
+            else:
+                imported += 1
             continue
 
         try:
@@ -585,7 +597,10 @@ def import_sessions(
         "skipped": skipped,
     }
     if dry_run:
-        summary["note"] = f"Dry run: {len(raw_sessions)} sessions parsed, no changes made."
+        summary["note"] = (
+            f"Dry run preview: {imported} would-import, {replaced} would-replace, "
+            f"{skipped} would-skip. No changes made."
+        )
     if limit_hit:
         summary["warning"] = (
             "Free tier limit reached. Some sessions were not imported. "
