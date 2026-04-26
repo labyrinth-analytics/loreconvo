@@ -408,6 +408,192 @@ def vault_set_tier(params: VaultSetTierInput) -> str:
     )
 
 
+@mcp.tool()
+def export_sessions(
+    output_path: str | None = None,
+    project: str | None = None,
+    tags: list[str] | None = None,
+    days_back: int | None = None,
+    limit: int = 1000,
+    format: str = "json",
+) -> dict:
+    """Export sessions to JSON or JSONL for backup or migration.
+
+    Exports all matching sessions with full detail (including skills, tags,
+    artifacts). Use output_path to write to a file; omit it to receive the
+    data inline. Use import_sessions to load the exported file.
+
+    Args:
+        output_path: File path to write export (e.g. '/tmp/loreconvo_export.json').
+                     If omitted, data is returned inline.
+        project: Export only sessions from this project.
+        tags: Export only sessions that have any of these tags.
+        days_back: Limit to sessions from the last N days. Omit for all time.
+        limit: Max sessions to export (default 1000).
+        format: 'json' (array wrapped in metadata) or 'jsonl' (one session per line).
+    """
+    sessions = db.get_sessions_for_export(
+        project=project, tags=tags, days_back=days_back, limit=limit
+    )
+
+    def _session_to_dict(s) -> dict:
+        return {
+            "id": s.id,
+            "title": s.title,
+            "surface": s.surface,
+            "project": s.project,
+            "start_date": s.start_date,
+            "end_date": s.end_date,
+            "summary": s.summary,
+            "decisions": s.decisions,
+            "artifacts": s.artifacts,
+            "open_questions": s.open_questions,
+            "tags": s.tags,
+            "skills_used": s.skills_used,
+            "created_at": s.created_at,
+        }
+
+    session_dicts = [_session_to_dict(s) for s in sessions]
+
+    if format == "jsonl":
+        data_str = "\n".join(json.dumps(d) for d in session_dicts)
+    else:
+        export_obj = {
+            "loreconvo_export": {
+                "version": "1.0",
+                "session_count": len(session_dicts),
+                "filters": {
+                    "project": project,
+                    "tags": tags,
+                    "days_back": days_back,
+                },
+                "sessions": session_dicts,
+            }
+        }
+        data_str = json.dumps(export_obj, indent=2)
+
+    if output_path:
+        Path(output_path).write_text(data_str, encoding="utf-8")
+        return {
+            "status": "exported",
+            "path": output_path,
+            "session_count": len(sessions),
+            "format": format,
+        }
+
+    return {
+        "status": "exported",
+        "session_count": len(sessions),
+        "format": format,
+        "data": data_str,
+    }
+
+
+@mcp.tool()
+def import_sessions(
+    file_path: str,
+    on_conflict: str = "skip",
+    dry_run: bool = False,
+) -> dict:
+    """Import sessions from a LoreConvo export file (JSON or JSONL).
+
+    Reads an export created by export_sessions and saves sessions into the
+    local database. Session UUIDs are preserved so re-importing is safe.
+
+    Args:
+        file_path: Path to the export file (JSON or JSONL format).
+        on_conflict: What to do if a session ID already exists.
+                     'skip' (default) -- leave the existing session unchanged.
+                     'replace' -- overwrite with the imported version.
+        dry_run: If True, parse and validate the file but make no DB changes.
+    """
+    if on_conflict not in ("skip", "replace"):
+        return {"error": "on_conflict must be 'skip' or 'replace'"}
+
+    path = Path(file_path)
+    if not path.exists():
+        return {"error": f"File not found: {file_path}"}
+
+    raw = path.read_text(encoding="utf-8").strip()
+
+    raw_sessions: list[dict] = []
+    # Try JSON format with wrapper first
+    try:
+        wrapper = json.loads(raw)
+        if "loreconvo_export" in wrapper:
+            raw_sessions = wrapper["loreconvo_export"]["sessions"]
+        else:
+            return {"error": "Invalid export file: missing 'loreconvo_export' key"}
+    except json.JSONDecodeError:
+        # Fall back to JSONL -- one session per line
+        for line_num, line in enumerate(raw.splitlines(), 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                raw_sessions.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                return {"error": f"Invalid JSON on line {line_num}: {exc}"}
+
+    imported = 0
+    replaced = 0
+    skipped = 0
+    limit_hit = False
+
+    for raw_s in raw_sessions:
+        session = Session(
+            id=raw_s.get("id", ""),
+            title=raw_s.get("title", ""),
+            surface=raw_s.get("surface", ""),
+            project=raw_s.get("project"),
+            start_date=raw_s.get("start_date", ""),
+            end_date=raw_s.get("end_date"),
+            summary=raw_s.get("summary", ""),
+            decisions=raw_s.get("decisions", []),
+            artifacts=raw_s.get("artifacts", []),
+            open_questions=raw_s.get("open_questions", []),
+            tags=raw_s.get("tags", []),
+            skills_used=raw_s.get("skills_used", []),
+            created_at=raw_s.get("created_at", ""),
+        )
+        if not session.id:
+            skipped += 1
+            continue
+
+        if dry_run:
+            skipped += 1
+            continue
+
+        try:
+            result = db.import_session(session, replace=(on_conflict == "replace"))
+        except SessionLimitReachedError:
+            limit_hit = True
+            break
+
+        if result == "imported":
+            imported += 1
+        elif result == "replaced":
+            replaced += 1
+        else:
+            skipped += 1
+
+    summary = {
+        "status": "dry_run" if dry_run else "done",
+        "total_in_file": len(raw_sessions),
+        "imported": imported,
+        "replaced": replaced,
+        "skipped": skipped,
+    }
+    if dry_run:
+        summary["note"] = f"Dry run: {len(raw_sessions)} sessions parsed, no changes made."
+    if limit_hit:
+        summary["warning"] = (
+            "Free tier limit reached. Some sessions were not imported. "
+            "Upgrade to Pro for unlimited sessions."
+        )
+    return summary
+
+
 def main():
     """Entry point for uvx / console script execution."""
     mcp.run(transport="stdio")
