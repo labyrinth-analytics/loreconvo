@@ -749,3 +749,84 @@ class SessionDatabase:
     def session_count(self) -> int:
         row = self.conn.execute("SELECT COUNT(*) as c FROM sessions").fetchone()
         return row["c"]
+
+    def get_sessions_for_export(
+        self,
+        project: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        days_back: Optional[int] = None,
+        limit: int = 1000,
+    ) -> List[Session]:
+        """Return sessions with full detail (including skills) for export."""
+        query = "SELECT * FROM sessions WHERE 1=1"
+        params: list = []
+
+        if days_back is not None:
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
+            query += " AND start_date >= ?"
+            params.append(cutoff)
+
+        if project:
+            query += " AND project = ?"
+            params.append(project)
+
+        query += " ORDER BY start_date DESC LIMIT ?"
+        params.append(limit)
+
+        rows = self.conn.execute(query, params).fetchall()
+        sessions = [self._row_to_session(r) for r in rows]
+
+        if tags:
+            sessions = [s for s in sessions if any(t in s.tags for t in tags)]
+
+        for session in sessions:
+            skill_rows = self.conn.execute(
+                "SELECT skill_name FROM session_skills WHERE session_id = ?",
+                (session.id,)
+            ).fetchall()
+            session.skills_used = [r["skill_name"] for r in skill_rows]
+
+        return sessions
+
+    def import_session(self, session: Session, replace: bool = False) -> str:
+        """Import one session. Returns 'imported', 'replaced', or 'skipped'."""
+        existing = self.conn.execute(
+            "SELECT id FROM sessions WHERE id = ?", (session.id,)
+        ).fetchone()
+
+        if existing and not replace:
+            return "skipped"
+
+        if not existing:
+            if not self.config.is_pro:
+                current_count = self.session_count()
+                if current_count >= self.config.max_free_sessions:
+                    raise SessionLimitReachedError(
+                        f"Free tier limit reached: {current_count} of "
+                        f"{self.config.max_free_sessions} sessions stored. "
+                        "Set your LORECONVO_PRO license key to unlock unlimited sessions."
+                    )
+
+        self.conn.execute(
+            """INSERT OR REPLACE INTO sessions
+               (id, title, surface, project, start_date, end_date, summary,
+                decisions, artifacts, open_questions, tags, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                session.id, session.title, session.surface, session.project,
+                session.start_date, session.end_date, session.summary,
+                json.dumps(session.decisions), json.dumps(session.artifacts),
+                json.dumps(session.open_questions), json.dumps(session.tags),
+                session.created_at,
+            )
+        )
+        if session.skills_used:
+            for skill_name in session.skills_used:
+                self.conn.execute(
+                    """INSERT OR REPLACE INTO session_skills
+                       (session_id, skill_name, invocation_count)
+                       VALUES (?, ?, 1)""",
+                    (session.id, skill_name)
+                )
+        self.conn.commit()
+        return "replaced" if existing else "imported"
