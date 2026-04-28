@@ -1,6 +1,6 @@
 # LoreConvo MCP Tool Catalog
 
-LoreConvo provides 14 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context.
+LoreConvo provides 16 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context.
 
 This catalog explains what each tool does, when Claude uses it, and what parameters it accepts.
 
@@ -270,6 +270,55 @@ Activate a tier (free or pro) for LoreConvo. Pro tier removes the free-tier sess
 
 ---
 
+## Data Portability
+
+### `export_sessions`
+
+Export sessions to JSON or JSONL for backup or migration. Includes full session detail: decisions, artifacts, open questions, tags, and skills.
+
+**When Claude uses it:** When you ask "export my LoreConvo sessions" or "back up my session history."
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `output_path` | text | no | none | File path to write the export (e.g. `/tmp/loreconvo_export.json`). If omitted, data is returned inline. |
+| `project` | text | no | none | Export only sessions from this project |
+| `tags` | list of text | no | none | Export only sessions with any of these tags |
+| `days_back` | integer | no | none | Limit to sessions from the last N days. Omit for all time. |
+| `limit` | integer | no | 1000 | Maximum sessions to export |
+| `format` | text | no | `json` | `json` (full export with metadata wrapper) or `jsonl` (one session per line) |
+
+**Returns:** A dict with `status`, `session_count`, `format`, and either `data` (inline) or `path` (file written).
+
+**Example conversation:**
+> You: "Export all my sessions from the side_hustle project to /tmp/backup.json"
+> Claude: *calls export_sessions with project="side_hustle" and output_path="/tmp/backup.json"*
+
+---
+
+### `import_sessions`
+
+Import sessions from a LoreConvo export file (JSON or JSONL). Session UUIDs are preserved so re-importing the same file is safe.
+
+**When Claude uses it:** When you ask "import sessions from a backup file" or "restore from this export."
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `file_path` | text | yes | -- | Path to the export file (JSON or JSONL format) |
+| `on_conflict` | text | no | `skip` | What to do if a session ID already exists: `skip` (leave existing unchanged) or `replace` (overwrite with imported version) |
+| `dry_run` | boolean | no | false | If true, parse and validate the file but make no database changes |
+
+**Returns:** A dict with `status`, `imported` count, `skipped` count, and any `errors` encountered.
+
+**Example conversation:**
+> You: "Import sessions from /tmp/loreconvo_export.json -- skip duplicates."
+> Claude: *calls import_sessions with file_path and on_conflict="skip"*
+
+---
+
 ## Quick Reference
 
 | Tool | One-line summary |
@@ -288,3 +337,5 @@ Activate a tier (free or pro) for LoreConvo. Pro tier removes the free-tier sess
 | `vault_suggest` | Proactive suggestions for what context to load |
 | `get_tier` | Check current tier and license key status |
 | `vault_set_tier` | Activate free or Pro tier |
+| `export_sessions` | Export sessions to JSON or JSONL for backup or migration |
+| `import_sessions` | Import sessions from a LoreConvo export file |
