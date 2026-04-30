@@ -4,6 +4,8 @@ Vault your Claude conversations. Never re-explain yourself again.
 
 Persistent cross-surface memory for Claude. Capture session context across Code, Cowork, and Chat. Organize by project, skill, and persona.
 
+> **Available on the Anthropic Marketplace.** Install directly from Claude, or via PyPI: `uvx loreconvo`
+
 ## Quick Start
 
 One command to install:
@@ -34,7 +36,7 @@ Replace `/path/to/loreconvo` with wherever you saved the source folder.
 
 After making code changes, use `/reload-plugins` to refresh without restarting.
 
-Once loaded, Claude has access to all 14 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
+Once loaded, Claude has access to all 16 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
 
 ### Cowork (Desktop App)
 
@@ -88,7 +90,7 @@ Claude Chat (web)
 - When a session ends, `auto_save.py` captures the conversation and saves a structured summary (decisions, artifacts, open questions, tags) to the local SQLite database.
 - When a new session starts, `auto_load.py` queries the database, scores recent sessions by signal quality, and injects the most relevant context into the session as system context. Sessions with open questions and decisions score highest; low-signal sessions are filtered out.
 
-**Cowork** (this desktop app) does not run hooks, but has full access to the same database via the 14 MCP tools. You can call `get_recent_sessions`, `search_sessions`, or `get_context_for` directly from a Cowork conversation to pull in context from any prior Code session.
+**Cowork** (this desktop app) does not run hooks, but has full access to the same database via the 16 MCP tools. You can call `get_recent_sessions`, `search_sessions`, or `get_context_for` directly from a Cowork conversation to pull in context from any prior Code session.
 
 **Claude Chat** (web) does not support plugins. The `export-to-chat.sh` script bridges the gap: it exports your most recent session to your clipboard so you can paste it directly into Chat. This gives Chat the same context that Code would have loaded automatically.
 
@@ -173,7 +175,7 @@ At session end:
 
 ## MCP Tools
 
-LoreConvo provides 14 MCP tools that Claude calls automatically during sessions:
+LoreConvo provides 16 MCP tools that Claude calls automatically during sessions:
 
 | Tool | What it does |
 |------|-------------|
@@ -190,6 +192,9 @@ LoreConvo provides 14 MCP tools that Claude calls automatically during sessions:
 | `get_skill_history` | See which sessions used a specific skill |
 | `vault_suggest` | Proactive suggestions for relevant context to load |
 | `get_tier` | Check current tier and license key status |
+| `vault_set_tier` | Set the active tier (free, pro, team) |
+| `export_sessions` | Export sessions to a portable JSON format |
+| `import_sessions` | Import sessions from a previously exported JSON file |
 
 ## Requirements
 
