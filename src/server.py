@@ -42,6 +42,7 @@ def save_session(
     project: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    session_id: str | None = None,
 ) -> dict:
     """Save a session summary to persistent memory.
 
@@ -61,32 +62,47 @@ def save_session(
         project: Project name if part of a defined project
         start_date: ISO 8601 start time (defaults to now)
         end_date: ISO 8601 end time
+        session_id: Optional session ID to enable deduplication with the
+            auto-save hook. If a session with this ID already exists (e.g.,
+            auto-saved at session end), the record is updated with the richer
+            manual metadata. Artifacts from the existing record are preserved
+            when the caller does not supply artifacts. If omitted, a new UUID
+            is generated (existing behavior).
     """
+    # Merge artifacts with any existing auto-saved record when session_id is known
+    merged_artifacts = artifacts or []
+    if session_id is not None and not artifacts:
+        existing = db.get_session(session_id)
+        if existing and existing.artifacts:
+            merged_artifacts = existing.artifacts
+
     session = Session(
         title=title,
         surface=surface,
         summary=summary,
         decisions=decisions or [],
-        artifacts=artifacts or [],
+        artifacts=merged_artifacts,
         open_questions=open_questions or [],
         tags=tags or [],
         skills_used=skills_used or [],
         project=project,
     )
+    if session_id is not None:
+        session.id = session_id
     if start_date:
         session.start_date = start_date
     if end_date:
         session.end_date = end_date
 
     try:
-        session_id = db.save_session(session)
+        saved_id = db.save_session(session)
     except SessionLimitReachedError as e:
         return {
             "status": "limit_reached",
             "error": str(e),
             "upgrade_url": "https://labyrinthanalyticsconsulting.com/loreconvo",
         }
-    return {"session_id": session_id, "status": "saved", "title": title}
+    return {"session_id": saved_id, "status": "saved", "title": title}
 
 
 @mcp.tool()
