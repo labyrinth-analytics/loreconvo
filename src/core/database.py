@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     artifacts       TEXT,
     open_questions  TEXT,
     tags            TEXT,
-    created_at      TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+    created_at      TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    source          TEXT DEFAULT 'session'
 );
 
 CREATE TABLE IF NOT EXISTS session_skills (
@@ -109,6 +110,7 @@ class SessionDatabase:
     def _init_schema(self):
         self.conn.executescript(SCHEMA_SQL)
         self._migrate_fts_v2()
+        self._migrate_add_source_column()
         self.conn.commit()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
@@ -173,6 +175,20 @@ class SessionDatabase:
         # Recreate triggers for the new column set
         self.conn.executescript(FTS_TRIGGERS)
 
+    def _migrate_add_source_column(self):
+        """Add 'source' column to sessions table if not already present.
+
+        Backward-compatible: existing rows default to 'session'.
+        SQLite raises OperationalError on duplicate column add -- that's the
+        signal that migration already ran.
+        """
+        try:
+            self.conn.execute(
+                "ALTER TABLE sessions ADD COLUMN source TEXT DEFAULT 'session'"
+            )
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
     def close(self):
         self.conn.close()
 
@@ -199,14 +215,14 @@ class SessionDatabase:
         self.conn.execute(
             """INSERT OR REPLACE INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
-                decisions, artifacts, open_questions, tags, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                decisions, artifacts, open_questions, tags, created_at, source)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session.id, session.title, session.surface, session.project,
                 session.start_date, session.end_date, session.summary,
                 json.dumps(session.decisions), json.dumps(session.artifacts),
                 json.dumps(session.open_questions), json.dumps(session.tags),
-                session.created_at
+                session.created_at, session.source,
             )
         )
         for skill_name in session.skills_used:
@@ -731,6 +747,7 @@ class SessionDatabase:
             return [raw]
 
     def _row_to_session(self, row) -> Session:
+        row_keys = row.keys()
         return Session(
             id=row["id"],
             title=row["title"],
@@ -743,7 +760,8 @@ class SessionDatabase:
             artifacts=self._parse_json_field(row["artifacts"]),
             open_questions=self._parse_json_field(row["open_questions"]),
             tags=self._parse_json_field(row["tags"]),
-            created_at=row["created_at"] or ""
+            created_at=row["created_at"] or "",
+            source=row["source"] if "source" in row_keys else "session",
         )
 
     def session_count(self) -> int:
@@ -810,14 +828,14 @@ class SessionDatabase:
         self.conn.execute(
             """INSERT OR REPLACE INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
-                decisions, artifacts, open_questions, tags, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                decisions, artifacts, open_questions, tags, created_at, source)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session.id, session.title, session.surface, session.project,
                 session.start_date, session.end_date, session.summary,
                 json.dumps(session.decisions), json.dumps(session.artifacts),
                 json.dumps(session.open_questions), json.dumps(session.tags),
-                session.created_at,
+                session.created_at, session.source,
             )
         )
         if existing:
