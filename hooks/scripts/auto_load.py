@@ -23,11 +23,16 @@ import json
 import os
 import sys
 import sqlite3
-from datetime import datetime, timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
 MAX_CONTEXT_CHARS = 4000  # Soft cap on total output length
+
+
+MEMORY_MD_NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # URL namespace
+MEMORY_MD_MAX_LINES = 200  # match Claude Code's startup line limit
 
 
 def get_db_path():
@@ -143,6 +148,74 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
         return []
     finally:
         conn.close()
+
+
+def index_memory_md(db_path, project_dir):
+    """Index MEMORY.md from project_dir into the sessions table as source='file_memory'.
+
+    Idempotent: uses a deterministic UUID5 keyed on the absolute file path so
+    repeated calls upsert rather than accumulate duplicates.
+
+    First 200 lines only (matches Claude Code's SessionStart load limit).
+    Returns True if a MEMORY.md was found and indexed, False otherwise.
+    """
+    memory_path = Path(project_dir) / "MEMORY.md"
+    if not memory_path.is_file():
+        return False
+
+    try:
+        lines = memory_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        content = "\n".join(lines[:MEMORY_MD_MAX_LINES])
+        if not content.strip():
+            return False
+
+        abs_path = str(memory_path.resolve())
+        session_id = str(uuid.uuid5(MEMORY_MD_NAMESPACE, abs_path))
+        project_name = Path(project_dir).name
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+        conn = sqlite3.connect(db_path)
+        try:
+            # Ensure source column exists (migration may not have run yet)
+            try:
+                conn.execute(
+                    "ALTER TABLE sessions ADD COLUMN source TEXT DEFAULT 'session'"
+                )
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass  # column already exists
+
+            conn.execute(
+                """INSERT OR REPLACE INTO sessions
+                   (id, title, surface, project, start_date, end_date,
+                    summary, decisions, artifacts, open_questions, tags,
+                    created_at, source)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    session_id,
+                    f"MEMORY.md: {project_name}",
+                    "file",
+                    project_name,
+                    now,
+                    now,
+                    content,
+                    "[]",
+                    "[]",
+                    "[]",
+                    '["memory_md"]',
+                    now,
+                    "file_memory",
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return True
+
+    except Exception as e:
+        sys.stderr.write(f"LoreConvo auto-load: MEMORY.md index error: {e}\n")
+        return False
 
 
 def select_sessions(sessions, max_count=5):
@@ -273,6 +346,11 @@ def main():
         cwd = hook_input.get("cwd", "")
 
         db_path = get_db_path()
+
+        # Index MEMORY.md from the project directory (idempotent upsert).
+        project_dir = os.environ.get("LORECONVO_PROJECT_PATH", cwd)
+        if project_dir and os.path.exists(db_path):
+            index_memory_md(db_path, project_dir)
 
         days_back = int(os.environ.get("LORECONVO_DAYS_BACK", "14"))
         limit = int(os.environ.get("LORECONVO_LIMIT", "10"))
