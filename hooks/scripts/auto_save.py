@@ -177,7 +177,7 @@ def ensure_tables(conn):
     """)
 
 
-def save_to_db(db_path, session_id, parsed):
+def save_to_db(db_path, session_id, parsed, project=None):
     """Save parsed session data directly to SQLite."""
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
@@ -197,7 +197,7 @@ def save_to_db(db_path, session_id, parsed):
             now = datetime.now().isoformat()
             conn.execute(
                 """UPDATE sessions SET summary = ?, decisions = ?, artifacts = ?,
-                   tags = ?, end_date = ?, updated_at = ?
+                   tags = ?, end_date = ?, updated_at = ?, project = ?
                    WHERE id = ?""",
                 (
                     parsed["summary"],
@@ -206,6 +206,7 @@ def save_to_db(db_path, session_id, parsed):
                     json.dumps(["auto-saved"]),
                     now,
                     now,
+                    project,
                     session_uuid,
                 ),
             )
@@ -215,13 +216,14 @@ def save_to_db(db_path, session_id, parsed):
         now = datetime.now().isoformat()
 
         conn.execute(
-            """INSERT INTO sessions (id, title, surface, summary, decisions, artifacts,
+            """INSERT INTO sessions (id, title, surface, project, summary, decisions, artifacts,
                open_questions, tags, start_date, end_date)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_uuid,
                 parsed["title"],
                 "code",
+                project,
                 parsed["summary"],
                 json.dumps(parsed["decisions"]),
                 json.dumps(parsed["artifacts"]),
@@ -273,6 +275,8 @@ def main():
         hook_input = json.loads(stdin_data)
         session_id = hook_input.get("session_id", "unknown")
         transcript_path = hook_input.get("transcript_path", "")
+        cwd = hook_input.get("cwd", "")
+        project = os.path.basename(cwd.rstrip("/")) if cwd else None
 
         # Parse transcript
         parsed = parse_transcript(transcript_path)
@@ -285,7 +289,7 @@ def main():
 
         # Save to database
         db_path = get_db_path()
-        saved = save_to_db(db_path, session_id, parsed)
+        saved = save_to_db(db_path, session_id, parsed, project)
 
         if saved:
             sys.stderr.write(f"LoreConvo: Auto-saved session '{parsed['title']}'\n")
