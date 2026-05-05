@@ -765,7 +765,9 @@ class SessionDatabase:
         )
 
     def session_count(self) -> int:
-        row = self.conn.execute("SELECT COUNT(*) as c FROM sessions").fetchone()
+        row = self.conn.execute(
+            "SELECT COUNT(*) as c FROM sessions WHERE source IS NULL OR source != 'file_memory'"
+        ).fetchone()
         return row["c"]
 
     def get_sessions_for_export(
