@@ -100,9 +100,11 @@ whoami
 |----------|---------------|------------------------|
 | `LORECONVO_DB_PATH` | Path to your session memory database | Always `~/.loreconvo/sessions.db` -- substitute your actual home path |
 | `LORECONVO_PRO` | Your Pro license key (optional) | Provided when you purchase a license |
+| `LORECONVO_PROJECT_PATH` | Directory to scan for MEMORY.md at session start (optional) | Full path to your project folder |
 
 If `LORECONVO_DB_PATH` is not set, LoreConvo defaults to `~/.loreconvo/sessions.db`.
 If `LORECONVO_PRO` is not set, LoreConvo runs on the free tier (up to 50 sessions).
+If `LORECONVO_PROJECT_PATH` is not set, LoreConvo scans the current working directory for a MEMORY.md file.
 
 ### Restart Claude Code
 
@@ -163,6 +165,34 @@ Replace `YOUR_USERNAME` with your actual Mac username.
 > **If hooks were silently not running:** This was a known issue fixed in the 2026-04-06
 > release. The install script now sets the correct execute permissions. If you installed
 > before that fix, run `bash install.sh` again from your loreconvo directory to fix it.
+
+### MEMORY.md Auto-Indexing
+
+If your project has a `MEMORY.md` file, the SessionStart hook automatically indexes it into LoreConvo at the start of each session. No extra setup is required -- it happens as part of the hook you already configured above.
+
+The MEMORY.md content is stored as a searchable entry tagged `memory_md`. Claude can find it alongside regular session history when you ask it to recall project conventions or decisions.
+
+**To point LoreConvo at a specific project directory** (instead of the current working directory), add `LORECONVO_PROJECT_PATH` to the `env` block in your `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "loreconvo": {
+      "command": "/Users/YOUR_USERNAME/projects/loreconvo/.venv/bin/loreconvo",
+      "env": {
+        "LORECONVO_DB_PATH": "/Users/YOUR_USERNAME/.loreconvo/sessions.db",
+        "LORECONVO_PROJECT_PATH": "/Users/YOUR_USERNAME/projects/my_project"
+      }
+    }
+  }
+}
+```
+
+Replace `YOUR_USERNAME` and `my_project` with your actual values. Do not use `~` or `$HOME` -- Claude Code does not expand shell variables in `settings.json`.
+
+If you have multiple projects, leave `LORECONVO_PROJECT_PATH` unset. The hook will use wherever Claude Code is opened as the project directory, which is correct for most setups.
+
+---
 
 ### PreCompact Hook (Recommended)
 
