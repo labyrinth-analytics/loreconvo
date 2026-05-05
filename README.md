@@ -88,13 +88,41 @@ Claude Chat (web)
 **Claude Code** is the primary surface. The hooks run automatically:
 
 - When a session ends, `auto_save.py` captures the conversation and saves a structured summary (decisions, artifacts, open questions, tags) to the local SQLite database.
-- When a new session starts, `auto_load.py` queries the database, scores recent sessions by signal quality, and injects the most relevant context into the session as system context. Sessions with open questions and decisions score highest; low-signal sessions are filtered out.
+- When a new session starts, `auto_load.py` queries the database, scores recent sessions by signal quality, and injects the most relevant context into the session as system context. Sessions with open questions and decisions score highest; low-signal sessions are filtered out. It also indexes any MEMORY.md found in the project directory (see [MEMORY.md Auto-Indexing](#memorymd-auto-indexing) below).
 
 **Cowork** (this desktop app) does not run hooks, but has full access to the same database via the 16 MCP tools. You can call `get_recent_sessions`, `search_sessions`, or `get_context_for` directly from a Cowork conversation to pull in context from any prior Code session.
 
 **Claude Chat** (web) does not support plugins. The `export-to-chat.sh` script bridges the gap: it exports your most recent session to your clipboard so you can paste it directly into Chat. This gives Chat the same context that Code would have loaded automatically.
 
 The result: when you switch surfaces mid-project, you never have to re-explain what you were doing.
+
+## MEMORY.md Auto-Indexing
+
+If your project has a `MEMORY.md` file, LoreConvo automatically indexes it at every session start. The contents become searchable alongside your regular sessions via `search_sessions`.
+
+This means Claude can recall project conventions, team notes, or architectural decisions from MEMORY.md without you having to mention them. Search results from MEMORY.md are tagged `memory_md` and have `source='file_memory'` so you can tell them apart from regular session entries.
+
+**Which directory is scanned?**
+
+By default, LoreConvo scans the directory where Claude Code is running (the current working directory). To point it at a different directory, set the `LORECONVO_PROJECT_PATH` environment variable:
+
+```json
+"env": {
+  "LORECONVO_PROJECT_PATH": "/Users/YOUR_USERNAME/projects/my_project"
+}
+```
+
+Add this to the `loreconvo` block in your `~/.claude/settings.json` alongside `LORECONVO_DB_PATH`. Replace `YOUR_USERNAME` and `my_project` with your actual values. Do not use `~` or `$HOME` -- use the full path.
+
+**Filtering MEMORY.md entries in search results**
+
+To include MEMORY.md entries in a search, use `search_sessions` normally -- they appear automatically. To see only MEMORY.md entries, filter by tag:
+
+> "Search LoreConvo sessions tagged memory_md for 'database conventions'."
+
+The index is updated each time a session starts (idempotent -- no duplicates accumulate).
+
+---
 
 ## Verify Installation
 
@@ -139,6 +167,7 @@ At session end:
 - **Skill tracking**: Record which skills were used for smart filtering
 - **Persona tagging**: Hierarchical personas for agent-specific memory (e.g., `ron-bot:sql`)
 - **Full-text search**: SQLite FTS5 for fast keyword search across all sessions
+- **MEMORY.md auto-indexing**: Your project MEMORY.md is automatically indexed at session start and is searchable alongside regular sessions via `search_sessions`
 - **Dual interface**: MCP tools (for LLM use) + CLI (for human use)
 - **Local-first**: SQLite database, no cloud dependency, zero API costs
 
