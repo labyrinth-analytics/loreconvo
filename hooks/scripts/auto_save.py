@@ -175,10 +175,19 @@ def ensure_tables(conn):
             title, summary, decisions, content=sessions, content_rowid=rowid
         );
     """)
+    try:
+        conn.execute("ALTER TABLE sessions ADD COLUMN source TEXT DEFAULT 'session'")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already exists
 
 
-def save_to_db(db_path, session_id, parsed, project=None):
-    """Save parsed session data directly to SQLite."""
+def save_to_db(db_path, session_id, parsed, project=None, source="session"):
+    """Save parsed session data directly to SQLite.
+
+    source: 'session' for final SessionEnd saves, 'periodic' for mid-session snapshots.
+    Periodic saves use the same session_id so the final SessionEnd save overwrites them.
+    """
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
     conn = sqlite3.connect(db_path)
@@ -193,11 +202,12 @@ def save_to_db(db_path, session_id, parsed, project=None):
         # Check if session already exists (e.g., resumed session or duplicate hook fire)
         cursor = conn.execute("SELECT id FROM sessions WHERE id = ?", (session_uuid,))
         if cursor.fetchone():
-            # Already saved -- update instead of duplicate
+            # Already saved -- update instead of duplicate.
+            # Also update source so a final 'session' save overwrites a 'periodic' one.
             now = datetime.now().isoformat()
             conn.execute(
                 """UPDATE sessions SET summary = ?, decisions = ?, artifacts = ?,
-                   tags = ?, end_date = ?, updated_at = ?, project = ?
+                   tags = ?, end_date = ?, updated_at = ?, project = ?, source = ?
                    WHERE id = ?""",
                 (
                     parsed["summary"],
@@ -207,6 +217,7 @@ def save_to_db(db_path, session_id, parsed, project=None):
                     now,
                     now,
                     project,
+                    source,
                     session_uuid,
                 ),
             )
@@ -217,8 +228,8 @@ def save_to_db(db_path, session_id, parsed, project=None):
 
         conn.execute(
             """INSERT INTO sessions (id, title, surface, project, summary, decisions, artifacts,
-               open_questions, tags, start_date, end_date)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               open_questions, tags, start_date, end_date, source)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_uuid,
                 parsed["title"],
@@ -231,6 +242,7 @@ def save_to_db(db_path, session_id, parsed, project=None):
                 json.dumps(["auto-saved"]),
                 now,
                 now,
+                source,
             ),
         )
 
