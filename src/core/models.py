@@ -21,7 +21,10 @@ class Session:
     tags: List[str] = field(default_factory=list)
     skills_used: List[str] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'))
-    source: str = 'session'  # 'session' | 'file_memory'
+    source: str = 'session'  # 'session' | 'file_memory' | 'imported'
+    shared_by: Optional[str] = None      # user ID who exported this session (team memory)
+    origin_machine: Optional[str] = None  # hostname/user ID of originating machine
+    content_hash: Optional[str] = None    # SHA-256 of title+summary+created_at for dedup
 
 
 @dataclass

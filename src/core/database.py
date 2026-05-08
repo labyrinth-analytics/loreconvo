@@ -1,7 +1,10 @@
 """SQLite database operations with FTS5 search."""
 
+import hashlib
 import json
+import os
 import re
+import socket
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -10,6 +13,15 @@ from .config import Config
 from .models import (
     PersonaTag, Project, SearchResult, Session, SessionLink, SkillUsage
 )
+
+
+_IMPORT_FIELD_CAPS = {
+    "title": 500,
+    "summary": 100_000,
+    "list_item": 1_000,
+}
+_MAX_SESSIONS_PER_FILE = 10_000
+_MAX_IMPORT_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 class SessionLimitReachedError(Exception):
@@ -111,6 +123,7 @@ class SessionDatabase:
         self.conn.executescript(SCHEMA_SQL)
         self._migrate_fts_v2()
         self._migrate_add_source_column()
+        self._migrate_add_team_memory_columns()
         self.conn.commit()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
@@ -189,8 +202,34 @@ class SessionDatabase:
         except sqlite3.OperationalError:
             pass  # column already exists
 
+    def _migrate_add_team_memory_columns(self):
+        """Add shared_by, origin_machine, content_hash columns for v0.4.0 team memory.
+
+        Idempotent: each ALTER TABLE is wrapped in try/except for the duplicate-column
+        OperationalError that SQLite raises when the column already exists.
+        """
+        for col_sql in (
+            "ALTER TABLE sessions ADD COLUMN shared_by TEXT",
+            "ALTER TABLE sessions ADD COLUMN origin_machine TEXT",
+            "ALTER TABLE sessions ADD COLUMN content_hash TEXT",
+        ):
+            try:
+                self.conn.execute(col_sql)
+            except sqlite3.OperationalError:
+                pass  # column already exists
+
     def close(self):
         self.conn.close()
+
+    @staticmethod
+    def compute_content_hash(title: str, summary: str, created_at: str) -> str:
+        """Compute a stable SHA-256 hash for deduplication on merge."""
+        raw = f"{title}|{summary}|{created_at}"
+        return "sha256:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _get_origin_machine() -> str:
+        return os.environ.get("LORECONVO_USER_ID", "") or socket.gethostname()
 
     # -- Session CRUD --
 
@@ -212,17 +251,24 @@ class SessionDatabase:
                     "Set your LORECONVO_PRO license key to unlock unlimited sessions, "
                     "or contact info@labyrinthanalyticsconsulting.com to upgrade."
                 )
+        content_hash = (
+            session.content_hash
+            or self.compute_content_hash(session.title, session.summary, session.created_at)
+        )
+        origin_machine = session.origin_machine or self._get_origin_machine()
         self.conn.execute(
             """INSERT OR REPLACE INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
-                decisions, artifacts, open_questions, tags, created_at, source)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                decisions, artifacts, open_questions, tags, created_at, source,
+                shared_by, origin_machine, content_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session.id, session.title, session.surface, session.project,
                 session.start_date, session.end_date, session.summary,
                 json.dumps(session.decisions), json.dumps(session.artifacts),
                 json.dumps(session.open_questions), json.dumps(session.tags),
                 session.created_at, session.source,
+                session.shared_by, origin_machine, content_hash,
             )
         )
         for skill_name in session.skills_used:
@@ -762,7 +808,99 @@ class SessionDatabase:
             tags=self._parse_json_field(row["tags"]),
             created_at=row["created_at"] or "",
             source=row["source"] if "source" in row_keys else "session",
+            shared_by=row["shared_by"] if "shared_by" in row_keys else None,
+            origin_machine=row["origin_machine"] if "origin_machine" in row_keys else None,
+            content_hash=row["content_hash"] if "content_hash" in row_keys else None,
         )
+
+    def get_sessions_for_shared_export(
+        self,
+        project: Optional[str] = None,
+        session_id_filter: Optional[List[str]] = None,
+        export_all: bool = False,
+    ) -> List[Session]:
+        """Return sessions formatted for team-memory shared export.
+
+        SEC-00071: source='periodic' sessions are excluded.
+        """
+        query = "SELECT * FROM sessions WHERE (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
+        params: list = []
+
+        if not export_all:
+            if session_id_filter:
+                placeholders = ",".join("?" * len(session_id_filter))
+                query += f" AND id IN ({placeholders})"
+                params.extend(session_id_filter)
+            elif project:
+                query += " AND project = ?"
+                params.append(project)
+
+        query += " ORDER BY start_date DESC LIMIT 1000"
+        rows = self.conn.execute(query, params).fetchall()
+        return [self._row_to_session(r) for r in rows]
+
+    def merge_session(self, session_dict: dict, shared_by: str) -> str:
+        """Import one session from a shared export dict. Returns 'imported' or 'skipped'.
+
+        SEC-00067: skip-on-exist only, no replace option.
+        SEC-00068: field length caps applied before any DB insert.
+        SEC-00069: content_hash always recomputed locally; imported value is ignored.
+        """
+        session_id = str(session_dict.get("id", "")).strip()
+        if not session_id:
+            return "skipped"
+
+        # UUID-exists check (exact duplicate)
+        if self.conn.execute(
+            "SELECT id FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone():
+            return "skipped"
+
+        # Apply field caps (SEC-00068)
+        title = str(session_dict.get("title", "") or "")[:_IMPORT_FIELD_CAPS["title"]]
+        summary = str(session_dict.get("summary", "") or "")[:_IMPORT_FIELD_CAPS["summary"]]
+        created_at = str(session_dict.get("created_at", "") or "")
+
+        # Recompute content_hash locally; never trust the imported value (SEC-00069)
+        local_hash = self.compute_content_hash(title, summary, created_at)
+
+        # Content-hash dedup (same content, different UUID path)
+        if self.conn.execute(
+            "SELECT id FROM sessions WHERE content_hash = ?", (local_hash,)
+        ).fetchone():
+            return "skipped"
+
+        tags = [str(t)[:_IMPORT_FIELD_CAPS["list_item"]]
+                for t in (session_dict.get("tags") or [])]
+        decisions = [str(d)[:_IMPORT_FIELD_CAPS["list_item"]]
+                     for d in (session_dict.get("decisions") or [])]
+        open_questions = [str(q)[:_IMPORT_FIELD_CAPS["list_item"]]
+                          for q in (session_dict.get("open_questions") or [])]
+        # SEC-00070: strip artifacts to basename only
+        import os as _os
+        artifacts = [_os.path.basename(str(a)) for a in (session_dict.get("artifacts") or [])]
+
+        surface = str(session_dict.get("surface", "") or "")
+        project = session_dict.get("project") or None
+        origin_machine = str(session_dict.get("origin_machine", "") or "")
+
+        self.conn.execute(
+            """INSERT OR IGNORE INTO sessions
+               (id, title, surface, project, start_date, end_date, summary,
+                decisions, artifacts, open_questions, tags, created_at, source,
+                shared_by, origin_machine, content_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                session_id, title, surface, project,
+                created_at, None, summary,
+                json.dumps(decisions), json.dumps(artifacts),
+                json.dumps(open_questions), json.dumps(tags),
+                created_at, "imported",
+                shared_by, origin_machine, local_hash,
+            )
+        )
+        self.conn.commit()
+        return "imported"
 
     def session_count(self) -> int:
         row = self.conn.execute(
@@ -827,17 +965,24 @@ class SessionDatabase:
                         "Set your LORECONVO_PRO license key to unlock unlimited sessions."
                     )
 
+        content_hash = (
+            session.content_hash
+            or self.compute_content_hash(session.title, session.summary, session.created_at)
+        )
+        origin_machine = session.origin_machine or self._get_origin_machine()
         self.conn.execute(
             """INSERT OR REPLACE INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
-                decisions, artifacts, open_questions, tags, created_at, source)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                decisions, artifacts, open_questions, tags, created_at, source,
+                shared_by, origin_machine, content_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session.id, session.title, session.surface, session.project,
                 session.start_date, session.end_date, session.summary,
                 json.dumps(session.decisions), json.dumps(session.artifacts),
                 json.dumps(session.open_questions), json.dumps(session.tags),
                 session.created_at, session.source,
+                session.shared_by, origin_machine, content_hash,
             )
         )
         if existing:
