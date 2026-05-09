@@ -7,13 +7,17 @@ description: >
   recall decisions, artifacts, or context from previous Code, Cowork, or Chat sessions.
   Also triggers on "tag as persona", "link sessions", "project context", or "skill history".
 metadata:
-  version: "0.3.3"
+  version: "0.4.0"
   author: "Labyrinth Analytics Consulting"
 ---
 
 # LoreConvo
 
 Vault your Claude conversations. Capture session context (decisions, artifacts, open questions) and recall it in future sessions across Code, Cowork, and Chat. Never re-explain yourself again.
+
+LoreConvo captures two types of memory: **episodic** (what happened -- summaries, artifacts,
+open questions) and **semantic** (what was decided -- stable conclusions that persist across
+sessions). Together these give Claude a structured, searchable record of your project history.
 
 ## When to Vault a Session
 
