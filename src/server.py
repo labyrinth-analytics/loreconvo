@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 from core.models import Session
-from core.database import SessionDatabase, SessionLimitReachedError
+from core.database import SessionDatabase, SessionLimitReachedError, _MAX_IMPORT_BYTES, _MAX_SESSIONS_PER_FILE
 from core.config import Config, set_tier as _set_tier_config
 from core.license import get_license_status
 
@@ -530,6 +530,9 @@ def import_sessions(
     if not path.exists():
         return {"error": f"File not found: {file_path}"}
 
+    if path.stat().st_size > _MAX_IMPORT_BYTES:
+        return {"error": "Import file too large. Max: 50 MB."}
+
     raw = path.read_text(encoding="utf-8").strip()
 
     raw_sessions: list[dict] = []
@@ -553,6 +556,9 @@ def import_sessions(
                 raw_sessions.append(json.loads(line))
             except json.JSONDecodeError as exc:
                 return {"error": f"Invalid JSON on line {line_num}: {exc}"}
+
+    if len(raw_sessions) > _MAX_SESSIONS_PER_FILE:
+        return {"error": "Import file contains too many sessions. Max: 10,000."}
 
     imported = 0
     replaced = 0
