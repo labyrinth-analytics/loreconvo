@@ -1,10 +1,37 @@
-# LoreConvo v0.3.3
+# LoreConvo v0.4.0
 
 Vault your Claude conversations. Never re-explain yourself again.
 
 Persistent cross-surface memory for Claude. Capture session context across Code, Cowork, and Chat. Organize by project, skill, and persona.
 
 > **Available on the Anthropic Marketplace.** Install directly from Claude, or via PyPI: `uvx loreconvo`
+
+## Why LoreConvo?
+
+### Your memory stays on your machine
+
+Unlike cloud-based memory tools, LoreConvo stores everything in a SQLite database on your
+own machine. No data leaves your computer. No subscription to a memory cloud. No vendor with
+access to your session history.
+
+Your sessions live in `~/.loreconvo/sessions.db` -- a file you own, can back up, and can
+delete any time.
+
+### Works wherever Claude works
+
+LoreConvo works across Claude Code, Claude.ai, and Cowork -- not just in one IDE.
+When you switch surfaces mid-project, your context travels with you automatically.
+
+### Structured memory, not raw transcripts
+
+LoreConvo captures two types of memory for each session:
+
+- **Episodic memory:** what happened -- summaries, artifacts created, open questions left behind
+- **Semantic memory:** what was decided -- stable conclusions about the project that persist
+  across sessions
+
+Together these give Claude a structured, searchable record of your project's history,
+not just a pile of chat transcripts.
 
 ## Quick Start
 
@@ -95,6 +122,27 @@ Claude Chat (web)
 **Claude Chat** (web) does not support plugins. The `export-to-chat.sh` script bridges the gap: it exports your most recent session to your clipboard so you can paste it directly into Chat. This gives Chat the same context that Code would have loaded automatically.
 
 The result: when you switch surfaces mid-project, you never have to re-explain what you were doing.
+
+## Project Workspaces
+
+LoreConvo projects are persistent workspaces -- every session, decision, and artifact
+from your work on a project is searchable from any Claude surface.
+
+```python
+# Create a project workspace
+create_project("my-api", "REST API project", expected_skills=["openapi", "python"])
+
+# See recent sessions, skill usage, and open questions for the project
+get_project("my-api")
+
+# Search scoped to the project
+search_sessions("auth design", project="my-api")
+```
+
+Used with [LoreDocs](https://github.com/labyrinth-analytics/loredocs), LoreConvo forms a
+portable project workspace for all of Claude -- session memory AND structured knowledge,
+entirely on your machine. Where cloud AI workspaces tie you to one ecosystem, the Lore
+pair works across every Claude surface you already use.
 
 ## MEMORY.md Auto-Indexing
 
