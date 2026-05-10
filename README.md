@@ -152,15 +152,13 @@ This means Claude can recall project conventions, team notes, or architectural d
 
 **Which directory is scanned?**
 
-By default, LoreConvo scans the directory where Claude Code is running (the current working directory). To point it at a different directory, set the `LORECONVO_PROJECT_PATH` environment variable:
+By default, LoreConvo scans the directory where Claude Code is running (the current working directory). To point it at a different directory, pass `LORECONVO_PROJECT_PATH` as an env flag in your `claude mcp add --scope user` command:
 
-```json
-"env": {
-  "LORECONVO_PROJECT_PATH": "/Users/YOUR_USERNAME/projects/my_project"
-}
+```bash
+"--env=LORECONVO_PROJECT_PATH=/Users/YOUR_USERNAME/projects/my_project"
 ```
 
-Add this to the `loreconvo` block in your `~/.claude/settings.json` alongside `LORECONVO_DB_PATH`. Replace `YOUR_USERNAME` and `my_project` with your actual values. Do not use `~` or `$HOME` -- use the full path.
+Replace `YOUR_USERNAME` and `my_project` with your actual values. Use the full absolute path -- do not use `~` or `$HOME`.
 
 **Filtering MEMORY.md entries in search results**
 

@@ -69,46 +69,40 @@ python3 -m venv .venv
 
 ## Connecting to Claude Code
 
-After installation, add LoreConvo to your `~/.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "loreconvo": {
-      "command": "/Users/YOUR_USERNAME/projects/loreconvo/.venv/bin/loreconvo",
-      "env": {
-        "LORECONVO_DB_PATH": "/Users/YOUR_USERNAME/.loreconvo/sessions.db"
-      }
-    }
-  }
-}
-```
-
-Replace `YOUR_USERNAME` with your Mac username. To find it, open a terminal and run:
+After installation, register LoreConvo with Claude Code using the `claude mcp add` command:
 
 ```bash
-whoami
+claude mcp add --scope user \
+  "--env=LORECONVO_PRO=<your-license-key>" \
+  loreconvo -- \
+  /path/to/loreconvo/.venv/bin/python \
+  /path/to/loreconvo/src/server.py
 ```
 
-> **Important:** Do not use `$HOME` or `~` in `settings.json`. Claude Code does not
-> expand shell variables in this file. Use the full absolute path with your actual
-> username instead.
+Replace `/path/to/loreconvo` with the actual path to your LoreConvo installation. To find it, run `pwd` from inside the loreconvo directory.
+
+The `--env=LORECONVO_PRO=<your-license-key>` flag is optional -- omit it if you are using the free tier. The `--scope user` flag registers LoreConvo for all Claude Code sessions (not just the current project).
+
+> **Why `claude mcp add` instead of editing settings.json?** Claude Code reads
+> user-level MCP servers from `~/.claude.json`, managed by `claude mcp add --scope user`.
+> Adding `mcpServers` entries to `~/.claude/settings.json` is silently ignored --
+> the server will not load. (GitHub issue #4976.)
 
 ### Environment variables
 
-| Variable | What it is for | Where to find the value |
-|----------|---------------|------------------------|
-| `LORECONVO_DB_PATH` | Path to your session memory database | Always `~/.loreconvo/sessions.db` -- substitute your actual home path |
-| `LORECONVO_PRO` | Your Pro license key (optional) | Provided when you purchase a license |
-| `LORECONVO_PROJECT_PATH` | Directory to scan for MEMORY.md at session start (optional) | Full path to your project folder |
+| Variable | What it is for | How to set it |
+|----------|---------------|--------------|
+| `LORECONVO_PRO` | Your Pro license key (optional) | `--env=LORECONVO_PRO=<key>` in the `claude mcp add` command |
+| `LORECONVO_DB_PATH` | Path to your session memory database (optional) | `--env=LORECONVO_DB_PATH=/path/to/sessions.db` in the command |
+| `LORECONVO_PROJECT_PATH` | Directory to scan for MEMORY.md at session start (optional) | `--env=LORECONVO_PROJECT_PATH=/path/to/project` in the command |
 
 If `LORECONVO_DB_PATH` is not set, LoreConvo defaults to `~/.loreconvo/sessions.db`.
 If `LORECONVO_PRO` is not set, LoreConvo runs on the free tier (up to 50 sessions).
 If `LORECONVO_PROJECT_PATH` is not set, LoreConvo scans the current working directory for a MEMORY.md file.
 
-### Restart Claude Code
+### Verify the connection
 
-After editing `settings.json`, restart Claude Code. Run the `/mcp` command in Claude
+After running `claude mcp add`, restart Claude Code. Run the `/mcp` command in Claude
 to verify LoreConvo is connected. You should see `loreconvo` listed with a green status.
 
 ---
@@ -172,23 +166,18 @@ If your project has a `MEMORY.md` file, the SessionStart hook automatically inde
 
 The MEMORY.md content is stored as a searchable entry tagged `memory_md`. Claude can find it alongside regular session history when you ask it to recall project conventions or decisions.
 
-**To point LoreConvo at a specific project directory** (instead of the current working directory), add `LORECONVO_PROJECT_PATH` to the `env` block in your `~/.claude/settings.json`:
+**To point LoreConvo at a specific project directory** (instead of the current working directory), add `LORECONVO_PROJECT_PATH` as an env flag in your `claude mcp add` command:
 
-```json
-{
-  "mcpServers": {
-    "loreconvo": {
-      "command": "/Users/YOUR_USERNAME/projects/loreconvo/.venv/bin/loreconvo",
-      "env": {
-        "LORECONVO_DB_PATH": "/Users/YOUR_USERNAME/.loreconvo/sessions.db",
-        "LORECONVO_PROJECT_PATH": "/Users/YOUR_USERNAME/projects/my_project"
-      }
-    }
-  }
-}
+```bash
+claude mcp add --scope user \
+  "--env=LORECONVO_PRO=<your-license-key>" \
+  "--env=LORECONVO_PROJECT_PATH=/Users/YOUR_USERNAME/projects/my_project" \
+  loreconvo -- \
+  /path/to/loreconvo/.venv/bin/python \
+  /path/to/loreconvo/src/server.py
 ```
 
-Replace `YOUR_USERNAME` and `my_project` with your actual values. Do not use `~` or `$HOME` -- Claude Code does not expand shell variables in `settings.json`.
+Replace `YOUR_USERNAME` and `my_project` with your actual values. Use the full absolute path -- do not use `~` or `$HOME`.
 
 If you have multiple projects, leave `LORECONVO_PROJECT_PATH` unset. The hook will use wherever Claude Code is opened as the project directory, which is correct for most setups.
 
@@ -298,7 +287,7 @@ Claude Code does not expand shell variables in `settings.json`. Replace any `~` 
 
 The free tier supports up to 50 sessions. When you reach the limit, `save_session`
 returns a message explaining how to upgrade. Contact Labyrinth Analytics for a Pro
-license key, then set it as `LORECONVO_PRO` in your `settings.json` env block.
+license key, then re-run `claude mcp add --scope user` with `--env=LORECONVO_PRO=<your-key>` included.
 
 ---
 
