@@ -147,6 +147,9 @@ def export(session_id, last, fmt, project, session_ids, export_all):
                 "content_hash": s.content_hash or db.compute_content_hash(
                     s.title, s.summary, s.created_at
                 ),
+                "decisions": s.decisions,
+                "open_questions": s.open_questions,
+                "artifacts": safe_artifacts,
             })
 
         click.echo(json.dumps({
