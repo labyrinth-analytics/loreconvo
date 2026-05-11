@@ -277,9 +277,17 @@ LoreConvo provides 17 MCP tools that Claude calls automatically during sessions:
 - macOS or Linux
 - `mcp` and `click` (auto-installed by `install.sh`)
 
-## Data Storage
+## Data and Privacy
 
-Sessions are stored locally in SQLite at `~/.loreconvo/sessions.db`. Override with the `LORECONVO_DB` environment variable.
+LoreConvo is **local-first**. All data lives in `~/.loreconvo/sessions.db` on your machine.
+
+- **Data collected:** Session titles, summaries, tags, surface identifiers, project names, and skill names you provide when saving. No telemetry, usage analytics, or identifiers are collected automatically.
+- **Storage:** SQLite database at `~/.loreconvo/sessions.db`. No cloud storage. Override the path with the `LORECONVO_DB` environment variable.
+- **Third-party sharing:** None. Data never leaves your machine.
+- **Retention:** Data is retained until you delete it via `delete_session` or remove the database file manually. No automatic expiry.
+- **Contact:** info@labyrinthanalyticsconsulting.com
+
+Full privacy policy: https://labyrinthanalyticsconsulting.com/privacy
 
 ## Troubleshooting
 

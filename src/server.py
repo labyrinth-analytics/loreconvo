@@ -35,7 +35,7 @@ mcp = FastMCP(
 db = SessionDatabase(Config())
 
 
-@mcp.tool()
+@mcp.tool(title="Save Session")
 def save_session(
     title: str,
     surface: str,
@@ -130,7 +130,7 @@ def save_session(
     return result
 
 
-@mcp.tool()
+@mcp.tool(title="Get Recent Sessions")
 def get_recent_sessions(
     limit: int = 10,
     days_back: int = 30,
@@ -163,7 +163,7 @@ def get_recent_sessions(
     ]
 
 
-@mcp.tool()
+@mcp.tool(title="Get Session")
 def get_session(session_id: str) -> dict:
     """Get full details of a specific session.
 
@@ -189,7 +189,7 @@ def get_session(session_id: str) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(title="Search Sessions")
 def search_sessions(
     query: str,
     persona: str | None = None,
@@ -230,7 +230,7 @@ def search_sessions(
     ]
 
 
-@mcp.tool()
+@mcp.tool(title="Get Context for Topic")
 def get_context_for(topic: str, max_results: int = 5, include_external: bool = False) -> list[dict]:
     """Get relevant session context for a topic.
 
@@ -257,7 +257,7 @@ def get_context_for(topic: str, max_results: int = 5, include_external: bool = F
     ]
 
 
-@mcp.tool()
+@mcp.tool(title="Tag Session")
 def tag_session(
     session_id: str,
     persona_name: str,
@@ -276,7 +276,7 @@ def tag_session(
     return {"status": "tagged", "session_id": session_id, "persona": persona_name}
 
 
-@mcp.tool()
+@mcp.tool(title="Link Sessions")
 def link_sessions(
     from_id: str,
     to_id: str,
@@ -293,7 +293,7 @@ def link_sessions(
     return {"status": "linked", "from": from_id, "to": to_id, "type": link_type}
 
 
-@mcp.tool()
+@mcp.tool(title="Get Project")
 def get_project(project_name: str) -> dict:
     """Get project details including recent sessions and skill usage stats.
 
@@ -306,13 +306,13 @@ def get_project(project_name: str) -> dict:
     return result
 
 
-@mcp.tool()
+@mcp.tool(title="List Projects")
 def list_projects() -> list[dict]:
     """List all defined projects with session counts."""
     return db.list_projects()
 
 
-@mcp.tool()
+@mcp.tool(title="Create Project")
 def create_project(
     name: str,
     description: str = "",
@@ -333,7 +333,7 @@ def create_project(
     return {"status": "created", "project": name}
 
 
-@mcp.tool()
+@mcp.tool(title="Onboard LoreConvo")
 def loreconvo_onboard(
     name: str | None = None,
     projects: list[str] | None = None,
@@ -369,7 +369,7 @@ def loreconvo_onboard(
     return _run_onboard(db, name=name, projects=projects, agents=agents, tag_style=tag_style)
 
 
-@mcp.tool()
+@mcp.tool(title="Get Skill History")
 def get_skill_history(
     skill_name: str,
     days_back: int = 90,
@@ -395,7 +395,7 @@ def get_skill_history(
     ]
 
 
-@mcp.tool()
+@mcp.tool(title="Get Context Suggestions")
 def vault_suggest(
     project: str | None = None,
     persona: str | None = None,
@@ -421,7 +421,7 @@ def vault_suggest(
     return db.get_suggestions(project, persona, days_back, limit)
 
 
-@mcp.tool()
+@mcp.tool(title="Get License Tier")
 def get_tier() -> dict:
     """Return the current LoreConvo license tier and status.
 
@@ -448,6 +448,7 @@ class VaultSetTierInput(BaseModel):
 
 
 @mcp.tool(
+    title="Set License Tier",
     name="vault_set_tier",
     annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
 )
@@ -490,7 +491,7 @@ def vault_set_tier(params: VaultSetTierInput) -> str:
     )
 
 
-@mcp.tool()
+@mcp.tool(title="Export Sessions")
 def export_sessions(
     output_path: str | None = None,
     project: str | None = None,
@@ -571,7 +572,7 @@ def export_sessions(
     }
 
 
-@mcp.tool()
+@mcp.tool(title="Import Sessions")
 def import_sessions(
     file_path: str,
     on_conflict: str = "skip",
@@ -697,7 +698,7 @@ def import_sessions(
     return summary
 
 
-@mcp.tool()
+@mcp.tool(title="Inspect Sessions")
 def inspect_sessions(
     session_id: str | None = None,
     search: str | None = None,
@@ -764,7 +765,7 @@ def inspect_sessions(
     return result
 
 
-@mcp.tool()
+@mcp.tool(title="Get Usage Stats")
 def get_stats() -> dict:
     """Return a usage dashboard: session counts by surface, project, and tag;
     storage metrics (DB size, estimated tokens stored); and the 5 most recent sessions.
