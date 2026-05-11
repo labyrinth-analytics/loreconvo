@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     open_questions  TEXT,
     tags            TEXT,
     created_at      TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-    source          TEXT DEFAULT 'session'
+    source          TEXT DEFAULT 'session',
+    external_tool_session INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS session_skills (
@@ -124,6 +125,7 @@ class SessionDatabase:
         self._migrate_fts_v2()
         self._migrate_add_source_column()
         self._migrate_add_team_memory_columns()
+        self._migrate_add_external_tool_session_column()
         self.conn.commit()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
@@ -218,6 +220,18 @@ class SessionDatabase:
             except sqlite3.OperationalError:
                 pass  # column already exists
 
+    def _migrate_add_external_tool_session_column(self):
+        """Add external_tool_session column for contamination control (RON-00115).
+
+        Idempotent: wrapped in try/except for duplicate-column OperationalError.
+        """
+        try:
+            self.conn.execute(
+                "ALTER TABLE sessions ADD COLUMN external_tool_session INTEGER DEFAULT 0"
+            )
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
     def close(self):
         self.conn.close()
 
@@ -260,8 +274,8 @@ class SessionDatabase:
             """INSERT OR REPLACE INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
                 decisions, artifacts, open_questions, tags, created_at, source,
-                shared_by, origin_machine, content_hash)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                shared_by, origin_machine, content_hash, external_tool_session)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session.id, session.title, session.surface, session.project,
                 session.start_date, session.end_date, session.summary,
@@ -269,6 +283,7 @@ class SessionDatabase:
                 json.dumps(session.open_questions), json.dumps(session.tags),
                 session.created_at, session.source,
                 session.shared_by, origin_machine, content_hash,
+                1 if session.external_tool_session else 0,
             )
         )
         for skill_name in session.skills_used:
@@ -297,10 +312,14 @@ class SessionDatabase:
 
     def get_recent_sessions(
         self, limit: int = 10, days_back: int = 30,
-        project: Optional[str] = None, skill: Optional[str] = None
+        project: Optional[str] = None, skill: Optional[str] = None,
+        include_external: bool = False,
     ) -> List[Session]:
+        _exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
         query = "SELECT * FROM sessions WHERE start_date >= ? AND (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
+        if _exclusion_enabled and not include_external:
+            query += " AND (external_tool_session IS NULL OR external_tool_session = 0)"
         params = [cutoff]
 
         if project:
@@ -420,8 +439,10 @@ class SessionDatabase:
     def search_sessions(
         self, query: str, persona: Optional[str] = None,
         tags: Optional[List[str]] = None, skills: Optional[List[str]] = None,
-        project: Optional[str] = None, limit: int = 10
+        project: Optional[str] = None, limit: int = 10,
+        include_external: bool = False,
     ) -> List[SearchResult]:
+        _exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
         fts_query = self._sanitize_fts_query(query)
         sql = """
             SELECT s.*, sessions_fts.rank
@@ -429,6 +450,8 @@ class SessionDatabase:
             JOIN sessions_fts ON s.rowid = sessions_fts.rowid
             WHERE sessions_fts MATCH ?
         """
+        if _exclusion_enabled and not include_external:
+            sql += " AND (s.external_tool_session IS NULL OR s.external_tool_session = 0)"
         params = [fts_query]
 
         if persona:
@@ -464,8 +487,8 @@ class SessionDatabase:
 
         return results
 
-    def get_context_for(self, topic: str, max_results: int = 5) -> List[SearchResult]:
-        return self.search_sessions(query=topic, limit=max_results)
+    def get_context_for(self, topic: str, max_results: int = 5, include_external: bool = False) -> List[SearchResult]:
+        return self.search_sessions(query=topic, limit=max_results, include_external=include_external)
 
     def list_all_skills(self) -> List[dict]:
         """Return all distinct skill names with session counts, sorted by use count desc."""
@@ -811,6 +834,7 @@ class SessionDatabase:
             shared_by=row["shared_by"] if "shared_by" in row_keys else None,
             origin_machine=row["origin_machine"] if "origin_machine" in row_keys else None,
             content_hash=row["content_hash"] if "content_hash" in row_keys else None,
+            external_tool_session=bool(row["external_tool_session"]) if "external_tool_session" in row_keys else False,
         )
 
     def get_sessions_for_shared_export(
@@ -974,8 +998,8 @@ class SessionDatabase:
             """INSERT OR REPLACE INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
                 decisions, artifacts, open_questions, tags, created_at, source,
-                shared_by, origin_machine, content_hash)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                shared_by, origin_machine, content_hash, external_tool_session)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session.id, session.title, session.surface, session.project,
                 session.start_date, session.end_date, session.summary,
@@ -983,6 +1007,7 @@ class SessionDatabase:
                 json.dumps(session.open_questions), json.dumps(session.tags),
                 session.created_at, session.source,
                 session.shared_by, origin_machine, content_hash,
+                1 if session.external_tool_session else 0,
             )
         )
         if existing:

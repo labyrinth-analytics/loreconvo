@@ -31,7 +31,9 @@ def cli():
 @click.option("--decisions", "-d", multiple=True, help="Key decisions (repeatable)")
 @click.option("--skills", multiple=True, help="Skills used (repeatable)")
 @click.option("--tags", multiple=True, help="Tags (repeatable)")
-def save(title, surface, summary, project, decisions, skills, tags):
+@click.option("--external-tool", "external_tool_session", is_flag=True, default=False,
+              help="Mark as an external tool session (excluded from auto-load and search by default)")
+def save(title, surface, summary, project, decisions, skills, tags, external_tool_session):
     """Save a session to memory."""
     session = Session(
         title=title,
@@ -41,6 +43,7 @@ def save(title, surface, summary, project, decisions, skills, tags):
         decisions=list(decisions),
         skills_used=list(skills),
         tags=list(tags),
+        external_tool_session=external_tool_session,
     )
     session_id = db.save_session(session)
     click.echo(f"Saved session: {session_id}")
