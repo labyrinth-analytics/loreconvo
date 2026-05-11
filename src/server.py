@@ -13,6 +13,7 @@ from core.models import Session
 from core.database import SessionDatabase, SessionLimitReachedError, _MAX_IMPORT_BYTES, _MAX_SESSIONS_PER_FILE
 from core.config import Config, set_tier as _set_tier_config
 from core.license import get_license_status
+from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onboard_config_path
 
 mcp = FastMCP(
     "loreconvo",
@@ -301,6 +302,42 @@ def create_project(
     """
     db.create_project(name, description, expected_skills, default_persona)
     return {"status": "created", "project": name}
+
+
+@mcp.tool()
+def loreconvo_onboard(
+    name: str | None = None,
+    projects: list[str] | None = None,
+    agents: list[str] | None = None,
+    tag_style: str = "simple",
+) -> dict:
+    """Set up or update your LoreConvo workspace configuration.
+
+    Call this once after installing LoreConvo to get a recommended setup.
+    Call again any time to add projects or agents, or to regenerate your
+    reference doc.
+
+    Creates:
+    - Project registrations for each project listed
+    - A config file at ~/.loreconvo/onboard_config.json
+    - A reference doc (markdown) in the response -- paste it into your
+      CLAUDE.md or a LoreDocs vault so your AI assistant can apply your
+      conventions consistently
+
+    Args:
+        name: Your workspace or team name (e.g. 'Labyrinth Analytics')
+        projects: Snake_case project identifiers (e.g. ['side_hustle', 'finance'])
+        agents: Agent names that will tag sessions (e.g. ['ron', 'meg'])
+        tag_style: 'simple' (status + priority) or 'detailed' (adds effort,
+                   scout-run markers, date tag guidance)
+
+    Surfaces: code (Claude Code), cowork (Claude.ai Projects), chat (Claude.ai
+    chat), codex (Codex CLI). Custom values are allowed for other tools.
+    Agent identity: use tags=['agent:name'] -- not the surface field.
+    """
+    if tag_style not in ("simple", "detailed"):
+        return {"error": "tag_style must be 'simple' or 'detailed'"}
+    return _run_onboard(db, name=name, projects=projects, agents=agents, tag_style=tag_style)
 
 
 @mcp.tool()
