@@ -764,6 +764,17 @@ def inspect_sessions(
     return result
 
 
+@mcp.tool()
+def get_stats() -> dict:
+    """Return a usage dashboard: session counts by surface, project, and tag;
+    storage metrics (DB size, estimated tokens stored); and the 5 most recent sessions.
+
+    Provides visibility into your memory usage -- who saved what, how much is stored,
+    and what's been captured most recently.
+    """
+    return db.get_usage_stats()
+
+
 def main():
     """Entry point for uvx / console script execution."""
     mcp.run(transport="stdio")
