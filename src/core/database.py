@@ -1005,6 +1005,77 @@ class SessionDatabase:
         self.conn.commit()
         return True
 
+    def get_usage_stats(self) -> dict:
+        """Return aggregate usage statistics for the get_stats MCP tool.
+
+        Excludes periodic snapshots and file_memory entries (internal sources).
+        """
+        user_filter = "source IS NULL OR source NOT IN ('file_memory', 'periodic')"
+
+        total = self.conn.execute(
+            f"SELECT COUNT(*) as c FROM sessions WHERE {user_filter}"
+        ).fetchone()["c"]
+
+        by_surface = self.conn.execute(
+            f"SELECT surface, COUNT(*) as c FROM sessions "
+            f"WHERE {user_filter} GROUP BY surface ORDER BY c DESC"
+        ).fetchall()
+
+        by_project = self.conn.execute(
+            f"SELECT COALESCE(project, '(none)') as project, COUNT(*) as c "
+            f"FROM sessions WHERE {user_filter} "
+            f"GROUP BY project ORDER BY c DESC LIMIT 10"
+        ).fetchall()
+
+        recent_5 = self.conn.execute(
+            f"SELECT title, start_date, surface, project FROM sessions "
+            f"WHERE {user_filter} ORDER BY start_date DESC LIMIT 5"
+        ).fetchall()
+
+        # Tag breakdown: parse JSON tags column in Python
+        tag_rows = self.conn.execute(
+            f"SELECT tags FROM sessions "
+            f"WHERE tags IS NOT NULL AND tags != '[]' AND ({user_filter})"
+        ).fetchall()
+        tag_counts: dict = {}
+        for row in tag_rows:
+            for tag in self._parse_json_field(row["tags"]):
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+        top_tags = dict(sorted(tag_counts.items(), key=lambda x: -x[1])[:10])
+
+        # Storage metrics
+        db_size_bytes = 0
+        if os.path.exists(self.config.db_path):
+            db_size_bytes = os.path.getsize(self.config.db_path)
+
+        char_count_row = self.conn.execute(
+            f"SELECT SUM(LENGTH(COALESCE(title,'')) + LENGTH(COALESCE(summary,'')) + "
+            f"LENGTH(COALESCE(decisions,'')) + LENGTH(COALESCE(open_questions,''))) as total_chars "
+            f"FROM sessions WHERE {user_filter}"
+        ).fetchone()
+        total_chars = char_count_row["total_chars"] or 0
+
+        return {
+            "total_sessions": total,
+            "by_surface": {r["surface"]: r["c"] for r in by_surface},
+            "by_project": {r["project"]: r["c"] for r in by_project},
+            "top_tags": top_tags,
+            "recent_sessions": [
+                {
+                    "title": r["title"],
+                    "date": r["start_date"][:10] if r["start_date"] else "",
+                    "surface": r["surface"],
+                    "project": r["project"],
+                }
+                for r in recent_5
+            ],
+            "storage": {
+                "db_size_bytes": db_size_bytes,
+                "db_size_mb": round(db_size_bytes / (1024 * 1024), 2),
+                "estimated_tokens": total_chars // 4,
+            },
+        }
+
     def get_sessions_for_export(
         self,
         project: Optional[str] = None,
