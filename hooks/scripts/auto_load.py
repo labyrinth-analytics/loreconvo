@@ -116,6 +116,17 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
 
         sessions = []
 
+        exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
+        # Only add the filter if the column exists (older DBs may not have it yet)
+        has_ext_col = any(
+            row[1] == "external_tool_session"
+            for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
+        )
+        ext_filter = (
+            " AND (external_tool_session IS NULL OR external_tool_session = 0)"
+            if (exclusion_enabled and has_ext_col) else ""
+        )
+
         if cwd:
             cursor = conn.execute(
                 """SELECT id, title, summary, decisions, artifacts,
@@ -123,7 +134,9 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
                    FROM sessions
                    WHERE project LIKE ?
                      AND start_date >= ?
-                     AND (source IS NULL OR source = 'session')
+                     AND (source IS NULL OR source = 'session')"""
+                + ext_filter +
+                """
                    ORDER BY start_date DESC
                    LIMIT ?""",
                 (f"%{cwd}%", cutoff, limit),
@@ -136,7 +149,9 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
                 """SELECT id, title, summary, decisions, artifacts,
                           open_questions, tags, start_date, end_date
                    FROM sessions
-                   WHERE (source IS NULL OR source = 'session')
+                   WHERE (source IS NULL OR source = 'session')"""
+                + ext_filter +
+                """
                    ORDER BY start_date DESC
                    LIMIT ?""",
                 (limit,),
