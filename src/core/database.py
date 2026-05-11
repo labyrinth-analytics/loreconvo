@@ -300,7 +300,7 @@ class SessionDatabase:
         project: Optional[str] = None, skill: Optional[str] = None
     ) -> List[Session]:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
-        query = "SELECT * FROM sessions WHERE start_date >= ?"
+        query = "SELECT * FROM sessions WHERE start_date >= ? AND (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
         params = [cutoff]
 
         if project:
