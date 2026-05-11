@@ -331,5 +331,101 @@ def stats():
         click.echo(f"Most recent: {recent[0].title} ({recent[0].start_date[:10]})")
 
 
+@cli.command()
+@click.argument("session_id", required=False)
+@click.option("--search", help="Full-text search query")
+@click.option("--tag", help="Filter by tag substring (e.g. 'agent:ron')")
+@click.option("--surface", help="Filter by surface (code, cowork, chat)")
+@click.option("--since", help="Show sessions since YYYY-MM-DD")
+@click.option("--limit", "-n", default=20, help="Max sessions to show")
+@click.option("--show-stats", is_flag=True, help="Show aggregate statistics")
+@click.option("--delete", "delete_id", metavar="ID", help="Delete a session by ID (prompts for confirmation)")
+def inspect(session_id, search, tag, surface, since, limit, show_stats, delete_id):
+    """Inspect stored sessions: list, filter, view detail, or delete.
+
+    Without arguments, lists recent sessions.
+    With SESSION_ID, shows full detail for that session.
+    Use --delete ID to remove a session after confirmation.
+    Use --show-stats to add aggregate counts to the listing.
+    """
+    if delete_id:
+        session = db.get_session(delete_id)
+        if not session:
+            click.echo(f"Session {delete_id} not found.")
+            sys.exit(1)
+        click.echo(f"Session to delete: [{session.start_date[:10]}] {session.title}")
+        if not click.confirm("Delete this session?"):
+            click.echo("Cancelled.")
+            return
+        if db.delete_session(delete_id):
+            click.echo(f"Deleted session {delete_id}.")
+        else:
+            click.echo("Delete failed.")
+            sys.exit(1)
+        return
+
+    if session_id:
+        session = db.get_session(session_id)
+        if not session:
+            click.echo(f"Session {session_id} not found.")
+            sys.exit(1)
+        click.echo(f"Title:   {session.title}")
+        click.echo(f"Date:    {session.start_date[:16]}")
+        click.echo(f"Surface: {session.surface}")
+        if session.project:
+            click.echo(f"Project: {session.project}")
+        if session.tags:
+            click.echo(f"Tags:    {', '.join(session.tags)}")
+        click.echo("")
+        click.echo("Summary:")
+        click.echo(session.summary)
+        if session.decisions:
+            click.echo("\nDecisions:")
+            for d in session.decisions:
+                click.echo(f"  - {d}")
+        if session.artifacts:
+            click.echo("\nArtifacts:")
+            for a in session.artifacts:
+                click.echo(f"  - {a}")
+        if session.open_questions:
+            click.echo("\nOpen Questions:")
+            for q in session.open_questions:
+                click.echo(f"  - {q}")
+        return
+
+    sessions = db.inspect_sessions(
+        search=search, tag=tag, surface=surface, since=since, limit=limit
+    )
+
+    if show_stats:
+        stats_data = db.get_inspect_stats()
+        click.echo(f"Total sessions: {stats_data['total']}")
+        if stats_data["by_surface"]:
+            parts = ", ".join(f"{k} ({v})" for k, v in stats_data["by_surface"].items())
+            click.echo(f"By surface:     {parts}")
+        if stats_data["by_project"]:
+            parts = ", ".join(
+                f"{k} ({v})" for k, v in list(stats_data["by_project"].items())[:5]
+            )
+            click.echo(f"By project:     {parts}")
+        click.echo(f"With open questions: {stats_data['with_open_questions']}")
+        click.echo("")
+
+    if not sessions:
+        click.echo("No sessions found.")
+        return
+
+    click.echo(f"{'ID':<8}  {'DATE':<10}  {'SURFACE':<8}  {'TAGS':<30}  TITLE")
+    click.echo("-" * 90)
+    for s in sessions:
+        sid = s.id[:8] if s.id else "?"
+        date = s.start_date[:10] if s.start_date else "?"
+        surf = s.surface[:8] if s.surface else ""
+        tags_str = ",".join(s.tags)[:30] if s.tags else ""
+        title = s.title[:40] if s.title else ""
+        click.echo(f"{sid:<8}  {date:<10}  {surf:<8}  {tags_str:<30}  {title}")
+    click.echo(f"\n{len(sessions)} session(s)")
+
+
 if __name__ == "__main__":
     cli()
