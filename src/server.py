@@ -23,7 +23,12 @@ mcp = FastMCP(
         "Use search_sessions or get_context_for to recall prior work. "
         "Use get_recent_sessions to see what was done recently. "
         "Use vault_suggest to get proactive recommendations on what to revisit. "
-        "Tag sessions with personas for agent-specific memory."
+        "Use loreconvo_onboard to set up your workspace on first install. "
+        "Fields: surface identifies the platform (code/cowork/chat/codex/custom), "
+        "project is a snake_case workspace identifier, "
+        "tags use conventions status:*, priority:*, agent:* (see your setup doc), "
+        "skills_used lists skill names invoked (not tool names). "
+        "Agents tag sessions with agent:<name> -- not the surface field."
     )
 )
 
