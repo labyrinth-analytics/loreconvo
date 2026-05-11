@@ -697,6 +697,73 @@ def import_sessions(
     return summary
 
 
+@mcp.tool()
+def inspect_sessions(
+    session_id: str | None = None,
+    search: str | None = None,
+    tag: str | None = None,
+    surface: str | None = None,
+    since: str | None = None,
+    limit: int = 20,
+    show_stats: bool = False,
+) -> dict:
+    """Inspect stored sessions: list, filter, or get full detail for one session.
+
+    Answers 'what do you know about me?' and helps users find, browse, and
+    understand their stored session memory.
+
+    Args:
+        session_id: If provided, return full detail for this specific session.
+        search: Full-text search query across title, summary, decisions, tags.
+        tag: Filter by tag substring (e.g. 'agent:ron', 'side_hustle').
+        surface: Filter by surface ('code', 'cowork', 'chat').
+        since: Return sessions on or after this date (YYYY-MM-DD).
+        limit: Max sessions to return (default 20).
+        show_stats: If True, include aggregate counts (total, by_surface, by_project).
+    """
+    if session_id:
+        session = db.get_session(session_id)
+        if not session:
+            return {"error": f"Session {session_id} not found"}
+        return {
+            "id": session.id,
+            "title": session.title,
+            "date": session.start_date[:16] if session.start_date else "",
+            "surface": session.surface,
+            "project": session.project,
+            "tags": session.tags,
+            "summary": session.summary,
+            "decisions": session.decisions,
+            "artifacts": session.artifacts,
+            "open_questions": session.open_questions,
+            "skills_used": session.skills_used,
+        }
+
+    sessions = db.inspect_sessions(
+        search=search, tag=tag, surface=surface, since=since, limit=limit
+    )
+
+    result: dict = {
+        "sessions": [
+            {
+                "id": s.id[:8] if s.id else "",
+                "full_id": s.id,
+                "date": s.start_date[:10] if s.start_date else "",
+                "surface": s.surface,
+                "tags": s.tags,
+                "title": s.title,
+            }
+            for s in sessions
+        ],
+        "count": len(sessions),
+    }
+
+    if show_stats:
+        result["stats"] = db.get_inspect_stats()
+
+    return result
+
+
 def main():
     """Entry point for uvx / console script execution."""
     mcp.run(transport="stdio")
