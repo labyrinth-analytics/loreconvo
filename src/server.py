@@ -103,7 +103,19 @@ def save_session(
             "error": str(e),
             "upgrade_url": "https://labyrinthanalyticsconsulting.com/loreconvo",
         }
-    return {"session_id": saved_id, "status": "saved", "title": title}
+
+    # first-use nudge
+    config_exists = _onboard_config_path(db).exists()
+    is_first_session = db.session_count() == 1 and not config_exists
+
+    result = {"session_id": saved_id, "status": "saved", "title": title}
+    if is_first_session:
+        result["setup_tip"] = (
+            "First session detected. Run loreconvo_onboard() to set up tag "
+            "conventions, project structure, and get a reference doc for your "
+            "AI assistant."
+        )
+    return result
 
 
 @mcp.tool()
