@@ -932,6 +932,79 @@ class SessionDatabase:
         ).fetchone()
         return row["c"]
 
+    def inspect_sessions(
+        self,
+        search: Optional[str] = None,
+        tag: Optional[str] = None,
+        surface: Optional[str] = None,
+        since: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[Session]:
+        """Return sessions matching inspect filters."""
+        if search:
+            results = self.search_sessions(search, limit=limit)
+            sessions = [r.session for r in results]
+            if surface:
+                sessions = [s for s in sessions if s.surface == surface]
+            if tag:
+                sessions = [s for s in sessions if any(tag in t for t in s.tags)]
+            if since:
+                sessions = [s for s in sessions if s.start_date >= since]
+            return sessions[:limit]
+
+        query = "SELECT * FROM sessions WHERE (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
+        params: list = []
+
+        if since:
+            query += " AND start_date >= ?"
+            params.append(since)
+        if surface:
+            query += " AND surface = ?"
+            params.append(surface)
+        if tag:
+            query += " AND tags LIKE ?"
+            params.append(f'%{tag}%')
+
+        query += " ORDER BY start_date DESC LIMIT ?"
+        params.append(limit)
+
+        rows = self.conn.execute(query, params).fetchall()
+        return [self._row_to_session(r) for r in rows]
+
+    def get_inspect_stats(self) -> dict:
+        """Return aggregate stats for inspect --show-stats."""
+        total = self.conn.execute(
+            "SELECT COUNT(*) as c FROM sessions"
+        ).fetchone()["c"]
+        by_surface = self.conn.execute(
+            "SELECT surface, COUNT(*) as c FROM sessions GROUP BY surface ORDER BY c DESC"
+        ).fetchall()
+        by_project = self.conn.execute(
+            "SELECT project, COUNT(*) as c FROM sessions WHERE project IS NOT NULL "
+            "GROUP BY project ORDER BY c DESC LIMIT 10"
+        ).fetchall()
+        with_oq = self.conn.execute(
+            "SELECT COUNT(*) as c FROM sessions "
+            "WHERE open_questions IS NOT NULL AND open_questions != '[]'"
+        ).fetchone()["c"]
+        return {
+            "total": total,
+            "by_surface": {r["surface"]: r["c"] for r in by_surface},
+            "by_project": {r["project"]: r["c"] for r in by_project},
+            "with_open_questions": with_oq,
+        }
+
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a session by ID. Returns True if deleted, False if not found."""
+        if not self.conn.execute(
+            "SELECT id FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone():
+            return False
+        self.conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+        self.conn.execute("DELETE FROM session_skills WHERE session_id = ?", (session_id,))
+        self.conn.commit()
+        return True
+
     def get_sessions_for_export(
         self,
         project: Optional[str] = None,
