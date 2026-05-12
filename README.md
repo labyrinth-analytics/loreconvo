@@ -123,6 +123,10 @@ Claude Chat (web)
 
 The result: when you switch surfaces mid-project, you never have to re-explain what you were doing.
 
+## Your Data is Always Available
+
+LoreConvo works through MCP tools when they are available and falls back to bundled scripts automatically when they are not. Your sessions are safe regardless of MCP status -- the same save, search, and recall operations work either way. You do not need to configure anything; the plugin skill handles the switch silently.
+
 ## Project Workspaces
 
 LoreConvo projects are persistent workspaces -- every session, decision, and artifact
