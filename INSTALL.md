@@ -313,6 +313,25 @@ to any cloud service. You own your data.
 
 ---
 
+## How LoreConvo Accesses Your Data
+
+LoreConvo provides three ways to read and write your session memory:
+
+**MCP tools** are the primary method. Claude uses these automatically during sessions -- tools
+like `save_session`, `get_recent_sessions`, and `search_sessions` connect through the MCP server.
+
+**CLI commands** let you manage sessions from your terminal independent of any Claude session.
+After installation, run `loreconvo-cli --help` to see available commands.
+
+**Bundled scripts** are the automatic fallback. If the MCP server is unavailable (for example,
+after a startup timeout or a rejected tool call), LoreConvo switches to these scripts silently.
+The plugin skill handles this; no action is needed on your part.
+
+All three methods read and write the same database at `~/.loreconvo/sessions.db`. Switching
+between them never causes data loss.
+
+---
+
 ## More Documentation
 
 - [Quickstart Guide](docs/quickstart.md) -- get up and running in 5 minutes
