@@ -101,19 +101,71 @@ def search(query, persona, project, skill, limit):
 @click.argument("session_id", required=False)
 @click.option("--last", is_flag=True, help="Export the most recent session")
 @click.option("--format", "fmt",
-              type=click.Choice(["markdown", "json", "shared"]), default="markdown",
-              help="Output format. 'shared' creates a team-shareable bundle (Pro only).")
-@click.option("--project", "-p", help="Filter by project (shared format)")
+              type=click.Choice(["markdown", "json", "shared", "anthropic-v1"]), default="markdown",
+              help="Output format. 'shared' creates a team-shareable bundle (Pro only). "
+                   "'anthropic-v1' exports to Anthropic managed-agents format (Pro only).")
+@click.option("--project", "-p", help="Filter by project (shared and anthropic-v1 formats)")
 @click.option("--session-ids", "session_ids",
-              help="Comma-separated session IDs to include (shared format)")
+              help="Comma-separated session IDs to include (shared and anthropic-v1 formats)")
 @click.option("--all", "export_all", is_flag=True,
-              help="Export all sessions (shared format, use with care)")
-def export(session_id, last, fmt, project, session_ids, export_all):
+              help="Export all sessions (shared and anthropic-v1 formats, use with care)")
+@click.option("--out", "out_path", help="Output file path (for shared and anthropic-v1 formats)")
+def export(session_id, last, fmt, project, session_ids, export_all, out_path):
     """Export a session for pasting into Chat or other tools.
 
     With --format shared, exports a JSON bundle for teammates to import via
-    'loreconvo merge'. Requires LoreConvo Pro.
+    'loreconvo merge'. With --format anthropic-v1, exports to Anthropic
+    managed-agents memory format. Both require LoreConvo Pro.
     """
+    if fmt == "anthropic-v1":
+        if not db.config.is_pro:
+            click.echo(
+                "error: Export format 'anthropic-v1' requires LoreConvo Pro. "
+                "Get a license at labyrinthanalyticsconsulting.com."
+            )
+            sys.exit(1)
+
+        id_filter = [s.strip() for s in (session_ids or "").split(",") if s.strip()]
+        sessions = db.get_sessions_for_shared_export(
+            project=project,
+            session_id_filter=id_filter if id_filter else None,
+            export_all=export_all or (not id_filter and not project),
+        )
+
+        entries = []
+        for s in sessions:
+            entries.append({
+                "id": s.id,
+                "content": s.summary or "",
+                "created_at": s.created_at,
+                "tags": s.tags or [],
+                "metadata": {
+                    "title": s.title,
+                    "surface": s.surface,
+                    "project": s.project,
+                },
+            })
+
+        export_obj = {
+            "format": "anthropic-memory-v1",
+            "source": "loreconvo",
+            "exported_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "schema_note": (
+                "Preliminary field mapping -- validate against Anthropic beta API "
+                "docs before submitting to Anthropic memory stores."
+            ),
+            "entry_count": len(entries),
+            "entries": entries,
+        }
+
+        data_str = json.dumps(export_obj, indent=2)
+        if out_path:
+            Path(out_path).write_text(data_str, encoding="utf-8")
+            click.echo(f"Exported {len(entries)} session(s) to {out_path} (anthropic-memory-v1)")
+        else:
+            click.echo(data_str)
+        return
+
     if fmt == "shared":
         # SEC-00067: Pro gate at command entry
         if not db.config.is_pro:
