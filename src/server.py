@@ -638,7 +638,7 @@ def import_sessions(
         decisions = [str(d)[:_IMPORT_FIELD_CAPS["list_item"]] for d in (raw_s.get("decisions") or [])]
         open_questions = [str(q)[:_IMPORT_FIELD_CAPS["list_item"]] for q in (raw_s.get("open_questions") or [])]
         tags = [str(t)[:_IMPORT_FIELD_CAPS["list_item"]] for t in (raw_s.get("tags") or [])]
-        artifacts = [str(a) for a in (raw_s.get("artifacts") or [])]
+        artifacts = [Path(str(a)).name for a in (raw_s.get("artifacts") or [])]
         skills_used = [str(s)[:_IMPORT_FIELD_CAPS["list_item"]] for s in (raw_s.get("skills_used") or [])]
         session = Session(
             id=raw_s.get("id", ""),
