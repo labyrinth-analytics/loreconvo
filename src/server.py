@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 from core.models import Session
-from core.database import SessionDatabase, SessionLimitReachedError, _MAX_IMPORT_BYTES, _MAX_SESSIONS_PER_FILE
+from core.database import SessionDatabase, SessionLimitReachedError, _MAX_IMPORT_BYTES, _MAX_SESSIONS_PER_FILE, _IMPORT_FIELD_CAPS
 from core.config import Config, set_tier as _set_tier_config
 from core.license import get_license_status
 from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onboard_config_path
@@ -633,19 +633,26 @@ def import_sessions(
     limit_hit = False
 
     for raw_s in raw_sessions:
+        title = str(raw_s.get("title", "") or "")[:_IMPORT_FIELD_CAPS["title"]]
+        summary = str(raw_s.get("summary", "") or "")[:_IMPORT_FIELD_CAPS["summary"]]
+        decisions = [str(d)[:_IMPORT_FIELD_CAPS["list_item"]] for d in (raw_s.get("decisions") or [])]
+        open_questions = [str(q)[:_IMPORT_FIELD_CAPS["list_item"]] for q in (raw_s.get("open_questions") or [])]
+        tags = [str(t)[:_IMPORT_FIELD_CAPS["list_item"]] for t in (raw_s.get("tags") or [])]
+        artifacts = [str(a) for a in (raw_s.get("artifacts") or [])]
+        skills_used = [str(s)[:_IMPORT_FIELD_CAPS["list_item"]] for s in (raw_s.get("skills_used") or [])]
         session = Session(
             id=raw_s.get("id", ""),
-            title=raw_s.get("title", ""),
+            title=title,
             surface=raw_s.get("surface", ""),
             project=raw_s.get("project"),
             start_date=raw_s.get("start_date", ""),
             end_date=raw_s.get("end_date"),
-            summary=raw_s.get("summary", ""),
-            decisions=raw_s.get("decisions", []),
-            artifacts=raw_s.get("artifacts", []),
-            open_questions=raw_s.get("open_questions", []),
-            tags=raw_s.get("tags", []),
-            skills_used=raw_s.get("skills_used", []),
+            summary=summary,
+            decisions=decisions,
+            artifacts=artifacts,
+            open_questions=open_questions,
+            tags=tags,
+            skills_used=skills_used,
             created_at=raw_s.get("created_at", ""),
         )
         if not session.id:
