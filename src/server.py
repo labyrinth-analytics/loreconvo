@@ -572,6 +572,95 @@ def export_sessions(
     }
 
 
+@mcp.tool(title="Export Sessions for Anthropic")
+def export_for_anthropic(
+    output_path: str | None = None,
+    project: str | None = None,
+    session_ids: list[str] | None = None,
+    days_back: int | None = None,
+) -> dict:
+    """Export LoreConvo sessions to Anthropic managed-agents memory format. Pro only.
+
+    Produces a JSON file in 'anthropic-memory-v1' format, suitable for import into
+    Anthropic managed-agents memory stores. Only non-periodic, non-file-memory sessions
+    are exported (contamination control).
+
+    NOTE: Field mapping is preliminary pending Anthropic beta API schema stabilization.
+    Cassandra will signal when the schema is stable. Save the output and validate
+    against Anthropic docs before submitting to a managed-agents memory store.
+
+    Args:
+        output_path: File path to write the export. If omitted, data is returned inline.
+        project: Export only sessions from this project.
+        session_ids: List of specific session UUIDs to export. Overrides project filter.
+        days_back: Limit to sessions from the last N days.
+    """
+    from datetime import datetime, timedelta, timezone as _tz
+
+    status = get_license_status()
+    if not status["is_pro"]:
+        return {
+            "error": (
+                "Export to Anthropic format requires LoreConvo Pro. "
+                "Get a license at labyrinthanalyticsconsulting.com."
+            )
+        }
+
+    sessions = db.get_sessions_for_shared_export(
+        project=project,
+        session_id_filter=session_ids,
+        export_all=(session_ids is None and project is None),
+    )
+
+    if days_back is not None:
+        cutoff = (datetime.now(_tz.utc) - timedelta(days=days_back)).isoformat()
+        sessions = [s for s in sessions if s.start_date >= cutoff[:len(s.start_date)]]
+
+    entries = []
+    for s in sessions:
+        entries.append({
+            "id": s.id,
+            "content": s.summary or "",
+            "created_at": s.created_at,
+            "tags": s.tags or [],
+            "metadata": {
+                "title": s.title,
+                "surface": s.surface,
+                "project": s.project,
+            },
+        })
+
+    export_obj = {
+        "format": "anthropic-memory-v1",
+        "source": "loreconvo",
+        "exported_at": datetime.now(_tz.utc).isoformat().replace("+00:00", "Z"),
+        "schema_note": (
+            "Preliminary field mapping -- validate against Anthropic beta API "
+            "docs before submitting to Anthropic memory stores."
+        ),
+        "entry_count": len(entries),
+        "entries": entries,
+    }
+
+    data_str = json.dumps(export_obj, indent=2)
+
+    if output_path:
+        Path(output_path).write_text(data_str, encoding="utf-8")
+        return {
+            "status": "exported",
+            "format": "anthropic-memory-v1",
+            "path": output_path,
+            "entry_count": len(entries),
+        }
+
+    return {
+        "status": "exported",
+        "format": "anthropic-memory-v1",
+        "entry_count": len(entries),
+        "data": data_str,
+    }
+
+
 @mcp.tool(title="Import Sessions")
 def import_sessions(
     file_path: str,
