@@ -198,6 +198,7 @@ def search_sessions(
     project: str | None = None,
     limit: int = 10,
     include_external: bool = False,
+    semantic: bool = False,
 ) -> list[dict]:
     """Search session memory by keyword, with optional filters.
 
@@ -213,8 +214,11 @@ def search_sessions(
         limit: Max results (default 10)
         include_external: If True, include sessions flagged as external_tool_session.
             Default False. Can also be enabled globally via LORECONVO_EXTERNAL_TOOL_EXCLUSION=0.
+        semantic: If True, use LanceDB hybrid (vector + BM25) search instead of FTS5.
+            Pro tier only. Falls back to FTS5 if index not built yet; run
+            rebuild_index to build it after first Pro activation.
     """
-    results = db.search_sessions(query, persona, tags, skills, project, limit, include_external=include_external)
+    results = db.search_sessions(query, persona, tags, skills, project, limit, include_external=include_external, semantic=semantic)
     return [
         {
             "id": r.session.id,
@@ -231,7 +235,12 @@ def search_sessions(
 
 
 @mcp.tool(title="Get Context for Topic")
-def get_context_for(topic: str, max_results: int = 5, include_external: bool = False) -> list[dict]:
+def get_context_for(
+    topic: str,
+    max_results: int = 5,
+    include_external: bool = False,
+    semantic: bool = False,
+) -> list[dict]:
     """Get relevant session context for a topic.
 
     Use at the start of a session to load prior decisions and context about a topic.
@@ -242,8 +251,10 @@ def get_context_for(topic: str, max_results: int = 5, include_external: bool = F
         max_results: Max excerpts to return (default 5)
         include_external: If True, include sessions flagged as external_tool_session.
             Default False.
+        semantic: If True, use LanceDB hybrid search (Pro only). Falls back to FTS5
+            if index not yet built.
     """
-    results = db.get_context_for(topic, max_results, include_external=include_external)
+    results = db.get_context_for(topic, max_results, include_external=include_external, semantic=semantic)
     return [
         {
             "session_title": r.session.title,
@@ -326,6 +337,28 @@ def get_related_sessions(
         "related_count": len(related),
         "related": related,
     }
+
+
+@mcp.tool(title="Rebuild Semantic Index")
+def rebuild_index() -> dict:
+    """Rebuild the LanceDB semantic search index from all stored sessions. Pro only.
+
+    Run after first Pro activation, or to recover from a corrupted index.
+    Downloads BAAI/bge-small-en-v1.5 (~130MB) once on first run; subsequent
+    runs use the cached model. May take 1-2 minutes for large session stores.
+
+    Returns a dict with 'indexed' (sessions added to index) and 'total_in_db'
+    (total sessions in SQLite, including those excluded from indexing).
+    """
+    status = get_license_status()
+    if not status["is_pro"]:
+        return {
+            "error": (
+                "rebuild_index requires LoreConvo Pro. "
+                "Get a license at labyrinthanalyticsconsulting.com."
+            )
+        }
+    return db.rebuild_lance_index()
 
 
 @mcp.tool(title="Get Project")
