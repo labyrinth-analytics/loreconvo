@@ -1,4 +1,8 @@
-# LoreConvo v0.3.3 - Pinned direct dependencies
+# LoreConvo v0.5.0 - Pinned direct dependencies
 # Exact versions required for Anthropic marketplace compliance
 mcp==1.27.0
 click==8.3.1
+# Pro-tier optional deps (hybrid semantic search): install with pip install loreconvo[pro]
+# lancedb==0.30.2
+# sentence-transformers==5.5.0
+# pyarrow==24.0.0
