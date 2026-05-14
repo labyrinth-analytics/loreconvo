@@ -846,8 +846,13 @@ class SessionDatabase:
         """Return sessions formatted for team-memory shared export.
 
         SEC-00071: source='periodic' sessions are excluded.
+        SH-10121: external_tool_session sessions excluded -- re-exporting imported
+        sessions creates circular contamination once Phase 3 import lands.
         """
+        _exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
         query = "SELECT * FROM sessions WHERE (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
+        if _exclusion_enabled:
+            query += " AND (external_tool_session IS NULL OR external_tool_session = 0)"
         params: list = []
 
         if not export_all:
