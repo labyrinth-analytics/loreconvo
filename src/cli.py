@@ -17,7 +17,7 @@ db = SessionDatabase(Config())
 
 
 @click.group()
-@click.version_option(version="0.4.0", prog_name="loreconvo")
+@click.version_option(version="0.5.0", prog_name="loreconvo")
 def cli():
     """LoreConvo - vault your Claude conversations. Never re-explain yourself again."""
     pass
@@ -79,10 +79,12 @@ def list_sessions(limit, days, project, skill):
 @click.option("--project", "-p", help="Filter by project")
 @click.option("--skill", help="Filter by skill")
 @click.option("--limit", "-n", default=10, help="Max results")
-def search(query, persona, project, skill, limit):
+@click.option("--semantic", is_flag=True, default=False,
+              help="Use LanceDB hybrid (vector + BM25) search. Pro tier only.")
+def search(query, persona, project, skill, limit, semantic):
     """Search session memory."""
     skills_list = [skill] if skill else None
-    results = db.search_sessions(query, persona, skills=skills_list, project=project, limit=limit)
+    results = db.search_sessions(query, persona, skills=skills_list, project=project, limit=limit, semantic=semantic)
     if not results:
         click.echo(f'No sessions found for "{query}"')
         return
@@ -492,6 +494,31 @@ def inspect(session_id, search, tag, surface, since, limit, show_stats, delete_i
         title = s.title[:40] if s.title else ""
         click.echo(f"{sid:<8}  {date:<10}  {surf:<8}  {tags_str:<30}  {title}")
     click.echo(f"\n{len(sessions)} session(s)")
+
+
+@cli.command(name="rebuild-index")
+def rebuild_index():
+    """Rebuild the LanceDB semantic search index. Pro tier required.
+
+    Downloads BAAI/bge-small-en-v1.5 (~130MB) on first run if not cached.
+    Run once after first Pro activation, or to recover a corrupted index.
+    Subsequent searches with --semantic will use this index.
+    """
+    if not db.config.is_pro:
+        click.echo("error: rebuild-index requires LoreConvo Pro. "
+                   "Get a license at labyrinthanalyticsconsulting.com.")
+        sys.exit(1)
+    click.echo("Rebuilding semantic search index (may take 1-2 minutes on first run)...")
+    try:
+        result = db.rebuild_lance_index()
+        if "error" in result:
+            click.echo(f"error: {result['error']}")
+            sys.exit(1)
+        click.echo(f"[OK] Index built: {result['indexed']} session(s) indexed "
+                   f"(of {result['total_in_db']} total in database).")
+    except Exception as exc:
+        click.echo(f"error: rebuild failed: {exc}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
