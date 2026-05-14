@@ -293,6 +293,41 @@ def link_sessions(
     return {"status": "linked", "from": from_id, "to": to_id, "type": link_type}
 
 
+@mcp.tool(title="Get Related Sessions")
+def get_related_sessions(
+    session_id: str,
+    limit: int = 10,
+    min_shared_terms: int = 3,
+) -> dict:
+    """Find sessions related to a given session by keyword co-occurrence. Pro only.
+
+    Analyzes the keyword index built during save_session to surface sessions
+    that share the most terms with the given session. Useful for discovering
+    related work across projects and time periods.
+
+    Args:
+        session_id: UUID of the session to find related sessions for
+        limit: Max results to return (default 10, max 50)
+        min_shared_terms: Minimum shared keywords required (default 3)
+    """
+    status = get_license_status()
+    if not status["is_pro"]:
+        return {
+            "error": (
+                "get_related_sessions requires LoreConvo Pro. "
+                "Set your LORECONVO_PRO license key or contact "
+                "info@labyrinthanalyticsconsulting.com to upgrade."
+            )
+        }
+    limit = max(1, min(limit, 50))
+    related = db.get_related_sessions(session_id, limit, min_shared_terms)
+    return {
+        "session_id": session_id,
+        "related_count": len(related),
+        "related": related,
+    }
+
+
 @mcp.tool(title="Get Project")
 def get_project(project_name: str) -> dict:
     """Get project details including recent sessions and skill usage stats.

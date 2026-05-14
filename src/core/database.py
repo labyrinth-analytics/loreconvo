@@ -23,6 +23,22 @@ _IMPORT_FIELD_CAPS = {
 _MAX_SESSIONS_PER_FILE = 10_000
 _MAX_IMPORT_BYTES = 50 * 1024 * 1024  # 50 MB
 
+_STOPWORDS = frozenset({
+    "a", "about", "after", "again", "ago", "all", "also", "an", "and",
+    "any", "are", "as", "at", "be", "been", "being", "but", "by", "can",
+    "could", "did", "do", "does", "done", "down", "during", "each",
+    "either", "every", "few", "for", "from", "get", "got", "had", "has",
+    "have", "he", "her", "here", "him", "his", "how", "i", "if", "in",
+    "into", "is", "it", "its", "just", "like", "may", "me", "more",
+    "most", "my", "neither", "new", "no", "nor", "not", "now", "of",
+    "off", "on", "once", "only", "or", "other", "our", "out", "over",
+    "own", "per", "run", "s", "set", "she", "so", "some", "such", "t",
+    "than", "that", "the", "their", "them", "then", "there", "these",
+    "they", "this", "those", "through", "to", "too", "under", "up",
+    "use", "used", "was", "we", "were", "what", "when", "where", "which",
+    "while", "who", "will", "with", "would", "yet", "you", "your",
+})
+
 
 class SessionLimitReachedError(Exception):
     """Raised when the free-tier session limit is reached.
@@ -83,6 +99,16 @@ CREATE TABLE IF NOT EXISTS session_links (
 CREATE INDEX IF NOT EXISTS idx_sessions_start_date ON sessions(start_date);
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project);
 CREATE INDEX IF NOT EXISTS idx_persona_sessions_name ON persona_sessions(persona_name);
+
+CREATE TABLE IF NOT EXISTS session_cooccurrences (
+    term       TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    frequency  INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (term, session_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cooccurrences_session ON session_cooccurrences(session_id);
+CREATE INDEX IF NOT EXISTS idx_cooccurrences_term ON session_cooccurrences(term);
 """
 
 FTS_SQL = """
@@ -126,6 +152,7 @@ class SessionDatabase:
         self._migrate_add_source_column()
         self._migrate_add_team_memory_columns()
         self._migrate_add_external_tool_session_column()
+        self._migrate_index_existing_cooccurrences()
         self.conn.commit()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
@@ -232,6 +259,173 @@ class SessionDatabase:
         except sqlite3.OperationalError:
             pass  # column already exists
 
+    def _migrate_index_existing_cooccurrences(self):
+        """Populate session_cooccurrences for existing sessions on first run.
+
+        Idempotent: only runs when the table is empty, indicating first install
+        of this schema version. Subsequent startups skip the work.
+        Skips rows with NULL id (legacy migration artifact).
+        """
+        count = self.conn.execute(
+            "SELECT COUNT(*) FROM session_cooccurrences"
+        ).fetchone()[0]
+        if count > 0:
+            return  # already indexed
+
+        rows = self.conn.execute(
+            "SELECT id, summary, decisions, project, tags FROM sessions WHERE id IS NOT NULL"
+        ).fetchall()
+        for row in rows:
+            self._index_session_cooccurrences(
+                row[0], row[1], row[2], row[3], row[4]
+            )
+
+    @staticmethod
+    def _extract_keywords(text: str, top_n: int = 30) -> List[tuple]:
+        """Extract top-N keywords from text using simple term frequency.
+
+        Returns list of (term, frequency) tuples sorted descending by frequency.
+        Only includes tokens of 3+ characters not in the stopword list.
+        """
+        if not text:
+            return []
+        tokens = re.findall(r'[a-z]{3,}', text.lower())
+        counts: dict = {}
+        for token in tokens:
+            if token not in _STOPWORDS:
+                counts[token] = counts.get(token, 0) + 1
+        return sorted(counts.items(), key=lambda x: x[1], reverse=True)[:top_n]
+
+    def _index_session_cooccurrences(
+        self,
+        session_id: str,
+        summary: Optional[str],
+        decisions_json: Optional[str],
+        project: Optional[str],
+        tags_json: Optional[str],
+    ) -> None:
+        """Index keyword co-occurrences for a session.
+
+        Extracts keywords from summary, decisions, project, and tags.
+        Stores results in session_cooccurrences, replacing any prior index
+        for this session (idempotent for re-saves).
+        """
+        self.conn.execute(
+            "DELETE FROM session_cooccurrences WHERE session_id = ?",
+            (session_id,)
+        )
+
+        parts: List[str] = []
+        if summary:
+            parts.append(summary)
+        if decisions_json:
+            try:
+                decisions = json.loads(decisions_json)
+                if isinstance(decisions, list):
+                    parts.extend(str(d) for d in decisions)
+            except (json.JSONDecodeError, TypeError):
+                parts.append(str(decisions_json))
+        if project:
+            parts.append(project)
+
+        text = " ".join(parts)
+        keywords = self._extract_keywords(text)
+        for term, freq in keywords:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO session_cooccurrences (term, session_id, frequency) "
+                "VALUES (?, ?, ?)",
+                (term, session_id, freq)
+            )
+
+        # Boost tags as explicit terms (frequency 5 to weight them above noise)
+        if tags_json:
+            try:
+                tags = json.loads(tags_json)
+                if isinstance(tags, list):
+                    for tag in tags:
+                        if isinstance(tag, str):
+                            tag_term = re.sub(r'[^a-z]', '', tag.lower())
+                            if len(tag_term) >= 3 and tag_term not in _STOPWORDS:
+                                self.conn.execute(
+                                    "INSERT OR REPLACE INTO session_cooccurrences "
+                                    "(term, session_id, frequency) VALUES (?, ?, ?)",
+                                    (tag_term, session_id, 5)
+                                )
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    def _auto_link_cooccurrences(self, session_id: str, min_shared_terms: int = 3) -> None:
+        """Create auto-links for sessions sharing >= min_shared_terms terms.
+
+        Links are stored in session_links with link_type='auto:cooccurrence'.
+        Uses INSERT OR IGNORE so manual links are never overwritten.
+        Caps at 20 new links per session to avoid link explosion.
+        """
+        candidates = self.conn.execute(
+            """SELECT sc2.session_id, COUNT(*) as shared_count
+               FROM session_cooccurrences sc1
+               JOIN session_cooccurrences sc2 ON sc1.term = sc2.term
+               WHERE sc1.session_id = ?
+                 AND sc2.session_id != ?
+               GROUP BY sc2.session_id
+               HAVING COUNT(*) >= ?
+               ORDER BY shared_count DESC
+               LIMIT 20""",
+            (session_id, session_id, min_shared_terms)
+        ).fetchall()
+
+        for row in candidates:
+            other_id = row[0]
+            self.conn.execute(
+                "INSERT OR IGNORE INTO session_links "
+                "(from_session_id, to_session_id, link_type) VALUES (?, ?, 'auto:cooccurrence')",
+                (session_id, other_id)
+            )
+
+    def get_related_sessions(
+        self,
+        session_id: str,
+        limit: int = 10,
+        min_shared_terms: int = 3,
+    ) -> List[dict]:
+        """Return sessions related to session_id by keyword co-occurrence.
+
+        Ranks by number of shared terms descending. Returns session metadata
+        plus shared_term_count and shared_terms list for transparency.
+        Pro tier only (caller must enforce).
+        """
+        rows = self.conn.execute(
+            """SELECT sc2.session_id,
+                      COUNT(*) as shared_count,
+                      s.title,
+                      s.project,
+                      s.start_date,
+                      s.summary
+               FROM session_cooccurrences sc1
+               JOIN session_cooccurrences sc2 ON sc1.term = sc2.term
+               JOIN sessions s ON sc2.session_id = s.id
+               WHERE sc1.session_id = ?
+                 AND sc2.session_id != ?
+                 AND (s.source IS NULL OR s.source NOT IN ('periodic', 'file_memory'))
+               GROUP BY sc2.session_id
+               HAVING COUNT(*) >= ?
+               ORDER BY shared_count DESC
+               LIMIT ?""",
+            (session_id, session_id, min_shared_terms, limit)
+        ).fetchall()
+
+        results = []
+        for row in rows:
+            results.append({
+                "session_id": row[0],
+                "shared_term_count": row[1],
+                "title": row[2],
+                "project": row[3],
+                "start_date": row[4],
+                "summary_preview": (row[5] or "")[:200],
+            })
+        return results
+
     def close(self):
         self.conn.close()
 
@@ -294,6 +488,21 @@ class SessionDatabase:
                 (session.id, skill_name)
             )
         self.conn.commit()
+
+        # Index co-occurrences and auto-link related sessions (additive, non-blocking)
+        try:
+            self._index_session_cooccurrences(
+                session.id,
+                session.summary,
+                json.dumps(session.decisions),
+                session.project,
+                json.dumps(session.tags),
+            )
+            self._auto_link_cooccurrences(session.id)
+            self.conn.commit()
+        except Exception:
+            pass  # co-occurrence index is best-effort; never fail a save
+
         return session.id
 
     def get_session(self, session_id: str) -> Optional[Session]:
