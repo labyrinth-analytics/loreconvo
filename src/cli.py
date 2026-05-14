@@ -160,8 +160,16 @@ def export(session_id, last, fmt, project, session_ids, export_all, out_path):
 
         data_str = json.dumps(export_obj, indent=2)
         if out_path:
-            Path(out_path).write_text(data_str, encoding="utf-8")
-            click.echo(f"Exported {len(entries)} session(s) to {out_path} (anthropic-memory-v1)")
+            resolved = Path(out_path).expanduser().resolve()
+            home = Path.home().resolve()
+            if not str(resolved).startswith(str(home)):
+                click.echo("error: output path must be within the home directory")
+                sys.exit(1)
+            if resolved.suffix.lower() != ".json":
+                click.echo("error: output path must end with .json")
+                sys.exit(1)
+            resolved.write_text(data_str, encoding="utf-8")
+            click.echo(f"Exported {len(entries)} session(s) to {resolved} (anthropic-memory-v1)")
         else:
             click.echo(data_str)
         return
