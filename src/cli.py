@@ -110,7 +110,9 @@ def search(query, persona, project, skill, limit):
 @click.option("--all", "export_all", is_flag=True,
               help="Export all sessions (shared and anthropic-v1 formats, use with care)")
 @click.option("--out", "out_path", help="Output file path (for shared and anthropic-v1 formats)")
-def export(session_id, last, fmt, project, session_ids, export_all, out_path):
+@click.option("--days-back", "days_back", type=int, default=None,
+              help="Limit export to sessions from the last N days (anthropic-v1 only).")
+def export(session_id, last, fmt, project, session_ids, export_all, out_path, days_back):
     """Export a session for pasting into Chat or other tools.
 
     With --format shared, exports a JSON bundle for teammates to import via
@@ -131,6 +133,11 @@ def export(session_id, last, fmt, project, session_ids, export_all, out_path):
             session_id_filter=id_filter if id_filter else None,
             export_all=export_all or (not id_filter and not project),
         )
+
+        if days_back is not None:
+            from datetime import timedelta
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace("+00:00", "Z")
+            sessions = [s for s in sessions if s.start_date >= cutoff]
 
         entries = []
         for s in sessions:
