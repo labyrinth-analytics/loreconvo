@@ -613,8 +613,8 @@ def export_for_anthropic(
     )
 
     if days_back is not None:
-        cutoff = (datetime.now(_tz.utc) - timedelta(days=days_back)).isoformat()
-        sessions = [s for s in sessions if s.start_date >= cutoff[:len(s.start_date)]]
+        cutoff = (datetime.now(_tz.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
+        sessions = [s for s in sessions if s.start_date >= cutoff]
 
     entries = []
     for s in sessions:
@@ -645,11 +645,17 @@ def export_for_anthropic(
     data_str = json.dumps(export_obj, indent=2)
 
     if output_path:
-        Path(output_path).write_text(data_str, encoding="utf-8")
+        resolved = Path(output_path).expanduser().resolve()
+        home = Path.home().resolve()
+        if not str(resolved).startswith(str(home)):
+            return {"error": "output_path must be within the home directory"}
+        if resolved.suffix.lower() != ".json":
+            return {"error": "output_path must end with .json"}
+        resolved.write_text(data_str, encoding="utf-8")
         return {
             "status": "exported",
             "format": "anthropic-memory-v1",
-            "path": output_path,
+            "path": str(resolved),
             "entry_count": len(entries),
         }
 
