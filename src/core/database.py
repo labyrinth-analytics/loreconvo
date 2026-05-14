@@ -7,9 +7,11 @@ import re
 import socket
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import List, Optional
 
 from .config import Config
+from .hybrid_search import SEARCH_HALF_LIFE_DAYS, AUTOLOAD_HALF_LIFE_DAYS
 from .models import (
     PersonaTag, Project, SearchResult, Session, SessionLink, SkillUsage
 )
@@ -144,6 +146,7 @@ class SessionDatabase:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
+        self._lance_index = None  # lazy init; LanceIndex instance when Pro
         self._init_schema()
 
     def _init_schema(self):
@@ -382,6 +385,110 @@ class SessionDatabase:
                 (session_id, other_id)
             )
 
+    # -- LanceDB hybrid search (Pro tier) --
+
+    def _get_lance_index(self):
+        """Return the LanceIndex instance, creating it lazily on first call."""
+        if self._lance_index is None:
+            from .hybrid_search import LanceIndex
+            lance_dir = Path(self.config.db_path).parent / 'sessions.lance'
+            self._lance_index = LanceIndex(lance_dir)
+        return self._lance_index
+
+    def _lance_write_safe(self, session: Session) -> None:
+        """Write session to Lance index if Pro tier. Errors are logged, never raised."""
+        if not self.config.is_pro:
+            return
+        try:
+            self._get_lance_index().index_session(
+                session_id=session.id,
+                title=session.title,
+                summary=session.summary,
+                project=session.project,
+                surface=session.surface,
+                start_date=session.start_date,
+                tags=session.tags,
+                external_tool=session.external_tool_session,
+                source=session.source,
+            )
+        except Exception as exc:
+            import logging as _log
+            _log.getLogger(__name__).error("Lance write failed for %s: %s", session.id, exc)
+
+    def _fetch_sessions_for_semantic(
+        self,
+        session_ids: List[str],
+        persona: Optional[str],
+        tags: Optional[List[str]],
+        skills: Optional[List[str]],
+        limit: int,
+        include_external: bool,
+    ) -> List[SearchResult]:
+        """Fetch sessions by ID (Lance results) and apply post-filters.
+
+        Preserves the relevance order returned by LanceIndex.search().
+        """
+        _exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
+        placeholders = ",".join("?" * len(session_ids))
+        sql = f"SELECT * FROM sessions WHERE id IN ({placeholders})"
+        if _exclusion_enabled and not include_external:
+            sql += " AND (external_tool_session IS NULL OR external_tool_session = 0)"
+        rows = self.conn.execute(sql, session_ids).fetchall()
+
+        # Preserve relevance order from session_ids
+        id_to_row = {row['id']: row for row in rows}
+        results = []
+        for rank, sid in enumerate(session_ids):
+            row = id_to_row.get(sid)
+            if row is None:
+                continue
+            session = self._row_to_session(row)
+            results.append(SearchResult(session=session, match_score=1.0 / (rank + 1)))
+
+        if persona:
+            persona_ids = {r[0] for r in self.conn.execute(
+                "SELECT session_id FROM persona_sessions WHERE persona_name LIKE ?",
+                (persona + "%",)
+            ).fetchall()}
+            results = [r for r in results if r.session.id in persona_ids]
+
+        if skills:
+            skill_placeholders = ",".join("?" * len(skills))
+            skill_ids = {r[0] for r in self.conn.execute(
+                f"SELECT session_id FROM session_skills WHERE skill_name IN ({skill_placeholders})",
+                skills
+            ).fetchall()}
+            results = [r for r in results if r.session.id in skill_ids]
+
+        if tags:
+            results = [r for r in results if any(t in r.session.tags for t in tags)]
+
+        return results[:limit]
+
+    def rebuild_lance_index(self) -> dict:
+        """Rebuild the Lance index from all SQLite sessions. Pro tier only.
+
+        Returns a summary dict with 'indexed' and 'total_in_db' counts.
+        Raises on fatal errors.
+        """
+        if not self.config.is_pro:
+            return {"error": "rebuild-index requires LoreConvo Pro"}
+
+        rows = self.conn.execute(
+            "SELECT id, title, summary, project, surface, start_date, tags, "
+            "external_tool_session, source FROM sessions WHERE id IS NOT NULL AND title IS NOT NULL"
+        ).fetchall()
+        sessions_list = [dict(r) for r in rows]
+
+        from .hybrid_search import LanceIndex
+        lance_dir = Path(self.config.db_path).parent / 'sessions.lance'
+        index = LanceIndex(lance_dir)
+        count = index.rebuild(sessions_list)
+
+        # Replace cached instance with the freshly built one
+        self._lance_index = index
+        return {"status": "ok", "indexed": count, "total_in_db": len(sessions_list)}
+
     def get_related_sessions(
         self,
         session_id: str,
@@ -502,6 +609,9 @@ class SessionDatabase:
             self.conn.commit()
         except Exception:
             pass  # co-occurrence index is best-effort; never fail a save
+
+        # Dual-write to Lance index (Pro only, errors never propagate)
+        self._lance_write_safe(session)
 
         return session.id
 
@@ -650,7 +760,24 @@ class SessionDatabase:
         tags: Optional[List[str]] = None, skills: Optional[List[str]] = None,
         project: Optional[str] = None, limit: int = 10,
         include_external: bool = False,
+        semantic: bool = False,
     ) -> List[SearchResult]:
+        # Semantic path: Pro tier + Lance index available
+        if semantic and self.config.is_pro:
+            lance = self._get_lance_index()
+            if lance.is_available():
+                session_ids = lance.search(
+                    query,
+                    project=project,
+                    limit=limit * 3,
+                    half_life_days=SEARCH_HALF_LIFE_DAYS,
+                )
+                if session_ids:
+                    return self._fetch_sessions_for_semantic(
+                        session_ids, persona, tags, skills, limit, include_external
+                    )
+            # Fall through to FTS5 if Lance unavailable or no results
+
         _exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
         fts_query = self._sanitize_fts_query(query)
         sql = """
@@ -696,7 +823,26 @@ class SessionDatabase:
 
         return results
 
-    def get_context_for(self, topic: str, max_results: int = 5, include_external: bool = False) -> List[SearchResult]:
+    def get_context_for(
+        self,
+        topic: str,
+        max_results: int = 5,
+        include_external: bool = False,
+        semantic: bool = False,
+        half_life_days: int = SEARCH_HALF_LIFE_DAYS,
+    ) -> List[SearchResult]:
+        if semantic and self.config.is_pro:
+            lance = self._get_lance_index()
+            if lance.is_available():
+                session_ids = lance.search(
+                    topic,
+                    limit=max_results * 3,
+                    half_life_days=half_life_days,
+                )
+                if session_ids:
+                    return self._fetch_sessions_for_semantic(
+                        session_ids, None, None, None, max_results, include_external
+                    )
         return self.search_sessions(query=topic, limit=max_results, include_external=include_external)
 
     def list_all_skills(self) -> List[dict]:
