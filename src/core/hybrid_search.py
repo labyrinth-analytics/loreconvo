@@ -11,8 +11,14 @@ import datetime
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import List, Optional
+
+_UUID_RE = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    re.IGNORECASE,
+)
 
 SEARCH_HALF_LIFE_DAYS = 90     # user-triggered search_sessions default
 AUTOLOAD_HALF_LIFE_DAYS = 30   # auto-load hook default
@@ -215,8 +221,14 @@ class LanceIndex:
                 self._table.create_fts_index('summary', replace=True)
                 self._table.create_fts_index('tags', replace=True)
             else:
-                safe_id = session_id.replace("'", "''")
-                table.delete(f"session_id = '{safe_id}'")
+                # Validate UUID format to prevent SQL injection via session_id.
+                # LanceDB 0.30.2 has no parameterized filter API; constrain the
+                # input space to [0-9a-f-] so no SQL metacharacters can reach
+                # the Arrow DataFusion engine. Revisit on every LanceDB upgrade.
+                if not _UUID_RE.match(session_id):
+                    _log.warning("index_session: non-UUID session_id rejected: %.64s", session_id)
+                    return True
+                table.delete(f"session_id = '{session_id}'")
                 table.add([row])
 
             return True
@@ -245,6 +257,9 @@ class LanceIndex:
 
             where_clause: Optional[str] = None
             if project:
+                # LanceDB 0.30.2 has no parameterized filter API. Arrow DataFusion
+                # follows standard SQL quoting: '' escapes a literal single-quote.
+                # Revisit on every LanceDB upgrade to check for parameterized support.
                 safe_proj = project.replace("'", "''")
                 where_clause = f"project = '{safe_proj}'"
 

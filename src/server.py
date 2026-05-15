@@ -624,10 +624,16 @@ def export_sessions(
         data_str = json.dumps(export_obj, indent=2)
 
     if output_path:
-        Path(output_path).write_text(data_str, encoding="utf-8")
+        resolved = Path(output_path).expanduser().resolve()
+        home = Path.home().resolve()
+        if not str(resolved).startswith(str(home)):
+            return {"error": "output_path must be within the home directory"}
+        if resolved.suffix.lower() not in (".json", ".jsonl"):
+            return {"error": "output_path must end with .json or .jsonl"}
+        resolved.write_text(data_str, encoding="utf-8")
         return {
             "status": "exported",
-            "path": output_path,
+            "path": str(resolved),
             "session_count": len(sessions),
             "format": format,
         }
