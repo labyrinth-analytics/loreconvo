@@ -36,6 +36,9 @@ pro = [
     "sentence-transformers==5.5.0",
     "pyarrow==24.0.0",
 ]
+bridge = [
+    "anthropic==0.87.0",
+]
 
 [project.scripts]
 loreconvo = "loreconvo.server:main"
