@@ -313,6 +313,20 @@ to any cloud service. You own your data.
 
 ---
 
+## Security note for Pro users
+
+When you enable the Pro tier and build the semantic index, LoreConvo creates a
+`sessions.lance/` directory under your data root (default: `~/.loreconvo/`). This
+directory stores vector representations (embeddings) of your session titles and
+summaries. The directory is protected with mode 700 (owner-only access on POSIX
+systems).
+
+If you back up your data root, include this directory in your backup -- and treat
+the backup with the same sensitivity as the source data, since the vectors encode
+the semantic content of your session history.
+
+---
+
 ## How LoreConvo Accesses Your Data
 
 LoreConvo provides three ways to read and write your session memory:
