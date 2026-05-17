@@ -12,7 +12,7 @@ mkdir -p "$PLUGIN_DATA"
 # Only install if requirements have changed or never installed
 if [ ! -f "$MARKER" ] || ! diff -q "$REQUIREMENTS" "$PLUGIN_DATA/requirements.txt" >/dev/null 2>&1; then
     echo "LoreConvo: Installing dependencies..."
-    pip3 install -q -r "$REQUIREMENTS" --break-system-packages 2>/dev/null || pip3 install -q -r "$REQUIREMENTS" 2>/dev/null
+    pip3 install -q -r "$REQUIREMENTS" --break-system-packages 2>>"$PLUGIN_DATA/install.log" || pip3 install -q -r "$REQUIREMENTS" 2>>"$PLUGIN_DATA/install.log"
     if [ $? -eq 0 ]; then
         cp "$REQUIREMENTS" "$PLUGIN_DATA/requirements.txt"
         touch "$MARKER"
