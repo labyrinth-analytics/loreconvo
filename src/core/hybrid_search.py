@@ -90,7 +90,7 @@ def _rrf_merge(vec_results: list, fts_results: list, k: int = 60, limit: int = 1
 
 def _recency_rerank(results: list, half_life_days: int, limit: int) -> list:
     """Re-score RRF results by exponential recency decay and re-sort."""
-    today = datetime.datetime.utcnow()
+    today = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     scored = []
     for rank, r in enumerate(results):
         date = r.get('session_date')
