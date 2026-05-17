@@ -114,6 +114,29 @@ CREATE INDEX IF NOT EXISTS idx_cooccurrences_session ON session_cooccurrences(se
 CREATE INDEX IF NOT EXISTS idx_cooccurrences_term ON session_cooccurrences(term);
 """
 
+DREAMING_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS memory_digests (
+    id              TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    project         TEXT NOT NULL,
+    surface         TEXT,
+    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    source_count    INTEGER DEFAULT 0,
+    oldest_session_date TEXT,
+    newest_session_date TEXT,
+    decisions       TEXT,
+    open_questions  TEXT,
+    known_stack     TEXT,
+    stale_facts     TEXT,
+    digest_markdown TEXT,
+    mode            TEXT DEFAULT 'heuristic',
+    tier            TEXT DEFAULT 'free',
+    disabled        INTEGER DEFAULT 0,
+    api_key_found   INTEGER DEFAULT 1,
+    UNIQUE(project, surface)
+);
+"""
+
 FTS_SQL = """
 CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts USING fts5(
     title, summary, decisions, tags, open_questions,
@@ -157,6 +180,7 @@ class SessionDatabase:
         self._migrate_add_team_memory_columns()
         self._migrate_add_external_tool_session_column()
         self._migrate_index_existing_cooccurrences()
+        self._migrate_add_dreaming_columns()
         self.conn.commit()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
@@ -262,6 +286,22 @@ class SessionDatabase:
             )
         except sqlite3.OperationalError:
             pass  # column already exists
+
+    def _migrate_add_dreaming_columns(self):
+        """Add dreaming/recall columns and memory_digests table (v0.6.0).
+
+        Idempotent: each ALTER TABLE is wrapped in try/except for the duplicate-column
+        OperationalError that SQLite raises when the column already exists.
+        """
+        self.conn.executescript(DREAMING_SCHEMA_SQL)
+        for col_sql in (
+            "ALTER TABLE sessions ADD COLUMN expires_at TEXT",
+            "ALTER TABLE sessions ADD COLUMN staleness_hint TEXT",
+        ):
+            try:
+                self.conn.execute(col_sql)
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
     def _migrate_index_existing_cooccurrences(self):
         """Populate session_cooccurrences for existing sessions on first run.
@@ -1452,6 +1492,224 @@ class SessionDatabase:
                 "estimated_tokens": total_chars // 4,
             },
         }
+
+    # -- Dreaming / Recall operations (v0.6.0) --
+
+    def upsert_memory_digest(self, project: str, surface: Optional[str], data: dict) -> None:
+        """Insert or update a memory digest keyed by (project, surface)."""
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        existing = self.conn.execute(
+            "SELECT id FROM memory_digests WHERE project=? AND surface IS ?",
+            (project, surface)
+        ).fetchone()
+        if existing:
+            self.conn.execute(
+                """UPDATE memory_digests SET
+                   updated_at=?,
+                   source_count=COALESCE(?,source_count),
+                   oldest_session_date=COALESCE(?,oldest_session_date),
+                   newest_session_date=COALESCE(?,newest_session_date),
+                   decisions=COALESCE(?,decisions),
+                   open_questions=COALESCE(?,open_questions),
+                   known_stack=COALESCE(?,known_stack),
+                   stale_facts=COALESCE(?,stale_facts),
+                   digest_markdown=COALESCE(?,digest_markdown),
+                   mode=COALESCE(?,mode),
+                   tier=COALESCE(?,tier),
+                   api_key_found=COALESCE(?,api_key_found)
+                   WHERE project=? AND surface IS ?""",
+                (
+                    now,
+                    data.get("source_count"),
+                    data.get("oldest_session_date"),
+                    data.get("newest_session_date"),
+                    data.get("decisions"),
+                    data.get("open_questions"),
+                    data.get("known_stack"),
+                    data.get("stale_facts"),
+                    data.get("digest_markdown"),
+                    data.get("mode"),
+                    data.get("tier"),
+                    data.get("api_key_found"),
+                    project, surface,
+                )
+            )
+        else:
+            digest_id = __import__("uuid").uuid4().hex
+            self.conn.execute(
+                """INSERT INTO memory_digests
+                   (id, project, surface, created_at, updated_at,
+                    source_count, oldest_session_date, newest_session_date,
+                    decisions, open_questions, known_stack, stale_facts,
+                    digest_markdown, mode, tier, api_key_found)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    digest_id, project, surface, now, now,
+                    data.get("source_count", 0),
+                    data.get("oldest_session_date"),
+                    data.get("newest_session_date"),
+                    data.get("decisions"),
+                    data.get("open_questions"),
+                    data.get("known_stack"),
+                    data.get("stale_facts"),
+                    data.get("digest_markdown"),
+                    data.get("mode", "heuristic"),
+                    data.get("tier", "free"),
+                    data.get("api_key_found", 1),
+                )
+            )
+        self.conn.commit()
+
+    def get_memory_digest(self, project: str, surface: Optional[str]) -> Optional[dict]:
+        """Return the current digest for (project, surface) as a dict, or None."""
+        row = self.conn.execute(
+            "SELECT * FROM memory_digests WHERE project=? AND surface IS ?",
+            (project, surface)
+        ).fetchone()
+        if not row:
+            return None
+        return dict(row)
+
+    def update_digest_disabled(self, project: str, surface: Optional[str], disabled: bool) -> None:
+        """Set the disabled flag on a digest to suppress auto-load injection."""
+        self.conn.execute(
+            "UPDATE memory_digests SET disabled=? WHERE project=? AND surface IS ?",
+            (1 if disabled else 0, project, surface)
+        )
+        self.conn.commit()
+
+    def set_session_expiry(self, session_id: str, expires_at: Optional[str]) -> bool:
+        """Set or clear the expires_at field on a session. Returns False if not found."""
+        row = self.conn.execute(
+            "SELECT id FROM sessions WHERE id=?", (session_id,)
+        ).fetchone()
+        if not row:
+            return False
+        self.conn.execute(
+            "UPDATE sessions SET expires_at=? WHERE id=?",
+            (expires_at, session_id)
+        )
+        self.conn.commit()
+        return True
+
+    def set_session_staleness(self, session_id: str, hint: Optional[str]) -> None:
+        """Set or clear the staleness_hint field on a session."""
+        self.conn.execute(
+            "UPDATE sessions SET staleness_hint=? WHERE id=?",
+            (hint, session_id)
+        )
+        self.conn.commit()
+
+    def get_sessions_for_consolidation(
+        self,
+        project: str,
+        surface: Optional[str],
+        max_sessions: int = 50,
+        exclude_no_llm: bool = False,
+    ) -> List[dict]:
+        """Return up to max_sessions recent sessions for a (project, surface) pair.
+
+        Excludes periodic/file_memory sources. When exclude_no_llm=True, also
+        excludes sessions tagged 'no-llm'.
+        """
+        params: list = [project]
+        sql = (
+            "SELECT id, title, summary, decisions, open_questions, tags, "
+            "start_date, created_at, staleness_hint, expires_at, source "
+            "FROM sessions "
+            "WHERE project=? "
+            "AND (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
+        )
+        if surface is not None:
+            sql += " AND surface=?"
+            params.append(surface)
+        sql += " ORDER BY start_date DESC LIMIT ?"
+        params.append(max_sessions)
+
+        rows = self.conn.execute(sql, params).fetchall()
+        results = [dict(r) for r in rows]
+
+        if exclude_no_llm:
+            filtered = []
+            for r in results:
+                tags = self._parse_json_field(r.get("tags"))
+                if "no-llm" not in tags:
+                    filtered.append(r)
+            results = filtered
+
+        return results
+
+    def count_consolidations_today(
+        self,
+        project: str,
+        surface: Optional[str],
+        log_path: Optional[str] = None,
+    ) -> int:
+        """Count how many consolidation runs occurred today for this (project, surface).
+
+        Reads from consolidation.log (JSON-lines format). Returns 0 if log missing.
+        """
+        if log_path is None:
+            lore_dir = Path(self.config.db_path).parent
+            log_path = str(lore_dir / "consolidation.log")
+
+        if not Path(log_path).is_file():
+            return 0
+
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        count = 0
+        try:
+            for line in Path(log_path).read_text().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                entry = json.loads(line)
+                ts = entry.get("ts", "")
+                if (
+                    entry.get("project") == project
+                    and entry.get("surface") == surface
+                    and ts.startswith(today)
+                ):
+                    count += 1
+        except Exception:
+            pass
+        return count
+
+    def get_consolidation_log_entries(
+        self,
+        project: Optional[str] = None,
+        surface: Optional[str] = None,
+        limit: int = 10,
+        log_path: Optional[str] = None,
+    ) -> List[dict]:
+        """Return recent consolidation log entries, newest first.
+
+        Filters by project/surface when provided. Reads from consolidation.log.
+        """
+        if log_path is None:
+            lore_dir = Path(self.config.db_path).parent
+            log_path = str(lore_dir / "consolidation.log")
+
+        entries = []
+        if not Path(log_path).is_file():
+            return entries
+
+        try:
+            for line in Path(log_path).read_text().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                entry = json.loads(line)
+                if project and entry.get("project") != project:
+                    continue
+                if surface and entry.get("surface") != surface:
+                    continue
+                entries.append(entry)
+        except Exception:
+            pass
+
+        entries.reverse()
+        return entries[:limit]
 
     def get_sessions_for_export(
         self,

@@ -985,6 +985,168 @@ def get_stats() -> dict:
     return db.get_usage_stats()
 
 
+@mcp.tool(title="Consolidate Memories")
+def consolidate_memories(
+    project: str,
+    surface: str | None = None,
+    max_sessions: int = 50,
+    mode: str = "heuristic",
+) -> dict:
+    """Run memory consolidation for a project to build a structured digest.
+
+    Analyzes recent sessions and extracts decisions, open questions, and tech
+    stack facts. Free tier: up to 3 consolidations per day. Pro: unlimited.
+
+    Returns a digest dict with status, decisions found, open questions, and
+    the formatted digest_markdown for reference.
+
+    Acquires an exclusive lock; returns status='lock_held' if another
+    consolidation is already running.
+
+    Args:
+        project: Project name (matches the --project tag used when saving sessions)
+        surface: Surface to consolidate ('code', 'cowork', 'chat', etc.) or None for all
+        max_sessions: Maximum number of recent sessions to analyze (default 50)
+        mode: 'heuristic' (free, default). 'llm' requires Pro (v0.6.1).
+    """
+    from core.consolidation import HeuristicConsolidator
+    import pathlib
+    lore_dir = str(pathlib.Path(db.config.db_path).parent)
+    consolidator = HeuristicConsolidator(lore_dir=lore_dir)
+    result = consolidator.consolidate(
+        project=project,
+        surface=surface,
+        db=db,
+        max_sessions=max_sessions,
+        mode="heuristic",  # LLM mode deferred to v0.6.1
+        is_pro=db.config.is_pro,
+        trigger="on-demand",
+    )
+    return result
+
+
+@mcp.tool(title="Get Memory Digest")
+def get_memory_digest(
+    project: str,
+    surface: str | None = None,
+    disable: bool | None = None,
+) -> dict:
+    """Retrieve the current memory digest for a project without re-running consolidation.
+
+    Returns None if no digest exists. Use consolidate_memories first to generate one.
+
+    Optionally set disable=True to suppress auto-load injection for this digest,
+    or disable=False to re-enable injection. Omit disable to just read the current state.
+
+    Args:
+        project: Project name
+        surface: Surface filter (or None for all)
+        disable: If provided, update the disabled flag on the digest
+    """
+    if disable is not None:
+        db.update_digest_disabled(project, surface, disabled=disable)
+    digest = db.get_memory_digest(project, surface)
+    if digest is None:
+        return {
+            "status": "no_digest",
+            "message": "No memory digest found. Run consolidate_memories to generate one.",
+            "project": project,
+            "surface": surface,
+        }
+    return {
+        "status": "ok",
+        "project": digest["project"],
+        "surface": digest["surface"],
+        "mode": digest.get("mode", "heuristic"),
+        "source_count": digest.get("source_count", 0),
+        "updated_at": digest.get("updated_at", ""),
+        "disabled": bool(digest.get("disabled", 0)),
+        "digest_markdown": digest.get("digest_markdown", ""),
+        "decisions": digest.get("decisions"),
+        "open_questions": digest.get("open_questions"),
+        "known_stack": digest.get("known_stack"),
+    }
+
+
+@mcp.tool(title="Set Session Expiry")
+def set_session_expiry(
+    session_id: str,
+    expires_at: str | None,
+) -> dict:
+    """Set or clear an expiry date on a session.
+
+    After expires_at, the session is excluded from default search and auto-load.
+    The session is NOT deleted -- recover it with search_sessions(include_expired=True).
+    Pass expires_at=None to clear a previously set expiry.
+
+    Args:
+        session_id: ID of the session to update
+        expires_at: ISO 8601 date string (e.g. '2027-01-01T00:00:00Z'), or None to clear
+    """
+    found = db.set_session_expiry(session_id, expires_at)
+    if not found:
+        return {"status": "not_found", "session_id": session_id}
+    return {
+        "status": "ok",
+        "session_id": session_id,
+        "expires_at": expires_at,
+    }
+
+
+@mcp.tool(title="Get Dream Log")
+def get_dream_log(
+    project: str | None = None,
+    surface: str | None = None,
+    limit: int = 10,
+) -> dict:
+    """Return recent consolidation log entries for transparency and diagnostics.
+
+    Each entry shows: timestamp, project, surface, mode, source_count, trigger.
+    Use this to confirm consolidation ran, check rate limit status, and diagnose
+    fallbacks (e.g. api_key_found=false for LLM-mode fallback).
+
+    Args:
+        project: Filter by project (or None for all projects)
+        surface: Filter by surface (or None for all)
+        limit: Maximum number of entries to return (default 10, newest first)
+    """
+    import pathlib
+    lore_dir = pathlib.Path(db.config.db_path).parent
+    log_path = str(lore_dir / "consolidation.log")
+    entries = db.get_consolidation_log_entries(
+        project=project,
+        surface=surface,
+        limit=limit,
+        log_path=log_path,
+    )
+    digest = None
+    if project:
+        raw = db.get_memory_digest(project, surface)
+        if raw:
+            inject_env = os.environ.get("LORECONVO_DREAM_INJECT", "true").lower()
+            inject_active = inject_env != "false" and not bool(raw.get("disabled", 0))
+            digest = {
+                "updated_at": raw.get("updated_at", ""),
+                "mode": raw.get("mode", "heuristic"),
+                "source_count": raw.get("source_count", 0),
+                "disabled": bool(raw.get("disabled", 0)),
+                "api_key_found": bool(raw.get("api_key_found", 1)),
+                "injection_active": inject_active,
+                "injection_reason": (
+                    "active" if inject_active
+                    else ("LORECONVO_DREAM_INJECT=false" if inject_env == "false"
+                          else "digest.disabled=1 -- manually suppressed")
+                ),
+            }
+    return {
+        "status": "ok",
+        "project": project,
+        "surface": surface,
+        "entries": entries,
+        "digest_status": digest,
+    }
+
+
 def main():
     """Entry point for uvx / console script execution."""
     mcp.run(transport="stdio")
