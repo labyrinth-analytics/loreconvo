@@ -865,10 +865,7 @@ def import_sessions(
             continue
 
         if dry_run:
-            exists = db.conn.execute(
-                "SELECT id FROM sessions WHERE id = ?", (session.id,)
-            ).fetchone()
-            if exists:
+            if db.session_exists(session.id):
                 if on_conflict == "replace":
                     replaced += 1
                 else:

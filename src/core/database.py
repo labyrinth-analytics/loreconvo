@@ -24,6 +24,7 @@ _IMPORT_FIELD_CAPS = {
 }
 _MAX_SESSIONS_PER_FILE = 10_000
 _MAX_IMPORT_BYTES = 50 * 1024 * 1024  # 50 MB
+_INTERNAL_SOURCES = ("file_memory", "periodic")
 
 _STOPWORDS = frozenset({
     "a", "about", "after", "again", "ago", "all", "also", "an", "and",
@@ -1286,6 +1287,12 @@ class SessionDatabase:
         self.conn.commit()
         return "imported"
 
+    def session_exists(self, session_id: str) -> bool:
+        row = self.conn.execute(
+            "SELECT id FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        return row is not None
+
     def session_count(self) -> int:
         row = self.conn.execute(
             "SELECT COUNT(*) as c FROM sessions WHERE source IS NULL OR source != 'file_memory'"
@@ -1370,32 +1377,41 @@ class SessionDatabase:
 
         Excludes periodic snapshots and file_memory entries (internal sources).
         """
-        user_filter = "source IS NULL OR source NOT IN ('file_memory', 'periodic')"
+        _s = _INTERNAL_SOURCES
 
         total = self.conn.execute(
-            f"SELECT COUNT(*) as c FROM sessions WHERE {user_filter}"
+            "SELECT COUNT(*) as c FROM sessions "
+            "WHERE (source IS NULL OR source NOT IN (?, ?))",
+            _s,
         ).fetchone()["c"]
 
         by_surface = self.conn.execute(
-            f"SELECT surface, COUNT(*) as c FROM sessions "
-            f"WHERE {user_filter} GROUP BY surface ORDER BY c DESC"
+            "SELECT surface, COUNT(*) as c FROM sessions "
+            "WHERE (source IS NULL OR source NOT IN (?, ?)) "
+            "GROUP BY surface ORDER BY c DESC",
+            _s,
         ).fetchall()
 
         by_project = self.conn.execute(
-            f"SELECT COALESCE(project, '(none)') as project, COUNT(*) as c "
-            f"FROM sessions WHERE {user_filter} "
-            f"GROUP BY project ORDER BY c DESC LIMIT 10"
+            "SELECT COALESCE(project, '(none)') as project, COUNT(*) as c "
+            "FROM sessions WHERE (source IS NULL OR source NOT IN (?, ?)) "
+            "GROUP BY project ORDER BY c DESC LIMIT 10",
+            _s,
         ).fetchall()
 
         recent_5 = self.conn.execute(
-            f"SELECT title, start_date, surface, project FROM sessions "
-            f"WHERE {user_filter} ORDER BY start_date DESC LIMIT 5"
+            "SELECT title, start_date, surface, project FROM sessions "
+            "WHERE (source IS NULL OR source NOT IN (?, ?)) "
+            "ORDER BY start_date DESC LIMIT 5",
+            _s,
         ).fetchall()
 
         # Tag breakdown: parse JSON tags column in Python
         tag_rows = self.conn.execute(
-            f"SELECT tags FROM sessions "
-            f"WHERE tags IS NOT NULL AND tags != '[]' AND ({user_filter})"
+            "SELECT tags FROM sessions "
+            "WHERE tags IS NOT NULL AND tags != '[]' "
+            "AND (source IS NULL OR source NOT IN (?, ?))",
+            _s,
         ).fetchall()
         tag_counts: dict = {}
         for row in tag_rows:
@@ -1409,9 +1425,10 @@ class SessionDatabase:
             db_size_bytes = os.path.getsize(self.config.db_path)
 
         char_count_row = self.conn.execute(
-            f"SELECT SUM(LENGTH(COALESCE(title,'')) + LENGTH(COALESCE(summary,'')) + "
-            f"LENGTH(COALESCE(decisions,'')) + LENGTH(COALESCE(open_questions,''))) as total_chars "
-            f"FROM sessions WHERE {user_filter}"
+            "SELECT SUM(LENGTH(COALESCE(title,'')) + LENGTH(COALESCE(summary,'')) + "
+            "LENGTH(COALESCE(decisions,'')) + LENGTH(COALESCE(open_questions,''))) as total_chars "
+            "FROM sessions WHERE (source IS NULL OR source NOT IN (?, ?))",
+            _s,
         ).fetchone()
         total_chars = char_count_row["total_chars"] or 0
 
