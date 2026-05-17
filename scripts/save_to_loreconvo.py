@@ -16,6 +16,7 @@ Usage (save a session):
 Usage (read recent sessions):
     python scripts/save_to_loreconvo.py --read --limit 5
     python scripts/save_to_loreconvo.py --read --surface qa --limit 3
+    python scripts/save_to_loreconvo.py --read --tag-filter agent:ron-builder --limit 5
 
 Usage (read one session by ID):
     python scripts/save_to_loreconvo.py --read-id e55cac21-4471-4991-bf1d-17b2883f28dc
@@ -128,21 +129,32 @@ def read_sessions(args):
     """Read recent sessions from LoreConvo DB."""
     conn, db_path = _connect(args.db_path)
 
-    query = "SELECT id, surface, title, substr(summary, 1, 300) as summary_preview, datetime(created_at) as created FROM sessions"
-    params = []
     conditions = []
+    params = []
 
     if args.surface:
         conditions.append("surface = ?")
         params.append(args.surface)
 
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
+    tag_filter = getattr(args, "tag_filter", None)
+    if tag_filter:
+        # LIKE match against the JSON-serialised tags array.
+        # Tags are stored as json.dumps(list) so a quoted exact token like
+        # '"agent:ron-builder"' appears verbatim in the stored string.
+        # This is robust against NULL and malformed-JSON rows (those won't match).
+        conditions.append("tags LIKE ?")
+        params.append(f'%"{tag_filter}"%')
 
-    query += " ORDER BY created_at DESC LIMIT ?"
+    base = (
+        "SELECT id, surface, title, substr(summary, 1, 300) as summary_preview, "
+        "datetime(created_at) as created FROM sessions"
+    )
+    if conditions:
+        base += " WHERE " + " AND ".join(conditions)
+    base += " ORDER BY created_at DESC LIMIT ?"
     params.append(args.limit)
 
-    rows = conn.execute(query, params).fetchall()
+    rows = conn.execute(base, params).fetchall()
     conn.close()
 
     if not rows:
@@ -271,6 +283,8 @@ def main():
 
     # Read/search args
     parser.add_argument("--limit", type=int, default=5, help="Max sessions to return (default: 5)")
+    parser.add_argument("--tag-filter", type=str, dest="tag_filter",
+                        help="Filter --read results to sessions containing this tag (e.g. agent:ron-builder)")
 
     args = parser.parse_args()
 
