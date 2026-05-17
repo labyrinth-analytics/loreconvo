@@ -60,6 +60,17 @@ def _path_to_title(path: str) -> str:
     return name or path
 
 
+def _normalize_memory_path(path: str) -> str:
+    """Normalize memory paths to consistently end with .md for stable ID hashing.
+
+    Ensures /memories/foo and /memories/foo.md always resolve to the same session.
+    The root /memories and directory-style paths (trailing /) are left unchanged.
+    """
+    if path and path != "/memories" and not path.endswith("/") and not path.endswith(".md"):
+        return path + ".md"
+    return path
+
+
 class LoreConvoMemoryBackend(BetaAbstractMemoryTool):
     """LoreConvo storage backend for Anthropic's memory_20250818 API tool.
 
@@ -87,15 +98,15 @@ class LoreConvoMemoryBackend(BetaAbstractMemoryTool):
         self._project = project
 
     def _require_memories_prefix(self, path: str) -> None:
-        if not path.startswith("/memories"):
-            raise ToolError(f"Path must start with /memories, got: {path}")
+        if not (path == "/memories" or path.startswith("/memories/")):
+            raise ToolError(f"Path must start with /memories/, got: {path}")
 
     # ------------------------------------------------------------------
     # Abstract method implementations
     # ------------------------------------------------------------------
 
     def view(self, command: BetaMemoryTool20250818ViewCommand) -> str:
-        path = command.path.rstrip("/")
+        path = _normalize_memory_path(command.path.rstrip("/"))
 
         if path == "/memories":
             return self._list_all()
@@ -119,7 +130,7 @@ class LoreConvoMemoryBackend(BetaAbstractMemoryTool):
         return content
 
     def create(self, command: BetaMemoryTool20250818CreateCommand) -> str:
-        path = command.path
+        path = _normalize_memory_path(command.path)
         self._require_memories_prefix(path)
 
         session_id = _path_to_id(path)
@@ -143,8 +154,9 @@ class LoreConvoMemoryBackend(BetaAbstractMemoryTool):
         return f"Memory created: {path}"
 
     def str_replace(self, command: BetaMemoryTool20250818StrReplaceCommand) -> str:
-        self._require_memories_prefix(command.path)
-        session_id = _path_to_id(command.path)
+        path = _normalize_memory_path(command.path)
+        self._require_memories_prefix(path)
+        session_id = _path_to_id(path)
         session = self._db.get_session(session_id)
         if not session:
             raise ToolError(f"Memory not found: {command.path}")
@@ -166,8 +178,9 @@ class LoreConvoMemoryBackend(BetaAbstractMemoryTool):
         return f"Memory updated: {command.path}"
 
     def insert(self, command: BetaMemoryTool20250818InsertCommand) -> str:
-        self._require_memories_prefix(command.path)
-        session_id = _path_to_id(command.path)
+        path = _normalize_memory_path(command.path)
+        self._require_memories_prefix(path)
+        session_id = _path_to_id(path)
         session = self._db.get_session(session_id)
         if not session:
             raise ToolError(f"Memory not found: {command.path}")
