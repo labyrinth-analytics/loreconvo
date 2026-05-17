@@ -35,6 +35,34 @@ mcp = FastMCP(
 db = SessionDatabase(Config())
 
 
+def _compress_summary(raw_summary: str) -> str:
+    """Compress raw_summary via Claude API. Returns raw on any failure (no key, import error, API error)."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return raw_summary
+    try:
+        import anthropic
+    except ImportError:
+        return raw_summary
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Summarize the following session notes concisely. "
+                    "Preserve all key decisions, artifacts, and open questions. "
+                    "Output only the summary text:\n\n" + raw_summary
+                ),
+            }],
+        )
+        return response.content[0].text
+    except Exception:
+        return raw_summary
+
+
 @mcp.tool(title="Save Session")
 def save_session(
     title: str,
@@ -50,6 +78,7 @@ def save_session(
     end_date: str | None = None,
     session_id: str | None = None,
     external_tool_session: bool = False,
+    summarize: bool = False,
 ) -> dict:
     """Save a session summary to persistent memory.
 
@@ -80,7 +109,14 @@ def save_session(
             excluded from auto-load and search by default to prevent context
             contamination. Override exclusion with include_external=True on search,
             or set LORECONVO_EXTERNAL_TOOL_EXCLUSION=0 to disable globally.
+        summarize: If True and ANTHROPIC_API_KEY is set, send the summary to
+            Claude API (Haiku) for compression before saving. Opt-in only;
+            defaults to False. Falls back to the raw summary on any API error
+            or if the key is absent. See INSTALL.md Privacy Note.
     """
+    if summarize:
+        summary = _compress_summary(summary)
+
     # Merge artifacts with any existing auto-saved record when session_id is known
     merged_artifacts = artifacts or []
     if session_id is not None and not artifacts:
