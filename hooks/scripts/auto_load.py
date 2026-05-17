@@ -351,6 +351,64 @@ def format_context(sessions, cwd):
     return "\n".join(lines)
 
 
+def query_digest_for_injection(db_path: str, project: str, surface: str) -> "str | None":
+    """Return the digest_markdown for injection if eligible, or None.
+
+    Eligibility rules:
+    - LORECONVO_DREAM_INJECT env var must not be 'false'
+    - A memory_digests row must exist for (project, surface)
+    - disabled flag must be 0
+    - updated_at must be within 7 days (freshness check)
+    """
+    if os.environ.get("LORECONVO_DREAM_INJECT", "true").lower() == "false":
+        return None
+
+    if not os.path.exists(db_path):
+        return None
+
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            # Check if memory_digests table exists (may not on older installs)
+            tables = {row[0] for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()}
+            if "memory_digests" not in tables:
+                return None
+
+            row = conn.execute(
+                "SELECT digest_markdown, disabled, updated_at "
+                "FROM memory_digests WHERE project=? AND surface IS ?",
+                (project, surface)
+            ).fetchone()
+
+            if row is None:
+                return None
+            if row["disabled"]:
+                return None
+
+            # Freshness: updated_at must be within 7 days
+            updated_raw = row["updated_at"] or ""
+            if updated_raw:
+                try:
+                    updated_dt = datetime.fromisoformat(updated_raw.replace("Z", "+00:00"))
+                    age = datetime.now(timezone.utc) - updated_dt
+                    if age > timedelta(days=7):
+                        return None
+                except (ValueError, TypeError):
+                    return None
+
+            md = row["digest_markdown"] or ""
+            return md if md.strip() else None
+
+        finally:
+            conn.close()
+    except Exception as exc:
+        sys.stderr.write(f"LoreConvo auto-load: digest query error: {exc}\n")
+        return None
+
+
 def main():
     """Main entry point for SessionStart hook."""
     try:
@@ -384,6 +442,16 @@ def main():
         sessions = select_sessions(raw_sessions, max_count=max_count)
 
         context = format_context(sessions, cwd)
+
+        # Additive digest injection: prepend memory digest if eligible
+        project_name = os.path.basename(cwd) if cwd else ""
+        surface = os.environ.get("LORECONVO_SURFACE", "code")
+        digest_md = query_digest_for_injection(db_path, project_name, surface)
+        if digest_md and context:
+            context = digest_md + "\n\n" + context
+        elif digest_md:
+            context = digest_md
+
         if context:
             print(context)
             sys.stderr.write(
