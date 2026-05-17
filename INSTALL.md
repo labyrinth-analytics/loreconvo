@@ -313,6 +313,22 @@ to any cloud service. You own your data.
 
 ---
 
+## Privacy Note: summarize=True
+
+By default, LoreConvo stores session data locally with no external network calls.
+If you pass `summarize=True` to `save_session`, LoreConvo sends the session summary
+to the Anthropic API (using your `ANTHROPIC_API_KEY`) to produce a compressed version
+before saving locally. This is opt-in and disabled by default.
+
+When `summarize=True`:
+- Your session summary is transmitted to Anthropic and is subject to Anthropic's
+  [Privacy Policy](https://www.anthropic.com/legal/privacy).
+- If `ANTHROPIC_API_KEY` is not set, or the API call fails for any reason, LoreConvo
+  falls back to saving the raw summary. Session saves never fail due to this feature.
+- The `anthropic` package must be installed: `pip install loreconvo[bridge]`
+
+---
+
 ## Security note for Pro users
 
 When you enable the Pro tier and build the semantic index, LoreConvo creates a
