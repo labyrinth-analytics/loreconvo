@@ -235,6 +235,7 @@ def search_sessions(
     limit: int = 10,
     include_external: bool = False,
     semantic: bool = False,
+    include_expired: bool = False,
 ) -> list[dict]:
     """Search session memory by keyword, with optional filters.
 
@@ -253,8 +254,10 @@ def search_sessions(
         semantic: If True, use LanceDB hybrid (vector + BM25) search instead of FTS5.
             Pro tier only. Falls back to FTS5 if index not built yet; run
             rebuild_index to build it after first Pro activation.
+        include_expired: If True, include sessions whose expires_at is in the past.
+            Default False (expired sessions are hidden from search).
     """
-    results = db.search_sessions(query, persona, tags, skills, project, limit, include_external=include_external, semantic=semantic)
+    results = db.search_sessions(query, persona, tags, skills, project, limit, include_external=include_external, semantic=semantic, include_expired=include_expired)
     return [
         {
             "id": r.session.id,
@@ -1075,8 +1078,9 @@ def set_session_expiry(
 ) -> dict:
     """Set or clear an expiry date on a session.
 
-    After expires_at, the session is excluded from default search and auto-load.
-    The session is NOT deleted -- recover it with search_sessions(include_expired=True).
+    After expires_at passes, the session is excluded from search_sessions,
+    get_recent_sessions, and the auto-load hook. The session is NOT deleted --
+    recover it with search_sessions(include_expired=True).
     Pass expires_at=None to clear a previously set expiry.
 
     Args:
