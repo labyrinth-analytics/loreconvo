@@ -36,7 +36,7 @@ from anthropic.tools.memory import BetaAbstractMemoryTool
 from anthropic.lib.tools import ToolError
 
 from .core.config import Config
-from .core.database import SessionDatabase
+from .core.database import SessionDatabase, SessionLimitReachedError
 from .core.models import Session
 
 _SURFACE = "memory_bridge"
@@ -150,7 +150,13 @@ class LoreConvoMemoryBackend(BetaAbstractMemoryTool):
             summary=command.file_text,
             external_tool_session=False,
         )
-        self._db.save_session(session)
+        try:
+            self._db.save_session(session)
+        except SessionLimitReachedError:
+            raise ToolError(
+                "Memory limit reached on free tier. "
+                "Upgrade to Pro at labyrinthanalyticsconsulting.com for unlimited memories."
+            )
         return f"Memory created: {path}"
 
     def str_replace(self, command: BetaMemoryTool20250818StrReplaceCommand) -> str:
@@ -174,7 +180,13 @@ class LoreConvoMemoryBackend(BetaAbstractMemoryTool):
             )
 
         session.summary = content.replace(command.old_str, command.new_str, 1)
-        self._db.save_session(session)
+        try:
+            self._db.save_session(session)
+        except SessionLimitReachedError:
+            raise ToolError(
+                "Memory limit reached on free tier. "
+                "Upgrade to Pro at labyrinthanalyticsconsulting.com for unlimited memories."
+            )
         return f"Memory updated: {command.path}"
 
     def insert(self, command: BetaMemoryTool20250818InsertCommand) -> str:
@@ -194,7 +206,13 @@ class LoreConvoMemoryBackend(BetaAbstractMemoryTool):
 
         lines.insert(command.insert_line, command.insert_text.rstrip("\n"))
         session.summary = "\n".join(lines)
-        self._db.save_session(session)
+        try:
+            self._db.save_session(session)
+        except SessionLimitReachedError:
+            raise ToolError(
+                "Memory limit reached on free tier. "
+                "Upgrade to Pro at labyrinthanalyticsconsulting.com for unlimited memories."
+            )
         return f"Memory updated: {command.path}"
 
     def delete(self, command: BetaMemoryTool20250818DeleteCommand) -> str:
