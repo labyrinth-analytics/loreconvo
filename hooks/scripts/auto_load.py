@@ -117,14 +117,17 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
         sessions = []
 
         exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
+        col_names = {row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()}
         # Only add the filter if the column exists (older DBs may not have it yet)
-        has_ext_col = any(
-            row[1] == "external_tool_session"
-            for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
-        )
+        has_ext_col = "external_tool_session" in col_names
         ext_filter = (
             " AND (external_tool_session IS NULL OR external_tool_session = 0)"
             if (exclusion_enabled and has_ext_col) else ""
+        )
+        # SH-10248: exclude expired sessions from auto-load context
+        expiry_filter = (
+            " AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
+            if "expires_at" in col_names else ""
         )
 
         if cwd:
@@ -135,7 +138,7 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
                    WHERE project LIKE ?
                      AND start_date >= ?
                      AND (source IS NULL OR source = 'session')"""
-                + ext_filter +
+                + ext_filter + expiry_filter +
                 """
                    ORDER BY start_date DESC
                    LIMIT ?""",
@@ -150,7 +153,7 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
                           open_questions, tags, start_date, end_date
                    FROM sessions
                    WHERE (source IS NULL OR source = 'session')"""
-                + ext_filter +
+                + ext_filter + expiry_filter +
                 """
                    ORDER BY start_date DESC
                    LIMIT ?""",
