@@ -464,6 +464,7 @@ class SessionDatabase:
         skills: Optional[List[str]],
         limit: int,
         include_external: bool,
+        include_expired: bool = False,
     ) -> List[SearchResult]:
         """Fetch sessions by ID (Lance results) and apply post-filters.
 
@@ -474,6 +475,8 @@ class SessionDatabase:
         sql = f"SELECT * FROM sessions WHERE id IN ({placeholders})"
         if _exclusion_enabled and not include_external:
             sql += " AND (external_tool_session IS NULL OR external_tool_session = 0)"
+        if not include_expired:
+            sql += " AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
         rows = self.conn.execute(sql, session_ids).fetchall()
 
         # Preserve relevance order from session_ids
@@ -674,12 +677,15 @@ class SessionDatabase:
         self, limit: int = 10, days_back: int = 30,
         project: Optional[str] = None, skill: Optional[str] = None,
         include_external: bool = False,
+        include_expired: bool = False,
     ) -> List[Session]:
         _exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
         query = "SELECT * FROM sessions WHERE start_date >= ? AND (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
         if _exclusion_enabled and not include_external:
             query += " AND (external_tool_session IS NULL OR external_tool_session = 0)"
+        if not include_expired:
+            query += " AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
         params = [cutoff]
 
         if project:
@@ -802,6 +808,7 @@ class SessionDatabase:
         project: Optional[str] = None, limit: int = 10,
         include_external: bool = False,
         semantic: bool = False,
+        include_expired: bool = False,
     ) -> List[SearchResult]:
         # Semantic path: Pro tier + Lance index available
         if semantic and self.config.is_pro:
@@ -815,7 +822,8 @@ class SessionDatabase:
                 )
                 if session_ids:
                     return self._fetch_sessions_for_semantic(
-                        session_ids, persona, tags, skills, limit, include_external
+                        session_ids, persona, tags, skills, limit, include_external,
+                        include_expired=include_expired,
                     )
             # Fall through to FTS5 if Lance unavailable or no results
 
@@ -829,6 +837,8 @@ class SessionDatabase:
         """
         if _exclusion_enabled and not include_external:
             sql += " AND (s.external_tool_session IS NULL OR s.external_tool_session = 0)"
+        if not include_expired:
+            sql += " AND (s.expires_at IS NULL OR s.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
         params = [fts_query]
 
         if persona:
