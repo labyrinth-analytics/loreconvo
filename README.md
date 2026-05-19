@@ -1,4 +1,4 @@
-# LoreConvo v0.4.0
+# LoreConvo v0.6.0
 
 Vault your Claude conversations. Never re-explain yourself again.
 

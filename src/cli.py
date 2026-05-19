@@ -17,7 +17,7 @@ db = SessionDatabase(Config())
 
 
 @click.group()
-@click.version_option(version="0.5.0", prog_name="loreconvo")
+@click.version_option(version="0.6.0", prog_name="loreconvo")
 def cli():
     """LoreConvo - vault your Claude conversations. Never re-explain yourself again."""
     pass
