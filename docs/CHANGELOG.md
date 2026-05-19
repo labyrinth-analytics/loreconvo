@@ -4,6 +4,42 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## 2026-05-19 -- v0.6.0
+
+### New Features
+
+- **Memory Recall: LoreConvo now consolidates your sessions into a living memory digest.** When you call `consolidate_memories`, LoreConvo reads your recent sessions and synthesizes a compact digest of standing facts, open questions, and recurring themes -- so you can ask "what have I been working on?" and get a coherent answer instead of a wall of raw session text. The digest is automatically injected into your next Claude session via the SessionStart hook, so you pick up context without hunting through history.
+
+- **Session expiry (TTL).** You can now set an expiration date on any session using `set_session_expiry`. Once expired, the session is excluded from search results, the recent sessions list, and auto-load context. This lets you mark short-lived context (like one-off debugging notes) as temporary without deleting it. Expired sessions remain in the database and can be queried explicitly if you need them.
+
+- **Get Memory Digest and Get Dream Log tools.** Two new read tools complement `consolidate_memories`: `get_memory_digest` returns your current consolidated digest, and `get_dream_log` shows the consolidation log -- what was processed, when, and which sessions contributed. Useful for understanding what LoreConvo knows and when it last updated its summary.
+
+### Bug Fixes
+
+- **Expired sessions no longer surface in search or auto-load.** Previously, setting an expiry on a session had no effect on what appeared in search results or the auto-load context injected at session start. All three paths (search, `get_recent_sessions`, auto-load) now filter out expired sessions automatically.
+
+---
+
+## 2026-05-17 -- v0.5.1
+
+### New Features
+
+- **Opt-in session summarization via Claude API.** When saving a session with `save_session`, you can now pass `summarize=True` to have LoreConvo automatically compress your summary using Claude Haiku before storing it. Long session summaries that would otherwise bloat your context window are condensed to the key facts. This requires an `ANTHROPIC_API_KEY` in your environment; if the key is absent or the API call fails for any reason, the original summary is saved as-is. The feature is strictly opt-in -- nothing changes if you do not pass `summarize=True`.
+
+---
+
+## 2026-05-14 -- v0.5.0
+
+### New Features
+
+- **Semantic search for Pro users.** LoreConvo Pro now supports hybrid semantic search: your sessions are indexed with BGE-small embeddings and searched using a combination of vector similarity, BM25 full-text, and a recency decay reranker. In practice this means queries like "the auth bug we fixed last sprint" find the right session even if those exact words don't appear in the summary. If the semantic index isn't available, search falls back silently to FTS5. Install with `pip install loreconvo[pro]` to enable this feature.
+
+- **Related session discovery (Pro).** LoreConvo now automatically detects sessions that are topically related by analyzing which keywords co-occur across your session history. The new `get_related_sessions` tool surfaces sessions you might want to pull in as context when starting a new conversation on a familiar topic. This runs without any external API calls -- it's purely local analysis of your existing session data.
+
+- **Anthropic Managed Agents export (Pro).** A new `export_for_anthropic` tool exports your sessions in the format required by Anthropic's managed-agents memory API (`memory_20250818`). This makes LoreConvo usable as a drop-in memory backend for agents built on the Anthropic SDK. The export includes a `--days-back` option on the CLI (`loreconvo export anthropic-v1`) to control how far back the export reaches.
+
+---
+
 ## 2026-04-18
 
 ### Bug Fixes
