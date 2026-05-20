@@ -1,0 +1,90 @@
+# GitHub Actions workflow template for PyPI publishing via Trusted Publishing (OIDC).
+#
+# DESTINATION: Copy this file to each public product repo as:
+#     .github/workflows/publish.yml
+#
+# In the monorepo, that means placing it at:
+#     ron_skills/<product>/.github/workflows/publish.yml
+#
+# It then ships to the public repo on the next subtree push.
+#
+# HOW IT TRIGGERS:
+#   - Push a tag matching v*.*.* to the PUBLIC repo (not the monorepo).
+#     Example: `git push loreschema v0.1.0` after release.sh has set up the tag.
+#
+# WHAT IT DOES:
+#   1. Verifies the tag name matches the version in pyproject.toml (sanity gate).
+#   2. Builds wheel + sdist with `python -m build`.
+#   3. Uploads to PyPI using OIDC -- no API token, no GitHub secret needed.
+#      Auth is handled by the trusted publisher entry on PyPI
+#      (configured at pypi.org/manage/project/<name>/settings/publishing/).
+#
+# PREREQUISITES (one-time per product):
+#   - Trusted publisher configured on PyPI with:
+#       Owner:           labyrinth-analytics
+#       Repository:      <product>          (matches the GitHub repo name)
+#       Workflow:        publish.yml        (this filename)
+#       Environment:     (blank)
+#   - For NEW packages: configure as a "pending publisher" at
+#     pypi.org/manage/account/publishing/ BEFORE the first tag push.
+#   - For EXISTING packages: configure at
+#     pypi.org/manage/project/<name>/settings/publishing/
+#
+# This file is product-agnostic. The PyPI project name is read from
+# pyproject.toml at build time; nothing in this workflow hard-codes a name.
+
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+# OIDC requires id-token: write. contents: read is the minimum needed for checkout.
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify tag matches pyproject.toml version
+        run: |
+          set -e
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PYPROJECT_VERSION=$(python -c "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          echo "Tag version:        $TAG_VERSION"
+          echo "pyproject version:  $PYPROJECT_VERSION"
+          if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
+            echo "::error::Tag v$TAG_VERSION does not match pyproject.toml version $PYPROJECT_VERSION. Refusing to publish."
+            exit 1
+          fi
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade build
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Verify build artifacts
+        run: |
+          ls -la dist/
+          test -n "$(ls dist/*.whl 2>/dev/null)" || (echo "::error::No wheel produced"; exit 1)
+          test -n "$(ls dist/*.tar.gz 2>/dev/null)" || (echo "::error::No sdist produced"; exit 1)
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No `with: password` -- authentication is via OIDC trusted publishing.
+        # The `id-token: write` permission above plus the pypi.org publisher
+        # config is what authorizes this upload.
