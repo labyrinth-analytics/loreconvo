@@ -120,8 +120,12 @@ Install via the `.plugin` file in the cloned directory:
 
 ## Setting Up Auto-Save and Auto-Load
 
-LoreConvo can automatically save sessions when you close Claude Code and load relevant
-context when you start a new session. This uses Claude Code hooks.
+Install these hooks once and every session is captured automatically -- no `save_session`
+call needed. When you finish a session, the SessionEnd hook saves a structured summary
+(decisions, artifacts, open questions) to your local database. When you start a new
+session, the SessionStart hook loads the most relevant recent context back in.
+
+This uses Claude Code hooks.
 
 After running `install.sh`, add the hooks to `~/.claude/settings.json`:
 

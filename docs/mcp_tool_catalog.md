@@ -1,6 +1,6 @@
 # LoreConvo MCP Tool Catalog
 
-LoreConvo provides 16 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context.
+LoreConvo provides 26 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all 26.
 
 This catalog explains what each tool does, when Claude uses it, and what parameters it accepts.
 
@@ -339,3 +339,13 @@ Import sessions from a LoreConvo export file (JSON or JSONL). Session UUIDs are 
 | `vault_set_tier` | Activate free or Pro tier |
 | `export_sessions` | Export sessions to JSON or JSONL for backup or migration |
 | `import_sessions` | Import sessions from a LoreConvo export file |
+| `get_related_sessions` | Find sessions related to a given session by ID |
+| `consolidate_memories` | Merge related sessions into persistent memory entries (Recall) |
+| `get_memory_digest` | Inject a condensed memory digest into the current session (Recall) |
+| `get_dream_log` | View the consolidation activity log |
+| `set_session_expiry` | Mark a session to expire and be pruned after a given date |
+| `get_stats` | Show usage statistics: session count, surface breakdown |
+| `inspect_sessions` | Inspect session internals for debugging |
+| `export_for_anthropic` | Export sessions in Anthropic managed-agent format (Pro) |
+| `rebuild_semantic_index` | Rebuild the LanceDB semantic search index (Pro) |
+| `loreconvo_onboard` | First-time setup wizard |

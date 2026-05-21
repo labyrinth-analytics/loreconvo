@@ -8,6 +8,17 @@ Persistent cross-surface memory for Claude. Capture session context across Code,
 
 ## Why LoreConvo?
 
+### Sessions save automatically
+
+When you finish a Claude Code session, LoreConvo captures and stores it automatically --
+no explicit `save_session` call needed. A Claude Code hook fires at session end, reads
+the conversation, and saves a structured summary (decisions, artifacts, open questions)
+to your local database. When your next session starts, the most relevant context loads
+back in automatically.
+
+Install the hooks once. After that, every session is captured without any action on
+your part.
+
 ### Your memory stays on your machine
 
 Unlike cloud-based memory tools, LoreConvo stores everything in a SQLite database on your
@@ -63,7 +74,7 @@ Replace `/path/to/loreconvo` with wherever you saved the source folder.
 
 After making code changes, use `/reload-plugins` to refresh without restarting.
 
-Once loaded, Claude has access to all 17 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
+Once loaded, Claude has access to all 26 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
 
 ### Cowork (Desktop App)
 
@@ -211,6 +222,7 @@ At session end:
 
 ## Features
 
+- **Automatic session capture**: Sessions save at session end and load at session start via Claude Code hooks -- no manual `save_session` call required
 - **Cross-surface memory**: Bridge context between Claude Code, Cowork, and Chat
 - **Structured sessions**: Captures decisions, artifacts, open questions -- not just raw text
 - **Project organization**: Group sessions by project with expected skill sets
@@ -254,7 +266,8 @@ At session end:
 
 ## MCP Tools
 
-LoreConvo provides 17 MCP tools that Claude calls automatically during sessions:
+LoreConvo provides 26 MCP tools that Claude calls automatically during sessions.
+The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs/mcp_tool_catalog.md) for the complete reference.
 
 | Tool | What it does |
 |------|-------------|
@@ -265,6 +278,7 @@ LoreConvo provides 17 MCP tools that Claude calls automatically during sessions:
 | `get_context_for` | Pull relevant context for a topic (best for "recall" use) |
 | `tag_session` | Add a persona tag to a session |
 | `link_sessions` | Connect related sessions with a relationship type |
+| `get_related_sessions` | Find sessions related to a given session |
 | `create_project` | Create a named project with expected skills |
 | `get_project` | Get project details and associated sessions |
 | `list_projects` | List all projects |
@@ -274,6 +288,15 @@ LoreConvo provides 17 MCP tools that Claude calls automatically during sessions:
 | `vault_set_tier` | Set the active tier (free, pro, team) |
 | `export_sessions` | Export sessions to a portable JSON format |
 | `import_sessions` | Import sessions from a previously exported JSON file |
+| `consolidate_memories` | Merge related sessions into persistent memory entries (Recall) |
+| `get_memory_digest` | Inject a condensed memory digest into the current session (Recall) |
+| `set_session_expiry` | Mark a session to expire and be pruned after a given date |
+| `get_stats` | Show usage statistics (session count, surface breakdown) |
+| `inspect_sessions` | Inspect session internals for debugging |
+| `export_for_anthropic` | Export sessions in Anthropic managed-agent format (Pro) |
+| `rebuild_semantic_index` | Rebuild the LanceDB semantic search index (Pro) |
+| `loreconvo_onboard` | First-time setup wizard |
+| `get_dream_log` | View the consolidation activity log |
 
 ## Requirements
 
