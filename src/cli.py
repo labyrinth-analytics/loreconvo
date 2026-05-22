@@ -33,7 +33,9 @@ def cli():
 @click.option("--tags", multiple=True, help="Tags (repeatable)")
 @click.option("--external-tool", "external_tool_session", is_flag=True, default=False,
               help="Mark as an external tool session (excluded from auto-load and search by default)")
-def save(title, surface, summary, project, decisions, skills, tags, external_tool_session):
+@click.option("--reasoning-notes", "reasoning_notes", default=None,
+              help="Optional reasoning chain notes")
+def save(title, surface, summary, project, decisions, skills, tags, external_tool_session, reasoning_notes):
     """Save a session to memory."""
     session = Session(
         title=title,
@@ -44,6 +46,7 @@ def save(title, surface, summary, project, decisions, skills, tags, external_too
         skills_used=list(skills),
         tags=list(tags),
         external_tool_session=external_tool_session,
+        reasoning_notes=reasoning_notes if reasoning_notes else None,
     )
     session_id = db.save_session(session)
     click.echo(f"Saved session: {session_id}")

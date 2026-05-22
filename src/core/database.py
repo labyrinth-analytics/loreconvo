@@ -139,21 +139,22 @@ CREATE TABLE IF NOT EXISTS memory_digests (
 
 FTS_SQL = """
 CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts USING fts5(
-    title, summary, decisions, tags, open_questions,
+    title, summary, decisions, tags, open_questions, reasoning_notes,
     content=sessions, content_rowid=rowid
 );
 """
 
 FTS_TRIGGERS = """
 CREATE TRIGGER IF NOT EXISTS sessions_ai AFTER INSERT ON sessions BEGIN
-    INSERT INTO sessions_fts(rowid, title, summary, decisions, tags, open_questions)
-    VALUES (new.rowid, new.title, new.summary, new.decisions, new.tags, new.open_questions);
+    INSERT INTO sessions_fts(rowid, title, summary, decisions, tags, open_questions, reasoning_notes)
+    VALUES (new.rowid, new.title, new.summary, new.decisions, new.tags, new.open_questions, new.reasoning_notes);
 END;
 
 CREATE TRIGGER IF NOT EXISTS sessions_au AFTER UPDATE ON sessions BEGIN
     UPDATE sessions_fts SET title = new.title, summary = new.summary,
         decisions = new.decisions, tags = new.tags,
-        open_questions = new.open_questions WHERE rowid = old.rowid;
+        open_questions = new.open_questions,
+        reasoning_notes = new.reasoning_notes WHERE rowid = old.rowid;
 END;
 
 CREATE TRIGGER IF NOT EXISTS sessions_ad AFTER DELETE ON sessions BEGIN
@@ -181,6 +182,8 @@ class SessionDatabase:
         self._migrate_add_external_tool_session_column()
         self._migrate_index_existing_cooccurrences()
         self._migrate_add_dreaming_columns()
+        self._migrate_add_reasoning_notes_column()
+        self._migrate_fts_v3()
         self.conn.commit()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
@@ -286,6 +289,55 @@ class SessionDatabase:
             )
         except sqlite3.OperationalError:
             pass  # column already exists
+
+    def _migrate_add_reasoning_notes_column(self):
+        """Add reasoning_notes column to sessions table if not already present.
+
+        Idempotent: SQLite raises OperationalError on duplicate column add.
+        """
+        try:
+            self.conn.execute(
+                "ALTER TABLE sessions ADD COLUMN reasoning_notes TEXT"
+            )
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
+    def _migrate_fts_v3(self):
+        """Migrate FTS5 index to v3: add reasoning_notes column.
+
+        Follows the same rebuild pattern as _migrate_fts_v2.
+        Must be called after _migrate_add_reasoning_notes_column so the column exists.
+        """
+        needs_rebuild = False
+        try:
+            cursor = self.conn.execute("SELECT * FROM sessions_fts LIMIT 0")
+            col_names = [desc[0] for desc in cursor.description]
+            if 'reasoning_notes' not in col_names:
+                needs_rebuild = True
+        except sqlite3.OperationalError:
+            needs_rebuild = False
+            self.conn.executescript(FTS_SQL)
+            self.conn.executescript(FTS_TRIGGERS)
+            return
+
+        if not needs_rebuild:
+            self.conn.executescript(FTS_SQL)
+            self.conn.executescript(FTS_TRIGGERS)
+            return
+
+        self.conn.executescript("""
+            DROP TRIGGER IF EXISTS sessions_ai;
+            DROP TRIGGER IF EXISTS sessions_au;
+            DROP TRIGGER IF EXISTS sessions_ad;
+            DROP TABLE IF EXISTS sessions_fts;
+        """)
+        self.conn.executescript(FTS_SQL)
+        self.conn.execute("""
+            INSERT INTO sessions_fts(rowid, title, summary, decisions, tags, open_questions, reasoning_notes)
+            SELECT rowid, title, summary, decisions, tags, open_questions, reasoning_notes
+            FROM sessions
+        """)
+        self.conn.executescript(FTS_TRIGGERS)
 
     def _migrate_add_dreaming_columns(self):
         """Add dreaming/recall columns and memory_digests table (v0.6.0).
@@ -619,8 +671,9 @@ class SessionDatabase:
             """INSERT OR REPLACE INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
                 decisions, artifacts, open_questions, tags, created_at, source,
-                shared_by, origin_machine, content_hash, external_tool_session)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                shared_by, origin_machine, content_hash, external_tool_session,
+                reasoning_notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session.id, session.title, session.surface, session.project,
                 session.start_date, session.end_date, session.summary,
@@ -629,6 +682,7 @@ class SessionDatabase:
                 session.created_at, session.source,
                 session.shared_by, origin_machine, content_hash,
                 1 if session.external_tool_session else 0,
+                session.reasoning_notes if session.reasoning_notes else None,
             )
         )
         for skill_name in session.skills_used:
@@ -1241,6 +1295,7 @@ class SessionDatabase:
             origin_machine=row["origin_machine"] if "origin_machine" in row_keys else None,
             content_hash=row["content_hash"] if "content_hash" in row_keys else None,
             external_tool_session=bool(row["external_tool_session"]) if "external_tool_session" in row_keys else False,
+            reasoning_notes=row["reasoning_notes"] if "reasoning_notes" in row_keys else None,
         )
 
     def get_sessions_for_shared_export(

@@ -78,6 +78,7 @@ def save_session(
     end_date: str | None = None,
     session_id: str | None = None,
     external_tool_session: bool = False,
+    reasoning_notes: str | None = None,
     summarize: bool = False,
 ) -> dict:
     """Save a session summary to persistent memory.
@@ -109,6 +110,9 @@ def save_session(
             excluded from auto-load and search by default to prevent context
             contamination. Override exclusion with include_external=True on search,
             or set LORECONVO_EXTERNAL_TOOL_EXCLUSION=0 to disable globally.
+        reasoning_notes: Optional free-form text capturing the reasoning chain
+            or thought process behind decisions. Stored as-is; blank or None
+            leaves the field empty.
         summarize: If True and ANTHROPIC_API_KEY is set, send the summary to
             Claude API (Haiku) for compression before saving. Opt-in only;
             defaults to False. Falls back to the raw summary on any API error
@@ -135,6 +139,7 @@ def save_session(
         skills_used=skills_used or [],
         project=project,
         external_tool_session=external_tool_session,
+        reasoning_notes=reasoning_notes if reasoning_notes else None,
     )
     if session_id is not None:
         session.id = session_id
