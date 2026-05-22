@@ -55,6 +55,7 @@ def _should_index(
     title: Optional[str],
     external_tool: bool = False,
     source: Optional[str] = None,
+    summary: Optional[str] = None,
 ) -> bool:
     """Return False for sessions that must be excluded from the Lance index.
 
@@ -62,12 +63,15 @@ def _should_index(
     - external_tool_session=True (imported Anthropic sessions, etc.)
     - source in ('periodic', 'file_memory')
     - title starts with '--- name:' (SKILL.md content stored as sessions)
+    - summary starts with '--- name:' within first 20 chars (bypass detection)
     """
     if external_tool:
         return False
     if source in ('periodic', 'file_memory'):
         return False
     if title and title.startswith('--- name:'):
+        return False
+    if summary and summary[:20].startswith('--- name:'):
         return False
     return True
 
@@ -191,7 +195,7 @@ class LanceIndex:
         Sessions excluded by _should_index() are silently skipped (return True).
         Errors are logged but not raised (never block a session save).
         """
-        if not _should_index(title, external_tool, source):
+        if not _should_index(title, external_tool, source, summary):
             return True
 
         try:
@@ -301,6 +305,7 @@ class LanceIndex:
                 s.get('title'),
                 bool(s.get('external_tool_session')),
                 s.get('source'),
+                s.get('summary'),
             )
             and s.get('summary') is not None
         ]
