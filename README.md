@@ -224,7 +224,7 @@ At session end:
 
 - **Automatic session capture**: Sessions save at session end and load at session start via Claude Code hooks -- no manual `save_session` call required
 - **Cross-surface memory**: Bridge context between Claude Code, Cowork, and Chat
-- **Structured sessions**: Captures decisions, artifacts, open questions -- not just raw text
+- **Structured sessions**: Captures decisions, artifacts, open questions -- not just raw text; optional reasoning_notes field stores agent reasoning chains
 - **Project organization**: Group sessions by project with expected skill sets
 - **Skill tracking**: Record which skills were used for smart filtering
 - **Persona tagging**: Hierarchical personas for agent-specific memory (e.g., `ron-bot:sql`)
