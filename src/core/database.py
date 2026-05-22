@@ -1361,6 +1361,7 @@ class SessionDatabase:
         if search:
             results = self.search_sessions(search, limit=limit)
             sessions = [r.session for r in results]
+            sessions = [s for s in sessions if s.source not in ('periodic', 'file_memory')]
             if surface:
                 sessions = [s for s in sessions if s.surface == surface]
             if tag:
@@ -1390,19 +1391,21 @@ class SessionDatabase:
 
     def get_inspect_stats(self) -> dict:
         """Return aggregate stats for inspect --show-stats."""
+        _src_filter = "(source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
         total = self.conn.execute(
-            "SELECT COUNT(*) as c FROM sessions"
+            f"SELECT COUNT(*) as c FROM sessions WHERE {_src_filter}"
         ).fetchone()["c"]
         by_surface = self.conn.execute(
-            "SELECT surface, COUNT(*) as c FROM sessions GROUP BY surface ORDER BY c DESC"
+            f"SELECT surface, COUNT(*) as c FROM sessions WHERE {_src_filter} "
+            "GROUP BY surface ORDER BY c DESC"
         ).fetchall()
         by_project = self.conn.execute(
-            "SELECT project, COUNT(*) as c FROM sessions WHERE project IS NOT NULL "
-            "GROUP BY project ORDER BY c DESC LIMIT 10"
+            f"SELECT project, COUNT(*) as c FROM sessions WHERE {_src_filter} "
+            "AND project IS NOT NULL GROUP BY project ORDER BY c DESC LIMIT 10"
         ).fetchall()
         with_oq = self.conn.execute(
-            "SELECT COUNT(*) as c FROM sessions "
-            "WHERE open_questions IS NOT NULL AND open_questions != '[]'"
+            f"SELECT COUNT(*) as c FROM sessions WHERE {_src_filter} "
+            "AND open_questions IS NOT NULL AND open_questions != '[]'"
         ).fetchone()["c"]
         return {
             "total": total,

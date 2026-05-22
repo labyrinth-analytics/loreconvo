@@ -460,6 +460,10 @@ def inspect(session_id, search, tag, surface, since, limit, show_stats, delete_i
             click.echo("\nOpen Questions:")
             for q in session.open_questions:
                 click.echo(f"  - {q}")
+        if session.skills_used:
+            click.echo("\nSkills used:")
+            for sk in session.skills_used:
+                click.echo(f"  - {sk}")
         return
 
     sessions = db.inspect_sessions(
