@@ -147,12 +147,21 @@ from your work on a project is searchable from any Claude surface.
 # Create a project workspace
 create_project("my-api", "REST API project", expected_skills=["openapi", "python"])
 
+# Add persistent project instructions (optional)
+create_project(
+    "my-api",
+    description="REST API project",
+    instructions="Python 3.10+, SQLite only. No cloud dependencies. Deploy via Docker."
+)
+
 # See recent sessions, skill usage, and open questions for the project
 get_project("my-api")
 
 # Search scoped to the project
 search_sessions("auth design", project="my-api")
 ```
+
+**Project Instructions** (optional): When you create a project, you can store persistent instructions or constraints that Claude will see at session start. This is useful for enforcing project-wide standards without repeating them in every CLAUDE.md file. Instructions are displayed in the auto-load context before recent session summaries.
 
 Used with [LoreDocs](https://github.com/labyrinth-analytics/loredocs), LoreConvo forms a
 portable project workspace for all of Claude -- session memory AND structured knowledge,
