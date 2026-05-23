@@ -35,6 +35,7 @@ class Project:
     description: str = ""
     expected_skills: List[str] = field(default_factory=list)
     default_persona: Optional[str] = None
+    instructions: Optional[str] = None
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'))
 
 
