@@ -118,6 +118,30 @@ Install via the `.plugin` file in the cloned directory:
 
 ---
 
+## Connecting to Cursor IDE
+
+Cursor uses the same MCP protocol as Claude Code. Configure it by creating a `.cursor/mcp.json` file in your project root:
+
+```json
+{
+  "mcpServers": {
+    "loreconvo": {
+      "command": "/path/to/loreconvo/.venv/bin/python",
+      "args": ["/path/to/loreconvo/src/server.py"],
+      "env": {
+        "LORECONVO_PRO": "your-license-key"
+      }
+    }
+  }
+}
+```
+
+Or copy `.mcp.json` as `.cursor/mcp.json` if you already have a working Claude Code setup.
+
+Restart Cursor after adding the configuration. LoreConvo MCP tools will be available in the next Cursor session.
+
+---
+
 ## Setting Up Auto-Save and Auto-Load
 
 Install these hooks once and every session is captured automatically -- no `save_session`
