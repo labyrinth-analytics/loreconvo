@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS projects (
     description     TEXT,
     expected_skills TEXT,
     default_persona TEXT,
+    instructions    TEXT,
     created_at      TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
@@ -184,6 +185,7 @@ class SessionDatabase:
         self._migrate_add_dreaming_columns()
         self._migrate_add_reasoning_notes_column()
         self._migrate_fts_v3()
+        self._migrate_add_project_instructions_column()
         self.conn.commit()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
@@ -354,6 +356,18 @@ class SessionDatabase:
                 self.conn.execute(col_sql)
             except sqlite3.OperationalError:
                 pass  # column already exists
+
+    def _migrate_add_project_instructions_column(self):
+        """Add instructions TEXT column to projects table.
+
+        Idempotent: wrapped in try/except for duplicate-column OperationalError.
+        """
+        try:
+            self.conn.execute(
+                "ALTER TABLE projects ADD COLUMN instructions TEXT"
+            )
+        except sqlite3.OperationalError:
+            pass  # column already exists
 
     def _migrate_index_existing_cooccurrences(self):
         """Populate session_cooccurrences for existing sessions on first run.
@@ -1042,13 +1056,14 @@ class SessionDatabase:
     def create_project(
         self, name: str, description: str = "",
         expected_skills: Optional[List[str]] = None,
-        default_persona: Optional[str] = None
+        default_persona: Optional[str] = None,
+        instructions: Optional[str] = None
     ):
         self.conn.execute(
             """INSERT OR REPLACE INTO projects
-               (name, description, expected_skills, default_persona)
-               VALUES (?, ?, ?, ?)""",
-            (name, description, json.dumps(expected_skills or []), default_persona)
+               (name, description, expected_skills, default_persona, instructions)
+               VALUES (?, ?, ?, ?, ?)""",
+            (name, description, json.dumps(expected_skills or []), default_persona, instructions)
         )
         self.conn.commit()
 
@@ -1077,6 +1092,7 @@ class SessionDatabase:
             "description": row["description"],
             "expected_skills": json.loads(row["expected_skills"] or "[]"),
             "default_persona": row["default_persona"],
+            "instructions": row["instructions"],
             "session_count": len(sessions),
             "recent_sessions": [
                 {"id": s.id, "title": s.title, "date": s.start_date}

@@ -430,6 +430,7 @@ def create_project(
     description: str = "",
     expected_skills: list[str] | None = None,
     default_persona: str | None = None,
+    instructions: str | None = None,
 ) -> dict:
     """Create or update a project definition.
 
@@ -440,8 +441,9 @@ def create_project(
         description: What this project is about
         expected_skills: Skills typically used in this project's sessions
         default_persona: Auto-tag new sessions with this persona
+        instructions: Optional project-wide instructions or constraints
     """
-    db.create_project(name, description, expected_skills, default_persona)
+    db.create_project(name, description, expected_skills, default_persona, instructions)
     return {"status": "created", "project": name}
 
 

@@ -258,11 +258,12 @@ def select_sessions(sessions, max_count=5):
     return [s for _, s in good[:max_count]]
 
 
-def format_context(sessions, cwd):
+def format_context(sessions, cwd, db_path=None):
     """Format session data into a concise context block for Claude.
 
     Output is plain text that Claude Code injects into the session.
     Includes open_questions (missing from old version) as they are highest-signal.
+    If project instructions exist, includes them after project name.
     Enforces MAX_CONTEXT_CHARS soft cap to prevent system prompt bloat.
     """
     if not sessions:
@@ -275,6 +276,22 @@ def format_context(sessions, cwd):
     if cwd:
         project_name = os.path.basename(cwd) if cwd else "unknown"
         lines.append(f"Recent sessions for project: {project_name}")
+
+        # Query and include project instructions if available
+        if db_path and os.path.exists(db_path):
+            try:
+                conn = sqlite3.connect(db_path)
+                row = conn.execute(
+                    "SELECT instructions FROM projects WHERE name = ?",
+                    (project_name,)
+                ).fetchone()
+                conn.close()
+                if row and row[0]:
+                    lines.append("")
+                    lines.append("Project Instructions:")
+                    lines.append(row[0])
+            except (sqlite3.OperationalError, sqlite3.DatabaseError):
+                pass  # Ignore DB errors; instructions are optional
     else:
         lines.append("Recent sessions (no project filter):")
     lines.append("")
@@ -444,7 +461,7 @@ def main():
 
         sessions = select_sessions(raw_sessions, max_count=max_count)
 
-        context = format_context(sessions, cwd)
+        context = format_context(sessions, cwd, db_path)
 
         # Additive digest injection: prepend memory digest if eligible
         project_name = os.path.basename(cwd) if cwd else ""
