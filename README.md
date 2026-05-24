@@ -44,6 +44,20 @@ LoreConvo captures two types of memory for each session:
 Together these give Claude a structured, searchable record of your project's history,
 not just a pile of chat transcripts.
 
+## Recall Benchmark
+
+LoreConvo's FTS5 search is benchmarked against a 60-session synthetic corpus (6 topic areas, 36 labeled queries).
+
+| Variant | Recall@5 | MRR |
+|---------|----------|-----|
+| FTS5 + compound token expansion (default) | **88.9%** | **0.875** |
+| FTS5 baseline (no expansion) | 72.2% | 0.708 |
+
+Compound token expansion (camelCase / snake_case query preprocessing) lifts Recall@5 by **+35.7 pp** on queries using technical identifiers like `autoSave`, `pipeline_tracker`, and `get_context_for`.
+
+[Full benchmark report](docs/agent-reports/benchmarks/loreconvo_recall_benchmark_20260522.md) |
+[Reproduce](scripts/run_loreconvo_recall_benchmark.py)
+
 ## Quick Start
 
 One command to install:

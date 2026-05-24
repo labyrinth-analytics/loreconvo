@@ -95,6 +95,8 @@ The `--env=LORECONVO_PRO=<your-license-key>` flag is optional -- omit it if you 
 | `LORECONVO_PRO` | Your Pro license key (optional) | `--env=LORECONVO_PRO=<key>` in the `claude mcp add` command |
 | `LORECONVO_DB_PATH` | Path to your session memory database (optional) | `--env=LORECONVO_DB_PATH=/path/to/sessions.db` in the command |
 | `LORECONVO_PROJECT_PATH` | Directory to scan for MEMORY.md at session start (optional) | `--env=LORECONVO_PROJECT_PATH=/path/to/project` in the command |
+| `LORECONVO_DREAM_INJECT` | Controls whether the memory digest is injected at session start (optional) | Set to `false` to disable digest injection globally: `--env=LORECONVO_DREAM_INJECT=false` |
+| `HF_HUB_OFFLINE` | Blocks HuggingFace Hub network calls after the initial model download (Pro tier only, optional) | Set to `1` to prevent all post-download hub requests: `--env=HF_HUB_OFFLINE=1` |
 
 If `LORECONVO_DB_PATH` is not set, LoreConvo defaults to `~/.loreconvo/sessions.db`.
 If `LORECONVO_PRO` is not set, LoreConvo runs on the free tier (up to 50 sessions).
@@ -252,6 +254,63 @@ If you see that line, the hook is saving your session before compaction.
 
 ---
 
+## Memory Recall (Dreaming)
+
+Starting with v0.6.0, LoreConvo can consolidate your session history into a persistent memory digest. After you have saved 10 or more sessions, run the consolidation tool once to give Claude a compact summary of your project's standing decisions, open questions, and tech stack facts. The digest is automatically injected at session start from then on.
+
+### How to run consolidation
+
+Ask Claude:
+
+> "Run consolidate_memories for the side_hustle project."
+
+Claude calls `consolidate_memories` with your project name. The tool analyzes your recent sessions and writes a digest. You will see a summary of decisions extracted, open questions found, and a formatted markdown brief.
+
+**Free tier:** up to 3 on-demand consolidations per day. Pro users have unlimited runs.
+
+### After a consolidation run
+
+The digest is injected into every future session start automatically. If you want to read it without running a new consolidation, ask:
+
+> "Show me the current memory digest for side_hustle."
+
+Claude calls `get_memory_digest` and returns the stored digest.
+
+To see a log of all consolidation runs, ask:
+
+> "Show me the consolidation log for side_hustle."
+
+Claude calls `get_dream_log` and returns timestamps, session counts, and trigger information for recent runs.
+
+### Disabling digest injection
+
+If you want to suppress digest injection for a project without deleting the digest, set the environment variable:
+
+```
+LORECONVO_DREAM_INJECT=false
+```
+
+Add it via `--env=LORECONVO_DREAM_INJECT=false` in your `claude mcp add` command. This disables injection globally across all projects. To disable injection for one project only, ask Claude to call `get_memory_digest` with `disable=true`.
+
+### Known limitations (v0.6.0)
+
+- **no-llm tag:** If you tag a session with `no-llm`, it is excluded from future LLM-mode consolidation (v0.6.1). In v0.6.0 heuristic mode, all sessions are processed regardless of this tag.
+- **Bulk imports leave the digest stale.** If you import a batch of sessions, the digest is not updated until you run `consolidate_memories` again. LoreConvo uses the `updated_at` timestamp on the digest to determine freshness -- importing sessions does not update that timestamp.
+- **Project or surface renames strand the digest.** Digests are keyed by project name and surface. If you rename a project in `--project` tags, the old digest is no longer linked. Run `consolidate_memories` again after renaming.
+- **Free-tier rate limit is enforced in the MCP layer.** The 3/day limit applies to calls through the MCP tool. The Python consolidation library does not enforce this limit if called directly.
+
+### Setting session expiry (TTL)
+
+You can mark any session to expire on a specific date. After the date passes, the session is hidden from search results and the auto-load hook -- but it is not deleted and can be recovered manually.
+
+Ask Claude:
+
+> "Set the debugging notes session to expire on June 1st, 2027."
+
+Claude calls `set_session_expiry` with the session UUID and the ISO 8601 expiry date. To clear an expiry you previously set, ask Claude to call `set_session_expiry` with `expires_at=null`.
+
+---
+
 ## Verifying the Installation
 
 After connecting LoreConvo to Claude Code or Cowork, verify it is working:
@@ -369,6 +428,39 @@ If you back up your data root, include this directory in your backup -- and trea
 the backup with the same sensitivity as the source data, since the vectors encode
 the semantic content of your session history.
 
+### HuggingFace Hub network calls (Pro tier)
+
+The Pro tier loads the BGE-small-en-v1.5 embedding model (~130 MB) from HuggingFace
+on first use. This is a one-time download. After the download, inference runs entirely
+locally -- no session data is transmitted to HuggingFace.
+
+However, the `huggingface-hub` library (a dependency of `sentence-transformers`) may
+make occasional metadata checks to the HuggingFace API after the initial download --
+for example, to verify model card updates. No session content is included in these
+requests, but they are outbound network calls.
+
+If you want to ensure LoreConvo makes no network calls after the initial model
+download, set this environment variable:
+
+```
+HF_HUB_OFFLINE=1
+```
+
+Add it to your `claude mcp add` command:
+
+```bash
+claude mcp add --scope user \
+  "--env=LORECONVO_PRO=<your-license-key>" \
+  "--env=HF_HUB_OFFLINE=1" \
+  loreconvo -- \
+  /path/to/loreconvo/.venv/bin/python \
+  /path/to/loreconvo/src/server.py
+```
+
+With `HF_HUB_OFFLINE=1`, the model loads from the local cache and all HuggingFace
+API requests are blocked. Make sure the model has been downloaded at least once before
+setting this flag, or semantic search initialization will fail.
+
 ---
 
 ## How LoreConvo Accesses Your Data
@@ -394,5 +486,5 @@ between them never causes data loss.
 
 - [Quickstart Guide](docs/quickstart.md) -- get up and running in 5 minutes
 - [CLI Reference](docs/cli_reference.md) -- manage sessions from the terminal
-- [MCP Tool Catalog](docs/mcp_tool_catalog.md) -- all 16 tools explained in plain English
+- [MCP Tool Catalog](docs/mcp_tool_catalog.md) -- all 26 tools explained in plain English
 - [Changelog](docs/CHANGELOG.md) -- what changed in each release

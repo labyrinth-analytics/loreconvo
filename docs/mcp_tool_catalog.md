@@ -29,6 +29,7 @@ Save a session summary to persistent memory. Claude calls this at the end of a s
 | `project` | text | no | Project name to associate with |
 | `start_date` | text | no | ISO 8601 start time (defaults to now) |
 | `end_date` | text | no | ISO 8601 end time |
+| `summarize` | boolean | no | Pass `true` to compress the summary via the Claude Haiku API before saving. Requires `ANTHROPIC_API_KEY` and `pip install loreconvo[bridge]`. Defaults to `false`. Falls back to saving the raw summary if the API call fails. |
 
 **Returns:** The new session ID and a confirmation.
 
@@ -316,6 +317,92 @@ Import sessions from a LoreConvo export file (JSON or JSONL). Session UUIDs are 
 **Example conversation:**
 > You: "Import sessions from /tmp/loreconvo_export.json -- skip duplicates."
 > Claude: *calls import_sessions with file_path and on_conflict="skip"*
+
+---
+
+## Memory Recall
+
+### `consolidate_memories`
+
+When you need a compact summary of everything that has happened in a project, this tool scans your recent sessions, extracts the key decisions, open questions, and tech stack facts, and writes a markdown digest that Claude injects automatically at the start of every new session. It runs on-demand and returns the digest alongside a status flag. If another consolidation is already running, it returns `status: lock_held` rather than competing.
+
+**When Claude uses it:** When you ask for a project brief or when your digest is stale.
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `project` | text | yes | -- | Project name matching the `--project` tag used when saving sessions |
+| `surface` | text | no | none | Surface to consolidate: `code`, `cowork`, or `chat`. Omit to include all surfaces. |
+| `max_sessions` | integer | no | 50 | Maximum number of recent sessions to analyze |
+| `mode` | text | no | `heuristic` | Consolidation strategy. Only `heuristic` is available in v0.6.0. |
+
+**Example conversation:**
+> You: "Build a fresh memory digest for the side_hustle project."
+> Claude: *calls consolidate_memories with project="side_hustle"*
+
+**Free tier note:** Free users can run this tool up to 3 times per day. Pro users have unlimited runs.
+
+---
+
+### `get_memory_digest`
+
+Returns the current consolidated memory digest without running a new consolidation. Use this when you want to read what LoreConvo already knows without triggering another analysis. If no consolidation has run yet, you get a `no_digest` status telling you to run `consolidate_memories` first. You can also use the optional `disable` flag to control whether the digest is injected automatically at session start.
+
+**When Claude uses it:** When you ask to see the current digest or to enable or disable its automatic injection.
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `project` | text | yes | -- | Project name |
+| `surface` | text | no | none | Surface filter (`code`, `cowork`, `chat`). Omit for all surfaces. |
+| `disable` | boolean | no | omitted | Pass `true` to suppress automatic digest injection; `false` to re-enable. Omit to read without changing the setting. |
+
+**Returns:** Digest status, `source_count`, `updated_at`, `disabled` flag, and the full `digest_markdown`.
+
+**Example conversation:**
+> You: "Show me the current memory digest for side_hustle."
+> Claude: *calls get_memory_digest with project="side_hustle"*
+
+---
+
+### `set_session_expiry`
+
+Sets or clears an expiry date on a session. After the date passes, the session is hidden from search results, the recent sessions list, and the auto-load hook. The session is NOT deleted -- it stays in the database and you can recover it explicitly if needed. Pass `expires_at=null` to clear a previously set expiry. This is useful for marking temporary debugging notes or one-off context as time-limited.
+
+**When Claude uses it:** When you ask to expire a session or remove an expiry you set earlier.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `session_id` | text | yes | UUID of the session to update |
+| `expires_at` | text | yes (nullable) | ISO 8601 timestamp (e.g. `2027-01-01T00:00:00Z`) when the session expires, or `null` to clear |
+
+**Example conversation:**
+> You: "Set the debugging session from yesterday to expire on June 1st."
+> Claude: *calls set_session_expiry with the session UUID and expires_at="2026-06-01T00:00:00Z"*
+
+---
+
+### `get_dream_log`
+
+Returns recent consolidation log entries so you can see exactly what LoreConvo processed during each run: timestamp, project, surface, mode, number of sessions analyzed, and what triggered the run. Use this to confirm consolidation happened, monitor free-tier usage, or diagnose why a digest might be missing or stale.
+
+**When Claude uses it:** When you ask for a log of consolidation runs or want to check how many free-tier runs you have used.
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `project` | text | no | none | Filter log entries to a specific project. Omit for all projects. |
+| `surface` | text | no | none | Filter to a specific surface. Omit for all surfaces. |
+| `limit` | integer | no | 10 | Maximum number of entries to return, newest first |
+
+**Example conversation:**
+> You: "Did a consolidation run for side_hustle today?"
+> Claude: *calls get_dream_log with project="side_hustle" and limit=10*
 
 ---
 
