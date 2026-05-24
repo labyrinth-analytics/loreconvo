@@ -100,6 +100,20 @@ Claude will call `save_session` and store the session context. The next time you
 
 ---
 
+## Step 6: Build a Memory Digest (Recommended After 10+ Sessions)
+
+Once you have saved 10 or more sessions, LoreConvo can consolidate them into a compact memory digest -- a structured summary of your project's key decisions, open questions, and tech stack facts. Claude injects this digest automatically at each session start from then on.
+
+Ask Claude:
+
+> "Run consolidate_memories for the side_hustle project."
+
+Replace `side_hustle` with your own project name. You will see a brief summary of what was extracted. After that, every new session starts with an up-to-date project brief already loaded.
+
+**Free tier:** up to 3 consolidation runs per day. **Pro:** unlimited.
+
+---
+
 ## What Happens Next
 
 - **Claude Code:** The SessionStart and SessionEnd hooks run automatically. Context loads at the start of each session and saves at the end. You do not need to do anything.
@@ -128,3 +142,17 @@ Ask Claude to "mount my ~/.loreconvo folder" so Cowork can access the shared dat
 - Read the [CLI Reference](cli_reference.md) to use LoreConvo from the command line
 - Read the [MCP Tool Catalog](mcp_tool_catalog.md) for a full list of what Claude can do with LoreConvo
 - Read [COWORK_RESTORE.md](COWORK_RESTORE.md) for Cowork-specific setup
+
+**Optional: Compact summaries via Claude API**
+
+If you want LoreConvo to compress long session summaries before saving them, install the bridge extra and set your API key:
+
+```bash
+pip install loreconvo[bridge]
+```
+
+Then ask Claude to save with summarization:
+
+> "Save this session to LoreConvo with summarize=true."
+
+This sends the session summary to Claude Haiku for compression. If the API call fails for any reason, LoreConvo saves the original summary instead. See [INSTALL.md](../INSTALL.md) for the full privacy note.
