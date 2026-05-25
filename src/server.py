@@ -678,6 +678,8 @@ def export_sessions(
         home = Path.home().resolve()
         if not str(resolved).startswith(str(home)):
             return {"error": "output_path must be within the home directory"}
+        if str(resolved).startswith(str(home / ".claude")):
+            return {"error": "output_path cannot target Claude Code config directories"}
         if resolved.suffix.lower() not in (".json", ".jsonl"):
             return {"error": "output_path must end with .json or .jsonl"}
         resolved.write_text(data_str, encoding="utf-8")
@@ -773,6 +775,8 @@ def export_for_anthropic(
         home = Path.home().resolve()
         if not str(resolved).startswith(str(home)):
             return {"error": "output_path must be within the home directory"}
+        if str(resolved).startswith(str(home / ".claude")):
+            return {"error": "output_path cannot target Claude Code config directories"}
         if resolved.suffix.lower() != ".json":
             return {"error": "output_path must end with .json"}
         resolved.write_text(data_str, encoding="utf-8")

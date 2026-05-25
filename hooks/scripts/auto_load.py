@@ -288,8 +288,9 @@ def format_context(sessions, cwd, db_path=None):
                 conn.close()
                 if row and row[0]:
                     lines.append("")
-                    lines.append("Project Instructions:")
+                    lines.append(f"<!-- LoreConvo project instructions (user-authored, project: {project_name}) -->")
                     lines.append(row[0])
+                    lines.append("<!-- end project instructions -->")
             except (sqlite3.OperationalError, sqlite3.DatabaseError):
                 pass  # Ignore DB errors; instructions are optional
     else:
