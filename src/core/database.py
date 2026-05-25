@@ -492,6 +492,76 @@ class SessionDatabase:
                 (session_id, other_id)
             )
 
+    # -- Phase 2a: Embedding auto-link (Pro tier) --
+
+    def _auto_link_embeddings(self, session: "Session", cap: int = 10) -> None:
+        """Create bidirectional embedding-based links for a just-saved session.
+
+        Same-project scoping enforced. Bidirectional pairs are skipped if EITHER
+        direction already has any link type. Circuit breaker suppresses repeated
+        Lance failures without failing the save. Pro tier only.
+        """
+        from . import embedding_circuit as _circ
+        if not self.config.is_pro:
+            return
+        if os.environ.get("LORECONVO_EMBEDDING_LINKS", "1") == "0":
+            return
+        project = session.project or ""
+        if not _circ.check_circuit(project):
+            return
+        try:
+            lance = self._get_lance_index()
+            table = lance._open_table()
+            query_text = f"{session.title} {session.summary or ''}"
+            q_vec = lance._get_model().encode(query_text).tolist()
+            raw = table.search(
+                q_vec,
+                vector_column_name="vector",
+                query_type="vector",
+            ).limit(25).to_list()
+
+            # Filter: distance <= 0.707 (cosine >= 0.75), same project, not self
+            candidates = [
+                r["session_id"] for r in raw
+                if r.get("_distance", 999) <= 0.707
+                and r.get("session_id") != session.id
+                and r.get("project") == project
+            ]
+
+            inserted = 0
+            for other_id in candidates:
+                if inserted >= cap:
+                    break
+                existing = self.conn.execute(
+                    "SELECT 1 FROM session_links WHERE "
+                    "(from_session_id=? AND to_session_id=?) OR "
+                    "(from_session_id=? AND to_session_id=?)",
+                    (session.id, other_id, other_id, session.id)
+                ).fetchone()
+                if existing:
+                    continue
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO session_links "
+                    "(from_session_id, to_session_id, link_type) "
+                    "VALUES (?, ?, 'auto:embedding')",
+                    (session.id, other_id)
+                )
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO session_links "
+                    "(from_session_id, to_session_id, link_type) "
+                    "VALUES (?, ?, 'auto:embedding')",
+                    (other_id, session.id)
+                )
+                inserted += 1
+            self.conn.commit()
+            _circ.record_success(project)
+        except Exception as exc:
+            _circ.record_failure(project)
+            import logging as _log
+            _log.getLogger(__name__).error(
+                "auto_link_embeddings failed for session %s: %s", session.id, exc
+            )
+
     # -- LanceDB hybrid search (Pro tier) --
 
     def _get_lance_index(self):
@@ -604,14 +674,20 @@ class SessionDatabase:
         session_id: str,
         limit: int = 10,
         min_shared_terms: int = 3,
-    ) -> List[dict]:
-        """Return sessions related to session_id by keyword co-occurrence.
+    ) -> dict:
+        """Return sessions related to session_id by co-occurrence and embedding links.
 
-        Ranks by number of shared terms descending. Returns session metadata
-        plus shared_term_count and shared_terms list for transparency.
-        Pro tier only (caller must enforce).
+        Returns a version:2 envelope:
+            {"version": 2, "sessions": [...]}
+
+        Each session dict includes "link_type": "auto:cooccurrence" or "auto:embedding".
+        Co-occurrence entries have shared_term_count >= 1. Embedding entries use
+        shared_term_count=0 as a sentinel (semantically related, no term overlap).
+        Co-occurrence wins when the same session appears in both result sets.
+        Embedding links are excluded for free-tier callers.
         """
-        rows = self.conn.execute(
+        # Co-occurrence results (unchanged from v1)
+        cooc_rows = self.conn.execute(
             """SELECT sc2.session_id,
                       COUNT(*) as shared_count,
                       s.title,
@@ -631,17 +707,49 @@ class SessionDatabase:
             (session_id, session_id, min_shared_terms, limit)
         ).fetchall()
 
-        results = []
-        for row in rows:
-            results.append({
+        seen: dict = {}
+        for row in cooc_rows:
+            seen[row[0]] = {
                 "session_id": row[0],
                 "shared_term_count": row[1],
+                "link_type": "auto:cooccurrence",
                 "title": row[2],
                 "project": row[3],
                 "start_date": row[4],
                 "summary_preview": (row[5] or "")[:200],
-            })
-        return results
+            }
+
+        # Embedding results from session_links (Pro only)
+        if self.config.is_pro:
+            emb_rows = self.conn.execute(
+                """SELECT sl.to_session_id, s.title, s.project, s.start_date, s.summary
+                   FROM session_links sl
+                   JOIN sessions s ON sl.to_session_id = s.id
+                   WHERE sl.from_session_id = ?
+                     AND sl.link_type = 'auto:embedding'
+                     AND (s.source IS NULL OR s.source NOT IN ('periodic', 'file_memory'))
+                   LIMIT ?""",
+                (session_id, limit)
+            ).fetchall()
+            for row in emb_rows:
+                sid = row[0]
+                if sid not in seen:
+                    seen[sid] = {
+                        "session_id": sid,
+                        "shared_term_count": 0,
+                        "link_type": "auto:embedding",
+                        "title": row[1],
+                        "project": row[2],
+                        "start_date": row[3],
+                        "summary_preview": (row[4] or "")[:200],
+                    }
+
+        sessions = sorted(
+            seen.values(),
+            key=lambda r: r["shared_term_count"],
+            reverse=True,
+        )
+        return {"version": 2, "sessions": sessions}
 
     def close(self):
         self.conn.close()
@@ -724,6 +832,9 @@ class SessionDatabase:
 
         # Dual-write to Lance index (Pro only, errors never propagate)
         self._lance_write_safe(session)
+
+        # Phase 2a: embedding-based auto-link (Pro only, errors never propagate)
+        self._auto_link_embeddings(session)
 
         return session.id
 

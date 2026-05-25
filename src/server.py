@@ -354,11 +354,12 @@ def get_related_sessions(
     limit: int = 10,
     min_shared_terms: int = 3,
 ) -> dict:
-    """Find sessions related to a given session by keyword co-occurrence. Pro only.
+    """Find sessions related to a given session by co-occurrence and embedding. Pro only.
 
-    Analyzes the keyword index built during save_session to surface sessions
-    that share the most terms with the given session. Useful for discovering
-    related work across projects and time periods.
+    Returns co-occurrence links (shared_term_count >= 1) and embedding-based
+    semantic links (shared_term_count=0 sentinel). Co-occurrence results rank
+    above embedding results when sorting by shared_term_count DESC.
+    Response version=2 signals the new format with link_type field.
 
     Args:
         session_id: UUID of the session to find related sessions for
@@ -375,11 +376,14 @@ def get_related_sessions(
             )
         }
     limit = max(1, min(limit, 50))
-    related = db.get_related_sessions(session_id, limit, min_shared_terms)
+    result = db.get_related_sessions(session_id, limit, min_shared_terms)
+    # v2 envelope: result is {"version": 2, "sessions": [...]}
+    sessions = result.get("sessions", [])
     return {
+        "version": result.get("version", 2),
         "session_id": session_id,
-        "related_count": len(related),
-        "related": related,
+        "related_count": len(sessions),
+        "related": sessions,
     }
 
 
