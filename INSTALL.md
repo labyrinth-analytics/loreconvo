@@ -482,6 +482,46 @@ between them never causes data loss.
 
 ---
 
+## LoreConvo + Claude Code Auto-Memory: How They Coexist
+
+If you use Claude Code's built-in auto-memory alongside LoreConvo, you may wonder whether
+they conflict or duplicate each other. They do not. They answer different questions and
+operate on separate data stores with no overlap.
+
+**Claude Code auto-memory** is Claude's own built-in mechanism for remembering facts about
+you and your project. Claude Code stores these notes in a `MEMORY.md` file in your
+project's memory directory (`~/.claude/projects/<project>/memory/`). The file is loaded
+automatically at session start by Claude Code itself. In Opus 4.7, the model got better
+at deciding what facts are worth persisting there: preferences, standing decisions,
+environment details, reminders. Think of it as a short-form reference sheet the model
+updates over time.
+
+**LoreConvo** stores session narratives: what happened during a session, why decisions
+were made, which questions are still open, and what artifacts were produced. Each session
+summary is saved automatically when you close a Claude Code session (via the SessionEnd
+hook), and the most relevant summaries are injected back at the start of your next
+session (via the SessionStart hook). LoreConvo works across Claude Code, Cowork, and
+Chat, and its database is searchable so you can find the session where a specific
+decision was made.
+
+The two systems coexist cleanly because they store different things in different places.
+`MEMORY.md` answers "what should the model remember about my preferences and project?"
+LoreConvo answers "what happened last session, what decisions did we make, and what is
+still unresolved?" Both load at session start, but neither reads the other's data. No
+configuration is needed to use them together.
+
+To run both:
+
+- Install LoreConvo and set up the hooks (see above)
+- Use Claude Code's auto-memory as Anthropic ships it -- no extra configuration
+
+That is all. There is no integration step. They run side by side automatically.
+
+If your `MEMORY.md` file grows large, that is handled by Claude Code's own mechanisms.
+LoreConvo does not read or modify `MEMORY.md`, so its growth has no effect on LoreConvo.
+
+---
+
 ## More Documentation
 
 - [Quickstart Guide](docs/quickstart.md) -- get up and running in 5 minutes
