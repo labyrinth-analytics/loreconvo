@@ -7,7 +7,7 @@ description: >
   recall decisions, artifacts, or context from previous Code, Cowork, or Chat sessions.
   Also triggers on "tag as persona", "link sessions", "project context", or "skill history".
 metadata:
-  version: "0.6.0"
+  version: "0.6.1"
   author: "Labyrinth Analytics Consulting"
 ---
 

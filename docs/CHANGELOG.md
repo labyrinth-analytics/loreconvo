@@ -4,6 +4,25 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.6.1
+
+### New Features
+
+- **Session version history (previous_summary).** Each time you update a saved session,
+  LoreConvo now captures the prior summary before overwriting it. The previous summary is
+  stored in a new `previous_summary` field on the session and returned by the `get_session`
+  MCP tool. This is an audit field -- it is not indexed for search. Use it to see what
+  context was captured before a mid-session save (for example, from the PreCompact hook)
+  replaced the original summary.
+
+- **reasoning_notes parameter for save_session.** You can now pass an optional
+  `reasoning_notes` text field when saving a session. Use this to record the reasoning
+  chain behind a decision -- why you made a particular choice, what alternatives were
+  considered, or what constraints shaped the outcome. Reasoning notes are stored separately
+  from the session summary and are not indexed for search.
+
+---
+
 ## 2026-05-19 -- v0.6.0
 
 ### New Features
