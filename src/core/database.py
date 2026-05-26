@@ -186,6 +186,7 @@ class SessionDatabase:
         self._migrate_add_reasoning_notes_column()
         self._migrate_fts_v3()
         self._migrate_add_project_instructions_column()
+        self._migrate_add_previous_summary_column()
         self.conn.commit()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
@@ -368,6 +369,19 @@ class SessionDatabase:
             )
         except sqlite3.OperationalError:
             pass  # column already exists
+
+    def _migrate_add_previous_summary_column(self):
+        """Add previous_summary column for session version history (SH-10398).
+
+        Idempotent: uses PRAGMA table_info to skip if column already exists.
+        Not indexed in FTS5 -- audit field, not search field.
+        """
+        cols = {row[1] for row in self.conn.execute("PRAGMA table_info(sessions)")}
+        if "previous_summary" not in cols:
+            self.conn.execute(
+                "ALTER TABLE sessions ADD COLUMN previous_summary TEXT"
+            )
+            self.conn.commit()
 
     def _migrate_index_existing_cooccurrences(self):
         """Populate session_cooccurrences for existing sessions on first run.
@@ -789,13 +803,20 @@ class SessionDatabase:
             or self.compute_content_hash(session.title, session.summary, session.created_at)
         )
         origin_machine = session.origin_machine or self._get_origin_machine()
+        # Capture prior summary before INSERT OR REPLACE clobbers it (SH-10398).
+        prior_summary = None
+        existing = self.conn.execute(
+            "SELECT summary FROM sessions WHERE id = ?", (session.id,)
+        ).fetchone()
+        if existing:
+            prior_summary = existing[0]
         self.conn.execute(
             """INSERT OR REPLACE INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
                 decisions, artifacts, open_questions, tags, created_at, source,
                 shared_by, origin_machine, content_hash, external_tool_session,
-                reasoning_notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                reasoning_notes, previous_summary)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session.id, session.title, session.surface, session.project,
                 session.start_date, session.end_date, session.summary,
@@ -805,6 +826,7 @@ class SessionDatabase:
                 session.shared_by, origin_machine, content_hash,
                 1 if session.external_tool_session else 0,
                 session.reasoning_notes if session.reasoning_notes else None,
+                prior_summary,
             )
         )
         for skill_name in session.skills_used:
@@ -1423,6 +1445,7 @@ class SessionDatabase:
             content_hash=row["content_hash"] if "content_hash" in row_keys else None,
             external_tool_session=bool(row["external_tool_session"]) if "external_tool_session" in row_keys else False,
             reasoning_notes=row["reasoning_notes"] if "reasoning_notes" in row_keys else None,
+            previous_summary=row["previous_summary"] if "previous_summary" in row_keys else None,
         )
 
     def get_sessions_for_shared_export(

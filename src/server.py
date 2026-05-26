@@ -227,6 +227,7 @@ def get_session(session_id: str) -> dict:
         "open_questions": session.open_questions,
         "tags": session.tags,
         "skills_used": session.skills_used,
+        "previous_summary": session.previous_summary,
     }
 
 
