@@ -2,7 +2,7 @@
 
 LoreConvo includes a command-line interface (CLI) for managing session memory from your terminal. Use it when you want to save, search, or export sessions without going through Claude.
 
-**Version:** 0.3.3
+**Version:** 0.6.1
 
 ---
 
@@ -23,8 +23,8 @@ If you installed LoreConvo with `install.sh`, use the virtual environment Python
 Check your version:
 
 ```
-$ python src/cli.py --version
-loreconvo, version 0.3.3
+$ .venv/bin/python3 src/cli.py --version
+loreconvo, version 0.6.0
 ```
 
 ---
@@ -66,6 +66,7 @@ python src/cli.py save -t "TITLE" -s SURFACE -m "SUMMARY" [options]
 | `-d`, `--decisions` | text | no | none | Key decisions (use multiple times for multiple decisions) |
 | `--skills` | text | no | none | Skills used (use multiple times) |
 | `--tags` | text | no | none | Tags for categorization (use multiple times) |
+| `--reasoning-notes` | text | no | none | Optional reasoning chain text: why a decision was made, what alternatives were considered |
 
 ### Example
 
