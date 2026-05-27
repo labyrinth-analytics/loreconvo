@@ -258,33 +258,38 @@ At session end:
 
 ## CLI Reference
 
+After `pip install loreconvo` (or `uv sync`), the `loreconvo-cli` command is available:
+
 ```bash
 # Vault a session
-.venv/bin/python3 src/cli.py save -t "Tax pipeline debugging" -s code -m "Fixed the K-1 parser..."
+loreconvo-cli save -t "Tax pipeline debugging" -s code -m "Fixed the K-1 parser..."
 
 # List recent sessions
-.venv/bin/python3 src/cli.py list --days 7
+loreconvo-cli list --days 7
 
 # Search the vault
-.venv/bin/python3 src/cli.py search "rental insurance split"
+loreconvo-cli search "rental insurance split"
 
 # Export for Chat paste (most recent session, markdown format)
-.venv/bin/python3 src/cli.py export --last --format markdown
+loreconvo-cli export --last --format markdown
 
 # Export a specific session by ID
-.venv/bin/python3 src/cli.py export <session-id>
+loreconvo-cli export <session-id>
 
 # Export as JSON
-.venv/bin/python3 src/cli.py export --last --format json
+loreconvo-cli export --last --format json
 
 # Skill history
-.venv/bin/python3 src/cli.py skill-history rental-property-accounting
+loreconvo-cli skill-history rental-property-accounting
 
 # List all skills by usage count
-.venv/bin/python3 src/cli.py skills list
+loreconvo-cli skills list
 
 # Stats
-.venv/bin/python3 src/cli.py stats
+loreconvo-cli stats
+
+# Full help
+loreconvo-cli --help
 ```
 
 ## MCP Tools
