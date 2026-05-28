@@ -118,8 +118,12 @@ def save_session(
             defaults to False. Falls back to the raw summary on any API error
             or if the key is absent. See INSTALL.md Privacy Note.
     """
+    summary_source = None
     if summarize:
-        summary = _compress_summary(summary)
+        compressed = _compress_summary(summary)
+        if compressed != summary:
+            summary_source = "claude_api"
+        summary = compressed
 
     # Merge artifacts with any existing auto-saved record when session_id is known
     merged_artifacts = artifacts or []
@@ -150,6 +154,16 @@ def save_session(
 
     try:
         saved_id = db.save_session(session)
+        # Mark summary_source when LLM compression was applied via MCP save_session.
+        if summary_source == "claude_api" and saved_id:
+            try:
+                db.conn.execute(
+                    "UPDATE sessions SET summary_source=? WHERE id=?",
+                    (summary_source, saved_id),
+                )
+                db.conn.commit()
+            except Exception:
+                pass
     except SessionLimitReachedError as e:
         return {
             "status": "limit_reached",

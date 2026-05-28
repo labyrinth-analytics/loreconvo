@@ -187,6 +187,7 @@ class SessionDatabase:
         self._migrate_fts_v3()
         self._migrate_add_project_instructions_column()
         self._migrate_add_previous_summary_column()
+        self._migrate_add_summary_source_columns()
         self.conn.commit()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
@@ -382,6 +383,47 @@ class SessionDatabase:
                 "ALTER TABLE sessions ADD COLUMN previous_summary TEXT"
             )
             self.conn.commit()
+
+    def _migrate_add_summary_source_columns(self):
+        """Add async summarization columns and support tables (SH-10723, v0.7.0).
+
+        New sessions columns: summary_source, summary_retry_count, fallback_reason.
+        New tables: cap_state (daily API call budget), schema_migration_log.
+
+        summary_source values: heuristic, summary_pending, claude_api,
+                               claude_async, permanently_heuristic
+        Idempotent: column adds wrapped in try/except; tables use IF NOT EXISTS.
+        """
+        for col_sql in (
+            "ALTER TABLE sessions ADD COLUMN summary_source TEXT DEFAULT 'heuristic'",
+            "ALTER TABLE sessions ADD COLUMN summary_retry_count INTEGER DEFAULT 0",
+            "ALTER TABLE sessions ADD COLUMN fallback_reason TEXT",
+        ):
+            try:
+                self.conn.execute(col_sql)
+            except sqlite3.OperationalError:
+                pass  # column already exists
+
+        # Backfill: existing rows with a summary are heuristic; without are NULL-summary.
+        # All pre-v0.7.0 summaries were heuristic (no LLM path existed before).
+        self.conn.execute(
+            "UPDATE sessions SET summary_source='heuristic' "
+            "WHERE summary_source IS NULL AND summary IS NOT NULL"
+        )
+
+        self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS cap_state (
+                date            TEXT PRIMARY KEY,
+                calls_today     INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS schema_migration_log (
+                migration_name  TEXT PRIMARY KEY,
+                applied_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                from_version    TEXT,
+                to_version      TEXT
+            );
+        """)
 
     def _migrate_index_existing_cooccurrences(self):
         """Populate session_cooccurrences for existing sessions on first run.
