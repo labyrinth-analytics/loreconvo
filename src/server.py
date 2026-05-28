@@ -1181,6 +1181,123 @@ def get_dream_log(
     }
 
 
+@mcp.tool(title="Get Docs for Session")
+def get_docs_for_session(session_id: str, limit: int = 5) -> dict:
+    """Return LoreDocs documents cross-linked to a LoreConvo session. Pro tier only.
+
+    Queries the LoreDocs cross_product_links table. Both LoreConvo and LoreDocs
+    must be installed. Returns an empty list for free-tier callers (not an error).
+
+    Manual links (link_type='manual') are always sorted first. Auto-links created
+    with a stale embedding model are marked with is_stale=True and include an
+    upgrade_message.
+
+    Args:
+        session_id  -- LoreConvo session UUID
+        limit       -- max results (default 5)
+
+    Returns dict with:
+        schema_version          -- int, for version negotiation by callers
+        cross_product_available -- bool
+        tier_gate               -- "satisfied" | "pro_required"
+        links                   -- list of link dicts
+        reason                  -- set when cross_product_available is False
+    """
+    try:
+        from loredocs.storage import (
+            VaultStorage, CROSS_LINK_SCHEMA_VERSION,
+            REQUIRED_CROSS_LINK_SCHEMA_VERSION,
+            _CROSS_LINK_EMBEDDING_MODEL,
+            discover_product_db, DiscoveryError,
+        )
+        from loredocs.tiers import get_tier, TIER_PRO
+    except ImportError:
+        return {
+            "schema_version": 0,
+            "cross_product_available": False,
+            "reason": "Cross-product linking unavailable",
+            "links": [],
+        }
+
+    try:
+        ld_db = discover_product_db("loredocs")
+    except DiscoveryError:
+        return {
+            "schema_version": 0,
+            "cross_product_available": False,
+            "reason": "Cross-product linking unavailable",
+            "links": [],
+        }
+    if ld_db is None:
+        return {
+            "schema_version": 0,
+            "cross_product_available": False,
+            "reason": "Cross-product linking unavailable",
+            "links": [],
+        }
+
+    ld_storage = VaultStorage(ld_db.parent)
+    # Verify schema version before consuming
+    if CROSS_LINK_SCHEMA_VERSION < REQUIRED_CROSS_LINK_SCHEMA_VERSION:
+        return {
+            "schema_version": CROSS_LINK_SCHEMA_VERSION,
+            "cross_product_available": False,
+            "reason": "Cross-product linking unavailable",
+            "links": [],
+        }
+
+    is_pro = db.config.is_pro
+    return ld_storage.get_cross_product_links(
+        source_product="loreconvo",
+        source_id=session_id,
+        current_embedding_model=_CROSS_LINK_EMBEDDING_MODEL,
+        limit=limit,
+        is_pro=is_pro,
+    )
+
+
+@mcp.tool(title="Link Session to Doc")
+def session_link_doc(session_id: str, doc_id: str, vault_id: str) -> dict:
+    """Create a manual cross-product link from a LoreConvo session to a LoreDocs doc.
+
+    Manual links are accessible on all tiers. The target doc must not be in a
+    vault with cross_link_opt_out enabled. Both products must be installed.
+
+    Args:
+        session_id  -- LoreConvo session UUID
+        doc_id      -- LoreDocs document ID
+        vault_id    -- LoreDocs vault containing the document
+
+    Returns dict with:
+        ok      -- bool
+        reason  -- failure description on error (generic; details in debug log)
+    """
+    try:
+        from loredocs.storage import (
+            VaultStorage, discover_product_db, DiscoveryError,
+        )
+        from loredocs.tiers import get_tier, TIER_PRO
+    except ImportError:
+        return {"ok": False, "reason": "Cross-product linking unavailable"}
+
+    try:
+        ld_db = discover_product_db("loredocs")
+    except DiscoveryError:
+        return {"ok": False, "reason": "Cross-product linking unavailable"}
+    if ld_db is None:
+        return {"ok": False, "reason": "Cross-product linking unavailable"}
+
+    ld_storage = VaultStorage(ld_db.parent)
+    is_pro = db.config.is_pro
+    return ld_storage.link_session_to_doc(
+        session_id=session_id,
+        doc_id=doc_id,
+        vault_id=vault_id,
+        link_type="manual",
+        is_pro=is_pro,
+    )
+
+
 def main():
     """Entry point for uvx / console script execution."""
     mcp.run(transport="stdio")
