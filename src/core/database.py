@@ -188,6 +188,7 @@ class SessionDatabase:
         self._migrate_add_project_instructions_column()
         self._migrate_add_previous_summary_column()
         self._migrate_add_summary_source_columns()
+        self._migrate_add_cross_product_columns()
         self.conn.commit()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
@@ -424,6 +425,24 @@ class SessionDatabase:
                 to_version      TEXT
             );
         """)
+
+    def _migrate_add_cross_product_columns(self):
+        """Add Phase 2b cross-product linking columns to sessions (SH-10727, v0.7.1).
+
+        cross_link_opt_out: user can prevent this session from appearing in
+          cross-product links (soft suppression; links are filtered, not deleted).
+        last_cross_linked_at: debounce timestamp; save-triggered linking skips
+          sessions cross-linked within the last 10 minutes.
+        Both columns are idempotent (try/except on duplicate-column OperationalError).
+        """
+        for col_sql in (
+            "ALTER TABLE sessions ADD COLUMN cross_link_opt_out INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE sessions ADD COLUMN last_cross_linked_at TEXT DEFAULT NULL",
+        ):
+            try:
+                self.conn.execute(col_sql)
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
     def _migrate_index_existing_cooccurrences(self):
         """Populate session_cooccurrences for existing sessions on first run.
@@ -900,7 +919,153 @@ class SessionDatabase:
         # Phase 2a: embedding-based auto-link (Pro only, errors never propagate)
         self._auto_link_embeddings(session)
 
+        # Phase 2b: save-triggered cross-product linking (Pro only, best-effort)
+        try:
+            self.cross_link_session(session.id, session.summary or "")
+        except Exception:
+            pass
+
         return session.id
+
+    def cross_link_session(self, session_id: str, session_text: str) -> int:
+        """Trigger save-time cross-product linking for a LoreConvo session.
+
+        Queries the LoreDocs docs.lance index for semantically similar documents,
+        writes up to 5 links into LoreDocs cross_product_links. Pro-only.
+        Updates sessions.last_cross_linked_at for debounce.
+
+        Returns count of links written (0 if LoreDocs unavailable, not Pro, etc).
+        """
+        import logging as _logging
+        log = _logging.getLogger(__name__)
+
+        if not self.config.is_pro:
+            return 0
+
+        # Check debounce
+        now_str = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+        row = self.conn.execute(
+            "SELECT last_cross_linked_at FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if row and row["last_cross_linked_at"]:
+            try:
+                last = datetime.fromisoformat(row["last_cross_linked_at"].replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - last).total_seconds() < 600:
+                    return 0
+            except Exception:
+                pass
+
+        # Check session opt-out
+        opt_row = self.conn.execute(
+            "SELECT cross_link_opt_out FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if opt_row and opt_row["cross_link_opt_out"]:
+            return 0
+
+        # Discover LoreDocs and its Lance index
+        try:
+            from loredocs.semantic_search import get_lance_db_path
+            from loredocs.storage import (
+                VaultStorage, CROSS_LINK_SCHEMA_VERSION,
+                REQUIRED_CROSS_LINK_SCHEMA_VERSION,
+                _CROSS_LINK_EMBEDDING_MODEL, _CROSS_LINK_EMBEDDING_DIM,
+                _CROSS_LINK_CAP, _CROSS_LINK_L2_THRESHOLD,
+                discover_product_db, DiscoveryError,
+            )
+        except ImportError:
+            return 0  # LoreDocs not installed
+
+        try:
+            ld_db = discover_product_db("loredocs")
+        except DiscoveryError:
+            return 0
+        if ld_db is None:
+            return 0
+
+        lance_path = get_lance_db_path()
+        if lance_path is None:
+            return 0
+
+        query_text = session_text[:2000] if session_text else ""
+        if not query_text:
+            return 0
+
+        try:
+            import lancedb as _lancedb
+            from sentence_transformers import SentenceTransformer as _ST
+
+            model = _ST(_CROSS_LINK_EMBEDDING_MODEL)
+            q_vec = model.encode(query_text).tolist()
+
+            ld_lance_db = _lancedb.connect(str(lance_path))
+            table = ld_lance_db.open_table("docs")
+            raw = table.search(
+                q_vec, vector_column_name="vector", query_type="vector"
+            ).limit(50).to_list()
+
+            # Deduplicate to best distance per doc_id
+            best: dict = {}
+            for r in raw:
+                did = r.get("doc_id")
+                dist = r.get("_distance", 999.0)
+                if not did:
+                    continue
+                if dist > _CROSS_LINK_L2_THRESHOLD:
+                    continue
+                if did not in best or dist < best[did]:
+                    best[did] = dist
+
+            # Write cross-product links via LoreDocs storage API
+            ld_storage = VaultStorage(ld_db.parent)
+
+            # Verify schema version
+            check = ld_storage.get_cross_product_links(
+                "loreconvo", session_id, _CROSS_LINK_EMBEDDING_MODEL,
+                limit=1, is_pro=True,
+            )
+            if check.get("schema_version", 0) < REQUIRED_CROSS_LINK_SCHEMA_VERSION:
+                log.debug("cross_link_session: LoreDocs schema version too old")
+                return 0
+
+            written = 0
+            with ld_storage._db() as conn:
+                for did, dist in sorted(best.items(), key=lambda x: x[1])[:_CROSS_LINK_CAP]:
+                    if written >= _CROSS_LINK_CAP:
+                        break
+                    # Check vault opt-out
+                    vault_row = conn.execute(
+                        """SELECT v.cross_link_opt_out FROM documents d
+                           JOIN vaults v ON d.vault_id = v.id
+                           WHERE d.id = ? AND d.deleted = 0""",
+                        (did,)
+                    ).fetchone()
+                    if not vault_row or vault_row[0]:
+                        continue
+                    cosine = max(0.0, 1.0 - dist)
+                    ld_storage._write_cross_product_link(
+                        conn,
+                        source_product="loreconvo",
+                        source_id=session_id,
+                        target_product="loredocs",
+                        target_id=did,
+                        similarity_score=round(cosine, 4),
+                        embedding_model=_CROSS_LINK_EMBEDDING_MODEL,
+                        embedding_dim=_CROSS_LINK_EMBEDDING_DIM,
+                        link_type="auto",
+                        tier_required="pro",
+                    )
+                    written += 1
+
+            self.conn.execute(
+                "UPDATE sessions SET last_cross_linked_at = ? WHERE id = ?",
+                (now_str, session_id),
+            )
+            self.conn.commit()
+            log.debug("cross_link_session: wrote %d links for session %s", written, session_id)
+            return written
+        except Exception as exc:
+            log.warning("cross_link_session: unavailable (%s)", type(exc).__name__)
+            return 0
 
     def get_session(self, session_id: str) -> Optional[Session]:
         row = self.conn.execute(
