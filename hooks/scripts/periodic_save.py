@@ -120,11 +120,61 @@ def main():
         state[session_id] = session_state
         _save_state(state)
 
+        # Re-queue sweep: retry pending/heuristic sessions from prior saves.
+        if os.environ.get("LORECONVO_ANTHROPIC_API_KEY"):
+            _requeue_pending_summaries(db_path)
+
     except json.JSONDecodeError:
         sys.exit(0)
     except Exception as e:
         sys.stderr.write(f"LoreConvo periodic save error: {e}\n")
         sys.exit(0)
+
+
+def _requeue_pending_summaries(db_path):
+    """Dispatch async summarizer for sessions stuck in summary_pending or heuristic state.
+
+    Only processes sessions with summary_retry_count < MAX_SUMMARY_RETRIES.
+    Fire-and-forget -- periodic_save returns immediately.
+    """
+    import sqlite3
+    import subprocess
+    MAX_REQUEUE = 3  # max sessions to requeue per periodic sweep
+    try:
+        conn = sqlite3.connect(db_path, timeout=5.0)
+        rows = conn.execute(
+            """SELECT id FROM sessions
+               WHERE summary_source IN ('summary_pending', 'heuristic')
+               AND (summary_retry_count IS NULL OR summary_retry_count < 5)
+               AND source != 'periodic'
+               ORDER BY end_date DESC
+               LIMIT ?""",
+            (MAX_REQUEUE,),
+        ).fetchall()
+        conn.close()
+    except Exception:
+        return
+
+    if not rows:
+        return
+
+    hook_dir = Path(__file__).resolve().parent
+    src_dir = hook_dir / ".." / ".." / "src"
+    summarizer = (src_dir / "session_summarizer.py").resolve()
+    if not summarizer.exists():
+        return
+
+    for (sid,) in rows:
+        try:
+            subprocess.Popen(
+                [sys.executable, str(summarizer), sid],
+                env=os.environ.copy(),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

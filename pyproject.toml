@@ -1,6 +1,6 @@
 [project]
 name = "loreconvo"
-version = "0.6.1"
+version = "0.7.0"
 description = "Cross-surface persistent memory for Claude sessions. Vault conversations from Code, Cowork, and Chat -- recall decisions, artifacts, and context in any future session."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -21,15 +21,15 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp[cli]>=1.0.0",
-    "click>=8.0.0",
-    "cryptography>=41.0.0",
+    "mcp[cli]>=1.0.0",  # allow-range: mcp -- marketplace requires >=1.0.0, pinning to a single version breaks Claude Code installs
+    "click>=8.0.0",  # allow-range: click -- CLI dep, major API stable since 8.0
+    "cryptography>=41.0.0",  # allow-range: cryptography -- security lib, must allow patches for CVE coverage
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21",
+    "pytest>=7.0",  # allow-range: pytest -- dev-only, not shipped to marketplace
+    "pytest-asyncio>=0.21",  # allow-range: pytest-asyncio -- dev-only, not shipped to marketplace
 ]
 pro = [
     "lancedb==0.30.2",

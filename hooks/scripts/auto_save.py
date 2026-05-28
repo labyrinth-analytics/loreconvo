@@ -305,12 +305,44 @@ def main():
 
         if saved:
             sys.stderr.write(f"LoreConvo: Auto-saved session '{parsed['title']}'\n")
+            _dispatch_async_summarizer(session_id, transcript_path)
 
     except json.JSONDecodeError:
         sys.exit(0)
     except Exception as e:
         sys.stderr.write(f"LoreConvo auto-save error: {e}\n")
         sys.exit(0)
+
+
+def _dispatch_async_summarizer(session_id, transcript_path):
+    """Fire-and-forget background subprocess to upgrade session to LLM summary.
+
+    Only dispatched when LORECONVO_ANTHROPIC_API_KEY is set. The hook
+    returns immediately; summarization happens asynchronously.
+    """
+    import subprocess
+    if not os.environ.get("LORECONVO_ANTHROPIC_API_KEY"):
+        return
+    try:
+        # Locate session_summarizer.py relative to this hook's src directory.
+        hook_dir = os.path.dirname(os.path.abspath(__file__))
+        src_dir = os.path.join(hook_dir, "..", "..", "src")
+        summarizer = os.path.join(src_dir, "session_summarizer.py")
+        if not os.path.exists(summarizer):
+            return
+        args = [sys.executable, summarizer, session_id]
+        if transcript_path:
+            args.append(transcript_path)
+        # Pass current env so API key + LORECONVO_DB are inherited.
+        subprocess.Popen(
+            args,
+            env=os.environ.copy(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception as exc:
+        sys.stderr.write(f"LoreConvo: async summarizer dispatch failed (non-fatal): {exc}\n")
 
 
 if __name__ == "__main__":
