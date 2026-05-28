@@ -4,6 +4,28 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.7.0
+
+### New Features
+
+- **LLM async session summarization (Pro).** LoreConvo now automatically upgrades
+  auto-saved sessions from heuristic summaries to LLM-quality summaries in the
+  background, using Claude Haiku. Set `LORECONVO_ANTHROPIC_API_KEY` to opt in.
+  Summarization happens after your session ends, without blocking the hook.
+  A daily cap (configurable via `LORECONVO_SUMMARIZER_DAILY_CAP`, default 100)
+  prevents runaway API spend. Each session tracks its summary quality via a new
+  `summary_source` field: `heuristic`, `summary_pending`, `claude_async`, or
+  `permanently_heuristic` (after 5 failed retries). Pro tier only.
+
+### Migrations
+
+- Run `python3 scripts/loreconvo_migrate_v06_v07.py` to apply the v0.7.0 schema
+  migration before using async summarization. The migration adds `summary_source`,
+  `summary_retry_count`, and `fallback_reason` columns to sessions, and creates the
+  `cap_state` and `schema_migration_log` tables. It is idempotent -- safe to run again.
+
+---
+
 ## v0.6.1
 
 ### New Features
