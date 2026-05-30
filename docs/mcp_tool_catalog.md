@@ -1,6 +1,6 @@
 # LoreConvo MCP Tool Catalog
 
-LoreConvo provides 26 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all 26.
+LoreConvo provides 28 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all 26.
 
 This catalog explains what each tool does, when Claude uses it, and what parameters it accepts.
 
@@ -437,3 +437,5 @@ Returns recent consolidation log entries so you can see exactly what LoreConvo p
 | `export_for_anthropic` | Export sessions in Anthropic managed-agent format (Pro) |
 | `rebuild_semantic_index` | Rebuild the LanceDB semantic search index (Pro) |
 | `loreconvo_onboard` | First-time setup wizard |
+| `get_docs_for_session` | Retrieve LoreDocs documents linked to a session (Pro -- requires LoreDocs Pro) |
+| `session_link_doc` | Manually link a session to a LoreDocs document (Pro -- requires LoreDocs Pro) |
