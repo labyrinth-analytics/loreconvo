@@ -1,4 +1,4 @@
-# LoreConvo v0.6.1
+# LoreConvo v0.7.1
 
 Vault your Claude conversations. Never re-explain yourself again.
 
@@ -88,7 +88,7 @@ Replace `/path/to/loreconvo` with wherever you saved the source folder.
 
 After making code changes, use `/reload-plugins` to refresh without restarting.
 
-Once loaded, Claude has access to all 26 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
+Once loaded, Claude has access to all 28 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
 
 ### Cowork (Desktop App)
 
@@ -253,6 +253,9 @@ At session end:
 - **Persona tagging**: Hierarchical personas for agent-specific memory (e.g., `ron-bot:sql`)
 - **Full-text search**: SQLite FTS5 for fast keyword search across all sessions
 - **MEMORY.md auto-indexing**: Your project MEMORY.md is automatically indexed at session start and is searchable alongside regular sessions via `search_sessions`
+- **LLM async session summarization (Pro)**: Auto-saved sessions are upgraded to LLM-quality summaries in the background using Claude Haiku. Opt in by setting `LORECONVO_ANTHROPIC_API_KEY`. A daily cap (`LORECONVO_SUMMARIZER_DAILY_CAP`, default 100) prevents runaway API spend. Pro tier only.
+- **Embedding-based related session discovery (Pro)**: `get_related_sessions` automatically discovers sessions with similar content using BGE-small-en-v1.5 embeddings (cosine >= 0.75). Up to 10 bidirectional auto-links per save, same-project scoped. Free tier gets keyword co-occurrence links. Set `LORECONVO_EMBEDDING_LINKS=0` to disable embedding links.
+- **Cross-product document linking (Pro)**: Automatically discovers and links the LoreDocs documents most relevant to any session, and vice versa. Uses two new tools: `get_docs_for_session` and `session_link_doc`. Requires both LoreConvo Pro and LoreDocs Pro.
 - **Dual interface**: MCP tools (for LLM use) + CLI (for human use)
 - **Local-first**: SQLite database, no cloud dependency, zero API costs
 
@@ -294,7 +297,7 @@ loreconvo-cli --help
 
 ## MCP Tools
 
-LoreConvo provides 26 MCP tools that Claude calls automatically during sessions.
+LoreConvo provides 28 MCP tools that Claude calls automatically during sessions.
 The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs/mcp_tool_catalog.md) for the complete reference.
 
 | Tool | What it does |
@@ -325,6 +328,8 @@ The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs
 | `rebuild_semantic_index` | Rebuild the LanceDB semantic search index (Pro) |
 | `loreconvo_onboard` | First-time setup wizard |
 | `get_dream_log` | View the consolidation activity log |
+| `get_docs_for_session` | Retrieve LoreDocs documents linked to a specific session (Pro -- requires LoreDocs Pro) |
+| `session_link_doc` | Manually create a link between a session and a LoreDocs document (Pro -- requires LoreDocs Pro) |
 
 ## Requirements
 
