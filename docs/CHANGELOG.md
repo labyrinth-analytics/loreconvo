@@ -38,6 +38,15 @@ What changed in each release, written for users (not developers).
 
 ### New Features
 
+- **Embedding-based related session discovery (Pro).** `get_related_sessions` now
+  returns a v2 response envelope (`{"version": 2, "sessions": [...]}`) where each
+  session includes `link_type` and `shared_term_count` fields. Pro users get automatic
+  embedding-based links using BGE-small-en-v1.5 (cosine >= 0.75, up to 10 bidirectional
+  pairs per save, same-project scoped, circuit-breaker protected). Free tier: keyword
+  co-occurrence links only. Deduplication: if the same session pair is linked by both
+  co-occurrence and embedding, co-occurrence wins. To disable embedding links, set
+  `LORECONVO_EMBEDDING_LINKS=0`.
+
 - **Session version history (previous_summary).** Each time you update a saved session,
   LoreConvo now captures the prior summary before overwriting it. The previous summary is
   stored in a new `previous_summary` field on the session and returned by the `get_session`

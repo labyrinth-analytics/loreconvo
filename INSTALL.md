@@ -96,6 +96,9 @@ The `--env=LORECONVO_PRO=<your-license-key>` flag is optional -- omit it if you 
 | `LORECONVO_DB_PATH` | Path to your session memory database (optional) | `--env=LORECONVO_DB_PATH=/path/to/sessions.db` in the command |
 | `LORECONVO_PROJECT_PATH` | Directory to scan for MEMORY.md at session start (optional) | `--env=LORECONVO_PROJECT_PATH=/path/to/project` in the command |
 | `LORECONVO_DREAM_INJECT` | Controls whether the memory digest is injected at session start (optional) | Set to `false` to disable digest injection globally: `--env=LORECONVO_DREAM_INJECT=false` |
+| `LORECONVO_ANTHROPIC_API_KEY` | Anthropic API key for async LLM session summarization -- Pro only, optional | `--env=LORECONVO_ANTHROPIC_API_KEY=<key>` in the `claude mcp add` command. Note: this is separate from `ANTHROPIC_API_KEY`; LoreConvo uses its own key so it never interferes with your main Claude session budget. |
+| `LORECONVO_SUMMARIZER_DAILY_CAP` | Maximum sessions to upgrade via LLM summarization per day (optional, default: 100) -- Pro only | `--env=LORECONVO_SUMMARIZER_DAILY_CAP=50` to reduce API spend |
+| `LORECONVO_EMBEDDING_LINKS` | Disable embedding-based session auto-links (optional) -- Pro only | Set to `0` to use keyword co-occurrence links only: `--env=LORECONVO_EMBEDDING_LINKS=0` |
 | `HF_HUB_OFFLINE` | Blocks HuggingFace Hub network calls after the initial model download (Pro tier only, optional) | Set to `1` to prevent all post-download hub requests: `--env=HF_HUB_OFFLINE=1` |
 
 If `LORECONVO_DB_PATH` is not set, LoreConvo defaults to `~/.loreconvo/sessions.db`.
@@ -390,6 +393,22 @@ bash install.sh
 
 The installer detects the existing venv and updates it in place. Your session data
 at `~/.loreconvo/sessions.db` is preserved.
+
+---
+
+## Schema Migrations
+
+Some LoreConvo upgrades require a one-time migration script to add new database columns or tables. Run the migration after upgrading the package, before starting a new session.
+
+**v0.7.0 migration** (required if you are upgrading from v0.6.x):
+
+```bash
+python3 /path/to/loreconvo/scripts/loreconvo_migrate_v06_v07.py
+```
+
+This adds the `summary_source`, `summary_retry_count`, and `fallback_reason` columns to sessions, and creates the `cap_state` and `schema_migration_log` tables needed for async LLM summarization. The script is idempotent -- safe to run again if you are unsure whether it has run.
+
+If you skip this migration, LoreConvo v0.7.0 still works -- async summarization is simply not available until the migration runs.
 
 ---
 
