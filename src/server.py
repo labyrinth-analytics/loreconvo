@@ -1300,6 +1300,9 @@ def session_link_doc(session_id: str, doc_id: str, vault_id: str) -> dict:
 
 def main():
     """Entry point for uvx / console script execution."""
+    from core import idle_watchdog
+    # Reap this process if the client parks it idle (releases any held DB lock).
+    idle_watchdog.install(mcp, env_var="LORECONVO_IDLE_TIMEOUT")
     mcp.run(transport="stdio")
 
 
