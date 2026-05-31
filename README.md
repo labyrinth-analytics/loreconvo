@@ -31,7 +31,9 @@ delete any time.
 ### Works wherever Claude works
 
 LoreConvo works across Claude Code, Claude.ai, and Cowork -- not just in one IDE.
-When you switch surfaces mid-project, your context travels with you automatically.
+In Claude Code and Cowork, hooks load and save context automatically. In Claude.ai,
+paste your session synopsis to carry context forward. When you switch surfaces
+mid-project, your memory travels with you.
 
 ### Structured memory, not raw transcripts
 
