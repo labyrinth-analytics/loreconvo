@@ -171,6 +171,9 @@ class SessionDatabase:
         self.conn = sqlite3.connect(self.config.db_path)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
+        # Wait up to 5s for a competing writer instead of failing instantly
+        # with "database is locked" under transient contention.
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self._lance_index = None  # lazy init; LanceIndex instance when Pro
         self._init_schema()
