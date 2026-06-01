@@ -134,6 +134,33 @@ def parse_transcript(transcript_path):
                 if clean not in artifacts and len(artifacts) < 10:
                     artifacts.append(clean)
 
+    # Detect open questions (simple heuristic)
+    open_questions = []
+    oq_trigger_phrases = [
+        "should we", "what about", "unclear", "not sure",
+        "need to decide", "open question", "tbd", "to be determined",
+    ]
+    for msg in assistant_messages + user_messages:
+        # Explicit prefix markers (line-level): "Open question: ..." or "Q: ..."
+        for line in msg.split("\n"):
+            stripped = line.strip()
+            lower = stripped.lower()
+            if lower.startswith("open question:") or lower.startswith("q:"):
+                clean = stripped[:200]
+                if clean and len(clean) > 10 and clean not in open_questions and len(open_questions) < 10:
+                    open_questions.append(clean)
+        # Sentence-level: trigger phrase + "?" in the same sentence
+        msg_lower = msg.lower()
+        for phrase in oq_trigger_phrases:
+            if phrase in msg_lower:
+                for sentence in msg.split("."):
+                    sentence_stripped = sentence.strip()
+                    if phrase in sentence_stripped.lower() and "?" in sentence_stripped:
+                        clean = sentence_stripped[:200]
+                        if clean and len(clean) > 10 and clean not in open_questions and len(open_questions) < 10:
+                            open_questions.append(clean)
+                break
+
     # Unique tools used
     unique_tools = list(set(tool_uses))[:20]
 
@@ -142,6 +169,7 @@ def parse_transcript(transcript_path):
         "summary": summary,
         "decisions": decisions[:10],
         "artifacts": artifacts[:10],
+        "open_questions": open_questions[:10],
         "tools_used": unique_tools,
         "message_count": len(user_messages) + len(assistant_messages),
     }
@@ -207,12 +235,14 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
             now = datetime.now().isoformat()
             conn.execute(
                 """UPDATE sessions SET summary = ?, decisions = ?, artifacts = ?,
-                   tags = ?, end_date = ?, updated_at = ?, project = ?, source = ?
+                   open_questions = ?, tags = ?, end_date = ?, updated_at = ?,
+                   project = ?, source = ?
                    WHERE id = ?""",
                 (
                     parsed["summary"],
                     json.dumps(parsed["decisions"]),
                     json.dumps(parsed["artifacts"]),
+                    json.dumps(parsed.get("open_questions", [])),
                     json.dumps(["auto-saved"]),
                     now,
                     now,
@@ -238,7 +268,7 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
                 parsed["summary"],
                 json.dumps(parsed["decisions"]),
                 json.dumps(parsed["artifacts"]),
-                json.dumps([]),
+                json.dumps(parsed["open_questions"]),
                 json.dumps(["auto-saved"]),
                 now,
                 now,
