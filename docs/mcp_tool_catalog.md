@@ -427,7 +427,7 @@ Returns recent consolidation log entries so you can see exactly what LoreConvo p
 | `vault_set_tier` | Activate free or Pro tier |
 | `export_sessions` | Export sessions to JSON or JSONL for backup or migration |
 | `import_sessions` | Import sessions from a LoreConvo export file |
-| `get_related_sessions` | Find sessions related to a given session by ID |
+| `get_related_sessions` | Find sessions related to a given session (Free: keyword co-occurrence; Pro: adds embedding-based auto-links) |
 | `consolidate_memories` | Merge related sessions into persistent memory entries (Recall) |
 | `get_memory_digest` | Inject a condensed memory digest into the current session (Recall) |
 | `get_dream_log` | View the consolidation activity log |
