@@ -27,12 +27,17 @@ def get_db_path():
     return os.environ.get("LORECONVO_DB", os.path.expanduser("~/.loreconvo/sessions.db"))
 
 
-def save_pre_compact(db_path, session_id, parsed, trigger):
+def save_pre_compact(db_path, session_id, parsed, trigger, project=None):
     """Save parsed session data before compaction.
 
     If the session already exists in the DB (e.g., from a prior pre-compact
     or session-end save), update it. Otherwise insert a new record.
     Tags include 'pre-compact' and the trigger type ('manual' or 'auto').
+
+    project is derived from the hook cwd (mirrors auto_save.py) so pre-compact
+    saves are namespaced like every other save. On UPDATE we only fill project
+    when it is currently NULL (COALESCE) -- a pre-compact firing after an agent
+    or SessionEnd save must not clobber an already-stamped project.
     """
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     tags = ["pre-compact", trigger]
@@ -47,7 +52,8 @@ def save_pre_compact(db_path, session_id, parsed, trigger):
         if cursor.fetchone():
             conn.execute(
                 """UPDATE sessions SET summary = ?, decisions = ?, artifacts = ?,
-                   tags = ?, end_date = ?, updated_at = ?
+                   tags = ?, end_date = ?, updated_at = ?,
+                   project = COALESCE(project, ?)
                    WHERE id = ?""",
                 (
                     parsed["summary"],
@@ -56,6 +62,7 @@ def save_pre_compact(db_path, session_id, parsed, trigger):
                     json.dumps(tags),
                     now,
                     now,
+                    project,
                     session_id,
                 ),
             )
@@ -63,13 +70,14 @@ def save_pre_compact(db_path, session_id, parsed, trigger):
             return True
 
         conn.execute(
-            """INSERT INTO sessions (id, title, surface, summary, decisions, artifacts,
+            """INSERT INTO sessions (id, title, surface, project, summary, decisions, artifacts,
                open_questions, tags, start_date, end_date)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_id,
                 parsed["title"],
                 "code",
+                project,
                 parsed["summary"],
                 json.dumps(parsed["decisions"]),
                 json.dumps(parsed["artifacts"]),
@@ -119,6 +127,8 @@ def main():
         session_id = hook_input.get("session_id", "unknown")
         transcript_path = hook_input.get("transcript_path", "")
         trigger = hook_input.get("trigger", "auto")
+        cwd = hook_input.get("cwd", "")
+        project = os.path.basename(cwd.rstrip("/")) if cwd else None
 
         parsed = parse_transcript(transcript_path)
         if not parsed:
@@ -128,7 +138,7 @@ def main():
             sys.exit(0)
 
         db_path = get_db_path()
-        saved = save_pre_compact(db_path, session_id, parsed, trigger)
+        saved = save_pre_compact(db_path, session_id, parsed, trigger, project)
 
         if saved:
             sys.stderr.write(
