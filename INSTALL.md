@@ -398,17 +398,16 @@ at `~/.loreconvo/sessions.db` is preserved.
 
 ## Schema Migrations
 
-Some LoreConvo upgrades require a one-time migration script to add new database columns or tables. Run the migration after upgrading the package, before starting a new session.
+Schema migrations are automatic -- there is no manual step. When a new version of
+LoreConvo adds database columns or tables, the migration runs the next time LoreConvo
+starts after you upgrade (when the MCP server loads or you run any CLI command). Your
+session data at `~/.loreconvo/sessions.db` is preserved.
 
-**v0.7.0 migration** (required if you are upgrading from v0.6.x):
-
-```bash
-python3 /path/to/loreconvo/scripts/loreconvo_migrate_v06_v07.py
-```
-
-This adds the `summary_source`, `summary_retry_count`, and `fallback_reason` columns to sessions, and creates the `cap_state` and `schema_migration_log` tables needed for async LLM summarization. The script is idempotent -- safe to run again if you are unsure whether it has run.
-
-If you skip this migration, LoreConvo v0.7.0 still works -- async summarization is simply not available until the migration runs.
+Migrations are idempotent (safe to run repeatedly) and apply in-place, so upgrading
+from any earlier version brings your existing database fully up to date with no action
+on your part. For example, the v0.7.0 upgrade automatically adds the `summary_source`,
+`summary_retry_count`, and `fallback_reason` columns and creates the `cap_state` and
+`schema_migration_log` tables needed for async LLM summarization.
 
 ---
 
