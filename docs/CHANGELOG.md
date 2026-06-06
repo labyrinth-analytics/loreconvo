@@ -27,10 +27,11 @@ What changed in each release, written for users (not developers).
 
 ### Migrations
 
-- Run `python3 scripts/loreconvo_migrate_v06_v07.py` to apply the v0.7.0 schema
-  migration before using async summarization. The migration adds `summary_source`,
-  `summary_retry_count`, and `fallback_reason` columns to sessions, and creates the
-  `cap_state` and `schema_migration_log` tables. It is idempotent -- safe to run again.
+- No action required. LoreConvo migrates your database automatically the next time
+  it starts after you upgrade. The v0.7.0 upgrade adds the `summary_source`,
+  `summary_retry_count`, and `fallback_reason` columns to sessions and creates the
+  `cap_state` and `schema_migration_log` tables that async summarization needs. The
+  migration is idempotent and preserves all existing sessions.
 
 ---
 
