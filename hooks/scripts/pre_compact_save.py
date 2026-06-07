@@ -42,6 +42,13 @@ def save_pre_compact(db_path, session_id, parsed, trigger, project=None):
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     tags = ["pre-compact", trigger]
 
+    # Stamp the owning agent when this save fires inside a scheduled-agent run.
+    # run_agent_code.sh exports LORECONVO_AGENT; interactive sessions leave it
+    # unset, which correctly yields no agent tag.
+    agent = os.environ.get("LORECONVO_AGENT", "").strip()
+    if agent:
+        tags.append(f"agent:{agent}")
+
     conn = sqlite3.connect(db_path)
     try:
         ensure_tables(conn)
