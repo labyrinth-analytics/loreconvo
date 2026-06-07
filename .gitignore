@@ -17,5 +17,5 @@ venv/
 *.sqlite
 *.log
 .DS_Store
-tests/
-test_*.py
+# tests/ and test_*.py are TRACKED in the monorepo and stripped from public
+# repos at publish time by scripts/_subtree_push_filtered.sh. Do NOT re-ignore.
