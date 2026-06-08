@@ -624,6 +624,35 @@ def vault_set_tier(params: VaultSetTierInput) -> str:
     )
 
 
+def _validate_export_path(output_path: str) -> tuple[Path, str | None]:
+	"""Validate output_path against the configured export root.
+	Returns (resolved_path, None) on success, (None, error_msg) on failure."""
+	export_root = Path(
+		os.environ.get('LORECONVO_EXPORT_DIR', Path.home() / 'loreconvo-exports')
+	).expanduser().resolve()
+
+	resolved = Path(output_path).expanduser().resolve()
+
+	# Path must be within the export root
+	try:
+		resolved.relative_to(export_root)
+	except ValueError:
+		return None, (
+			f"output_path must be within the export directory ({export_root}). "
+			f"Set LORECONVO_EXPORT_DIR to change the export root."
+		)
+
+	# Extension check
+	if resolved.suffix.lower() not in ('.json', '.jsonl'):
+		return None, "output_path must end with .json or .jsonl"
+
+	# Create export root if it does not exist (chmod 700)
+	if not export_root.exists():
+		export_root.mkdir(parents=True, mode=0o700, exist_ok=True)
+
+	return resolved, None
+
+
 @mcp.tool(title="Export Sessions")
 def export_sessions(
     output_path: str | None = None,
@@ -689,14 +718,9 @@ def export_sessions(
         data_str = json.dumps(export_obj, indent=2)
 
     if output_path:
-        resolved = Path(output_path).expanduser().resolve()
-        home = Path.home().resolve()
-        if not str(resolved).startswith(str(home)):
-            return {"error": "output_path must be within the home directory"}
-        if str(resolved).startswith(str(home / ".claude")):
-            return {"error": "output_path cannot target Claude Code config directories"}
-        if resolved.suffix.lower() not in (".json", ".jsonl"):
-            return {"error": "output_path must end with .json or .jsonl"}
+        resolved, err = _validate_export_path(output_path)
+        if err:
+            return {"error": err}
         resolved.write_text(data_str, encoding="utf-8")
         return {
             "status": "exported",
@@ -786,14 +810,9 @@ def export_for_anthropic(
     data_str = json.dumps(export_obj, indent=2)
 
     if output_path:
-        resolved = Path(output_path).expanduser().resolve()
-        home = Path.home().resolve()
-        if not str(resolved).startswith(str(home)):
-            return {"error": "output_path must be within the home directory"}
-        if str(resolved).startswith(str(home / ".claude")):
-            return {"error": "output_path cannot target Claude Code config directories"}
-        if resolved.suffix.lower() != ".json":
-            return {"error": "output_path must end with .json"}
+        resolved, err = _validate_export_path(output_path)
+        if err:
+            return {"error": err}
         resolved.write_text(data_str, encoding="utf-8")
         return {
             "status": "exported",
