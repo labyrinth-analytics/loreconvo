@@ -832,6 +832,12 @@ class SessionDatabase:
     def close(self):
         self.conn.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+
     @staticmethod
     def compute_content_hash(title: str, summary: str, created_at: str) -> str:
         """Compute a stable SHA-256 hash for deduplication on merge."""

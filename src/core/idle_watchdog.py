@@ -17,7 +17,7 @@ import sys
 import threading
 import time
 
-DEFAULT_IDLE_TIMEOUT = 1800.0  # 30 minutes
+DEFAULT_IDLE_TIMEOUT = 300.0  # 5 minutes (was 1800; desktop app re-spawns on next call)
 
 
 def resolve_timeout(env_var, default=DEFAULT_IDLE_TIMEOUT):
