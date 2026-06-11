@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import os
 import re
 import socket
@@ -16,6 +17,7 @@ from .models import (
     PersonaTag, Project, SearchResult, Session, SessionLink, SkillUsage
 )
 
+logger = logging.getLogger(__name__)
 
 _IMPORT_FIELD_CAPS = {
     "title": 500,
@@ -175,6 +177,7 @@ class SessionDatabase:
         # with "database is locked" under transient contention.
         self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.execute("PRAGMA foreign_keys=ON")
+        self._validate_journal_mode()
         self._lance_index = None  # lazy init; LanceIndex instance when Pro
         self._init_schema()
 
