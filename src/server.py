@@ -14,6 +14,7 @@ from core.database import SessionDatabase, SessionLimitReachedError, _MAX_IMPORT
 from core.config import Config, set_tier as _set_tier_config
 from core.license import get_license_status
 from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onboard_config_path
+from compat_check import check as _compat_check, emit_startup_warnings as _compat_emit
 
 mcp = FastMCP(
     "loreconvo",
@@ -1317,8 +1318,24 @@ def session_link_doc(session_id: str, doc_id: str, vault_id: str) -> dict:
     )
 
 
+@mcp.tool(title="Get Server Info")
+def get_server_info() -> dict:
+    """Return MCP compatibility status for this LoreConvo server.
+
+    Returns product version, installed mcp SDK version, tested version, and
+    compatibility status. Useful for diagnosing version mismatches on running
+    servers without requiring a restart.
+
+    Returns dict with: product_name, product_version, mcp_installed, mcp_tested,
+    mcp_accepted, status (ok|mismatch|undetermined|disabled|internal_error), note.
+    """
+    result = _compat_check()
+    return {k: v for k, v in result.items() if k != "error_detail"}
+
+
 def main():
     """Entry point for uvx / console script execution."""
+    _compat_emit(_compat_check())
     from core import idle_watchdog
     # Reap this process if the client parks it idle (releases any held DB lock).
     idle_watchdog.install(mcp, env_var="LORECONVO_IDLE_TIMEOUT")
