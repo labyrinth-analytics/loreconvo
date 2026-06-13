@@ -180,6 +180,13 @@ class SessionDatabase:
         self._lance_index = None  # lazy init; LanceIndex instance when Pro
         self._init_schema()
 
+    def _validate_journal_mode(self) -> None:
+        """Validate that SQLite WAL mode is enabled."""
+        cursor = self.conn.execute("PRAGMA journal_mode")
+        result = cursor.fetchone()
+        if result and result[0].lower() != "wal":
+            logger.warning(f"SQLite journal mode is {result[0]}, expected WAL mode")
+
     def _init_schema(self):
         self.conn.executescript(SCHEMA_SQL)
         self._migrate_fts_v2()
