@@ -4,7 +4,13 @@ import json
 import sys
 import os
 from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from pathlib import Path
+
+try:
+    _LORECONVO_VERSION = _pkg_version("loreconvo")
+except PackageNotFoundError:  # running from a source checkout, not installed
+    _LORECONVO_VERSION = "0.0.0-dev"
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -17,7 +23,7 @@ db = SessionDatabase(Config())
 
 
 @click.group()
-@click.version_option(version="0.6.0", prog_name="loreconvo")
+@click.version_option(version=_LORECONVO_VERSION, prog_name="loreconvo")
 def cli():
     """LoreConvo - vault your Claude conversations. Never re-explain yourself again."""
     pass
