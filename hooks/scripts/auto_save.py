@@ -15,6 +15,25 @@ from datetime import datetime
 from pathlib import Path
 
 
+def auto_save_tags():
+    """Tags for an auto-saved session.
+
+    Always includes 'auto-saved'. When the environment provides LORECONVO_AGENT
+    and/or AGENT_RUN_SESSION_ID (set by the scheduled-agent launcher), also tag
+    the agent and run so agent-tagged recall can find these stubs. Ordinary
+    interactive sessions, which set neither var, are unchanged: just
+    ['auto-saved'].
+    """
+    tags = ["auto-saved"]
+    agent = os.environ.get("LORECONVO_AGENT")
+    if agent:
+        tags.append("agent:" + agent)
+    run_id = os.environ.get("AGENT_RUN_SESSION_ID")
+    if run_id:
+        tags.append("run:" + run_id)
+    return tags
+
+
 def get_db_path():
     """Get database path, matching core/config.py logic."""
     return os.environ.get("LORECONVO_DB", os.path.expanduser("~/.loreconvo/sessions.db"))
@@ -243,7 +262,7 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
                     json.dumps(parsed["decisions"]),
                     json.dumps(parsed["artifacts"]),
                     json.dumps(parsed.get("open_questions", [])),
-                    json.dumps(["auto-saved"]),
+                    json.dumps(auto_save_tags()),
                     now,
                     now,
                     project,
@@ -269,7 +288,7 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
                 json.dumps(parsed["decisions"]),
                 json.dumps(parsed["artifacts"]),
                 json.dumps(parsed["open_questions"]),
-                json.dumps(["auto-saved"]),
+                json.dumps(auto_save_tags()),
                 now,
                 now,
                 source,
