@@ -1,50 +1,39 @@
 # LoreConvo v0.7.1
 
-Vault your Claude conversations. Never re-explain yourself again.
+Your memory follows your identity, not your tool — with your consent.
 
-Persistent cross-surface memory for Claude. Capture session context across Code, Cowork, and Chat. Organize by project, skill, and persona.
+LoreConvo is the only AI memory that carries your context across Claude Code, Codex, Cursor, and Hermes Agent. One install, one memory, everywhere you code.
 
 > **Available on the Anthropic Marketplace.** Install directly from Claude, or via PyPI: `uvx loreconvo`
 
 ## Why LoreConvo?
 
-### Sessions save automatically
+### Your memory follows you across tools
 
-When you finish a Claude Code session, LoreConvo captures and stores it automatically --
-no explicit `save_session` call needed. A Claude Code hook fires at session end, reads
-the conversation, and saves a structured summary (decisions, artifacts, open questions)
-to your local database. When your next session starts, the most relevant context loads
-back in automatically.
+Every coding environment walls off context by machine and workspace. Claude Code, Codex, Cursor, Hermes Agent — each keeps its own memory. When you switch between them, you start over.
 
-Install the hooks once. After that, every session is captured without any action on
-your part.
+LoreConvo treats your identity as portable. All your tools can access the same memory from a single install. Your context follows you, not your tool.
+
+### You control what gets saved
+
+Competing tools auto-write to memory without asking. LoreConvo puts you in control: you decide what's worth keeping, and you can delete any memory at any time.
+
+Every memory shows you exactly where it came from — which surface captured it, when, what project context it belongs to, and which skill generated it. No mystery. Full provenance.
 
 ### Your memory stays on your machine
 
-Unlike cloud-based memory tools, LoreConvo stores everything in a SQLite database on your
-own machine. No data leaves your computer. No subscription to a memory cloud. No vendor with
-access to your session history.
+LoreConvo stores everything in a SQLite database on your own machine. No data leaves your computer. No cloud accounts. No vendor with access to your session history.
 
-Your sessions live in `~/.loreconvo/sessions.db` -- a file you own, can back up, and can
-delete any time.
-
-### Works wherever Claude works
-
-LoreConvo works across Claude Code, Claude.ai, and Cowork -- not just in one IDE.
-In Claude Code and Cowork, hooks load and save context automatically. In Claude.ai,
-paste your session synopsis to carry context forward. When you switch surfaces
-mid-project, your memory travels with you.
+Your sessions live in `~/.loreconvo/sessions.db` -- a file you own, can back up, and can delete whenever you want.
 
 ### Structured memory, not raw transcripts
 
 LoreConvo captures two types of memory for each session:
 
 - **Episodic memory:** what happened -- summaries, artifacts created, open questions left behind
-- **Semantic memory:** what was decided -- stable conclusions about the project that persist
-  across sessions
+- **Semantic memory:** what was decided -- stable conclusions about the project that persist across sessions
 
-Together these give Claude a structured, searchable record of your project's history,
-not just a pile of chat transcripts.
+Together these give Claude a structured, searchable record of your project's history, not just a pile of chat transcripts.
 
 ## Recall Benchmark
 
@@ -258,44 +247,7 @@ At session end:
 - **LLM async session summarization (Pro)**: Auto-saved sessions are upgraded to LLM-quality summaries in the background using Claude Haiku. Opt in by setting `LORECONVO_ANTHROPIC_API_KEY`. A daily cap (`LORECONVO_SUMMARIZER_DAILY_CAP`, default 100) prevents runaway API spend. Pro tier only.
 - **Embedding-based related session discovery (Pro)**: `get_related_sessions` automatically discovers sessions with similar content using BGE-small-en-v1.5 embeddings (cosine >= 0.75). Up to 10 bidirectional auto-links per save, same-project scoped. Free tier gets keyword co-occurrence links. Set `LORECONVO_EMBEDDING_LINKS=0` to disable embedding links.
 - **Cross-product document linking (Pro)**: Automatically discovers and links the LoreDocs documents most relevant to any session, and vice versa. Uses two new tools: `get_docs_for_session` and `session_link_doc`. Requires both LoreConvo Pro and LoreDocs Pro.
-- **Dual interface**: MCP tools (for LLM use) + CLI (for human use)
 - **Local-first**: SQLite database, no cloud dependency, zero API costs
-
-## CLI Reference
-
-After `pip install loreconvo` (or `uv sync`), the `loreconvo-cli` command is available:
-
-```bash
-# Vault a session
-loreconvo-cli save -t "Tax pipeline debugging" -s code -m "Fixed the K-1 parser..."
-
-# List recent sessions
-loreconvo-cli list --days 7
-
-# Search the vault
-loreconvo-cli search "rental insurance split"
-
-# Export for Chat paste (most recent session, markdown format)
-loreconvo-cli export --last --format markdown
-
-# Export a specific session by ID
-loreconvo-cli export <session-id>
-
-# Export as JSON
-loreconvo-cli export --last --format json
-
-# Skill history
-loreconvo-cli skill-history rental-property-accounting
-
-# List all skills by usage count
-loreconvo-cli skills list
-
-# Stats
-loreconvo-cli stats
-
-# Full help
-loreconvo-cli --help
-```
 
 ## MCP Tools
 
