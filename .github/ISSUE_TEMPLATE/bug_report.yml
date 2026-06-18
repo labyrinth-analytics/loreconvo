@@ -1,0 +1,73 @@
+name: Bug report
+description: Something in LoreConvo isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill in what you can -- even a partial report helps.
+
+        **Privacy note:** LoreConvo runs locally and stores your data on your machine. Do not paste
+        license keys, API keys, or the contents of private sessions/memories into this public issue.
+        Redact anything sensitive before submitting.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected to happen instead.
+      placeholder: When I run `loreconvo save ...`, I expected X but got Y.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact commands or actions that trigger the bug.
+      placeholder: |
+        1. Run `loreconvo ...`
+        2. ...
+        3. See error
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: LoreConvo version
+      description: Output of `loreconvo --version`.
+      placeholder: "0.7.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How did you install it?
+      options:
+        - PyPI (pip install loreconvo)
+        - Claude plugin marketplace
+        - From source
+        - Other / not sure
+    validations:
+      required: true
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      description: Output of `python --version`.
+      placeholder: "3.12.4"
+    validations:
+      required: false
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15.5 / Ubuntu 24.04 / Windows 11"
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Paste any traceback or error message. This is automatically formatted as code.
+      render: shell
+    validations:
+      required: false

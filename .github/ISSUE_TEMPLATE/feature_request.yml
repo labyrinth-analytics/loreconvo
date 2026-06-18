@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an idea or improvement for LoreConvo
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Tell us what problem you're trying to solve -- that's often
+        more useful than a specific solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: The use case or pain point motivating the request.
+      placeholder: I want to ... but currently I have to ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like LoreConvo to do?
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds or other approaches you've tried or thought about.
+    validations:
+      required: false

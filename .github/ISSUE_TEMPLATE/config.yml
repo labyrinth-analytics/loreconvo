@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Email support
+    url: mailto:info@labyrinthanalyticsconsulting.com
+    about: For account, licensing, or billing questions, or anything you'd rather not post publicly.
+  - name: Labyrinth Analytics
+    url: https://labyrinthanalyticsconsulting.com/loreconvo
+    about: Product page, docs, and Pro licensing.
