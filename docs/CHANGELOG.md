@@ -4,6 +4,40 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.7.2
+
+### Fixes
+
+- **No more "database is locked" errors from leaked server processes.** Some MCP
+  clients keep a stdio server parked open instead of closing it, leaving a process
+  that held the SQLite write lock. The idle-exit watchdog now defaults to 5 minutes
+  (override with `LORECONVO_IDLE_TIMEOUT`) and connections wait briefly on contention
+  instead of failing instantly, so transient locks resolve on their own.
+- **Fixed a startup crash** caused by an internal journal-mode validation call that no
+  longer existed.
+- **Mid-session (PreCompact) saves are now correctly filed.** Sessions captured by the
+  PreCompact hook are now namespaced to the right project and tagged with the agent
+  name, instead of occasionally being saved un-namespaced.
+
+### Improvements
+
+- **Auto-save now captures open questions.** When a session is saved automatically, any
+  unresolved questions are extracted heuristically so they surface in your next session.
+- **Safer exports.** Export paths are validated to prevent writing outside the intended
+  directory.
+- **More predictable installs.** The Anthropic SDK is pinned (`anthropic==0.87.0`) and
+  LoreConvo is verified against MCP Python SDK 1.27.2.
+- **Better crash diagnostics.** Auto-save crash-recovery stubs are now tagged with the
+  agent and run that produced them.
+
+### Project
+
+- **GitHub issue templates added.** Bug-report and feature-request forms (with a privacy
+  reminder not to paste keys or private session contents) make reporting issues clearer.
+- Documentation updates to the install guide, MCP tool catalog, and schema-migration notes.
+
+---
+
 ## v0.7.1
 
 ### New Features
