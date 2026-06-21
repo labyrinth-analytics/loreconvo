@@ -117,12 +117,14 @@ bash export-to-chat.sh "tax prep"
 The core value of LoreConvo is that context persists across Claude surfaces automatically. Here is the full chain:
 
 ```
-Claude Code (terminal)
+Claude Code  (~/.claude/settings.json via `claude mcp add`)
   |-- SessionEnd hook --> auto_save.py --> ~/.loreconvo/sessions.db
-  |-- SessionStart hook <-- auto_load.py <-- ~/.loreconvo/sessions.db
-                                               ^
-Cowork (desktop app) <--MCP tools-------------|
-  save_session / get_recent_sessions / search_sessions
+  |-- SessionStart hook <-- auto_load.py <-+
+                                           |
+Cursor       (.cursor/mcp.json) <--MCP-----+
+Codex        (~/.codex/config.toml) <--MCP-+
+Hermes Agent (~/.hermes/config.yaml) <-MCP-+
+  All surfaces: save_session / get_recent_sessions / search_sessions
 
 Claude Chat (web)
   |-- export-to-chat.sh --> clipboard --> paste into Chat
@@ -133,7 +135,11 @@ Claude Chat (web)
 - When a session ends, `auto_save.py` captures the conversation and saves a structured summary (decisions, artifacts, open questions, tags) to the local SQLite database.
 - When a new session starts, `auto_load.py` queries the database, scores recent sessions by signal quality, and injects the most relevant context into the session as system context. Sessions with open questions and decisions score highest; low-signal sessions are filtered out. It also indexes any MEMORY.md found in the project directory (see [MEMORY.md Auto-Indexing](#memorymd-auto-indexing) below).
 
-**Cowork** (this desktop app) does not run hooks, but has full access to the same database via the 17 MCP tools. You can call `get_recent_sessions`, `search_sessions`, or `get_context_for` directly from a Cowork conversation to pull in context from any prior Code session.
+**Cursor** connects via `.cursor/mcp.json` in the project root -- the same MCP protocol as Claude Code. See INSTALL.md for setup details.
+
+**OpenAI Codex** connects via `~/.codex/config.toml` using a `[mcp_servers.<name>]` section. See INSTALL.md for setup details.
+
+**Hermes Agent** connects via `~/.hermes/config.yaml` under the `mcp_servers:` key. See INSTALL.md for setup details.
 
 **Claude Chat** (web) does not support plugins. The `export-to-chat.sh` script bridges the gap: it exports your most recent session to your clipboard so you can paste it directly into Chat. This gives Chat the same context that Code would have loaded automatically.
 
