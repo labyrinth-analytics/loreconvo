@@ -1,7 +1,6 @@
 [project]
 name = "loreconvo"
 version = "0.7.3"
-mcpName = "io.github.labyrinth-analytics/loreconvo"
 description = "Cross-surface persistent memory for Claude sessions. Vault conversations from Code, Cowork, and Chat -- recall decisions, artifacts, and context in any future session."
 readme = "README.md"
 license = { file = "LICENSE" }
