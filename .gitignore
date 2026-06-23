@@ -17,6 +17,9 @@ dist/
 .pytest_cache/
 *.db
 *.sqlite
+# LanceDB vector index (runtime data, lives at ~/.loreconvo/sessions.lance/ -- never tracked)
+sessions.lance/
+*.lance/
 *.log
 .DS_Store
 # tests/ and test_*.py are TRACKED in the monorepo and stripped from public
