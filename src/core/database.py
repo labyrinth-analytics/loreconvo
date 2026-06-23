@@ -1850,8 +1850,13 @@ class SessionDatabase:
             "SELECT id FROM sessions WHERE id = ?", (session_id,)
         ).fetchone():
             return False
-        self.conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
         self.conn.execute("DELETE FROM session_skills WHERE session_id = ?", (session_id,))
+        self.conn.execute("DELETE FROM persona_sessions WHERE session_id = ?", (session_id,))
+        self.conn.execute(
+            "DELETE FROM session_links WHERE from_session_id = ? OR to_session_id = ?",
+            (session_id, session_id)
+        )
+        self.conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
         self.conn.commit()
         return True
 
