@@ -240,6 +240,30 @@ At session end:
 
 **For Cowork users:** Cowork does not run hooks automatically. Add instructions to call `get_recent_sessions` at session start and `save_session` at session end in your project CLAUDE.md. See [COWORK_RESTORE.md](COWORK_RESTORE.md) for details.
 
+## Plans: Free vs Pro
+
+LoreConvo is local-first and free to use. Pro ($8/mo) removes the session limit and
+unlocks LLM-quality summaries, semantic (meaning-based) recall, and cross-product
+linking. Everything runs on your machine on either plan -- Pro adds no cloud component.
+
+| | Free | Pro ($8/mo) |
+|---|---|---|
+| Saved sessions | 50 | Unlimited |
+| Full-text search (FTS5) | Yes | Yes |
+| MEMORY.md auto-indexing | Yes | Yes |
+| Project tagging, session linking, skill history | Yes | Yes |
+| Auto-load / auto-save hooks | Yes | Yes |
+| Local-first, no cloud, zero API costs | Yes | Yes |
+| Related-session discovery | Keyword co-occurrence | Embedding-based (BGE-small-en-v1.5) |
+| LLM async session summarization | -- | Yes (Claude Haiku, opt-in) |
+| Semantic search (`rebuild_semantic_index`) | -- | Yes |
+| Cross-product document linking (`get_docs_for_session`, `session_link_doc`) | -- | Yes (also requires LoreDocs Pro) |
+| Team memory -- export/merge sessions across machines | -- | Yes |
+| Anthropic managed-agent export (`export_for_anthropic`) | -- | Yes |
+
+Check your current tier and usage with `get_tier`. Activate a Pro license with
+`vault_set_tier`.
+
 ## Features
 
 - **Automatic session capture**: Sessions save at session end and load at session start via Claude Code hooks -- no manual `save_session` call required
@@ -276,7 +300,7 @@ The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs
 | `get_skill_history` | See which sessions used a specific skill |
 | `vault_suggest` | Proactive suggestions for relevant context to load |
 | `get_tier` | Check current tier and license key status |
-| `vault_set_tier` | Set the active tier (free, pro, team) |
+| `vault_set_tier` | Set the active tier (free or pro) |
 | `export_sessions` | Export sessions to a portable JSON format |
 | `import_sessions` | Import sessions from a previously exported JSON file |
 | `consolidate_memories` | Merge related sessions into persistent memory entries (Recall) |
