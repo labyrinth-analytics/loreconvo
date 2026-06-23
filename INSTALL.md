@@ -147,6 +147,49 @@ Restart Cursor after adding the configuration. LoreConvo MCP tools will be avail
 
 ---
 
+## Connecting to OpenAI Codex
+
+Codex uses a TOML config file at `~/.codex/config.toml`. Add a `[mcp_servers.loreconvo]` section:
+
+```toml
+[mcp_servers.loreconvo]
+command = "/path/to/loreconvo/.venv/bin/python3"
+args = ["/path/to/loreconvo/src/server.py"]
+
+[mcp_servers.loreconvo.env]
+CODEX_HOME = "/Users/your-username/.codex"
+LORECONVO_PRO = "your-license-key"
+```
+
+Replace `/path/to/loreconvo` with the absolute path where you cloned or installed LoreConvo (the directory containing `src/server.py`). Replace `your-username` and `your-license-key` with your values.
+
+**macOS note:** `~/.Codex/config.toml` (capital C) resolves to the same location on a case-insensitive filesystem. The canonical path is lowercase `~/.codex/config.toml`.
+
+Restart Codex after saving the file. LoreConvo MCP tools will be available in the next Codex session.
+
+---
+
+## Connecting to Hermes Agent
+
+Hermes Agent uses its own YAML config file at `~/.hermes/config.yaml` -- it does **not** use `.mcp.json`. Add an entry under `mcp_servers:`:
+
+```yaml
+mcp_servers:
+  loreconvo:
+    command: /path/to/loreconvo/.venv/bin/python3
+    args:
+      - /path/to/loreconvo/src/server.py
+    enabled: true
+    env:
+      LORECONVO_PRO: your-license-key
+```
+
+Replace `/path/to/loreconvo` with the absolute path where you cloned or installed LoreConvo. Replace `your-license-key` with your Pro license key. Omit the `LORECONVO_PRO` line if you are using the free tier.
+
+Restart Hermes Agent after saving the file. LoreConvo MCP tools will be available in the next Hermes session.
+
+---
+
 ## Setting Up Auto-Save and Auto-Load
 
 Install these hooks once and every session is captured automatically -- no `save_session`
