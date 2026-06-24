@@ -354,13 +354,39 @@ def main():
 
         if saved:
             sys.stderr.write(f"LoreConvo: Auto-saved session '{parsed['title']}'\n")
-            _dispatch_async_summarizer(session_id, transcript_path)
+            if _is_valid_transcript_path(transcript_path):
+                _dispatch_async_summarizer(session_id, transcript_path)
 
     except json.JSONDecodeError:
         sys.exit(0)
     except Exception as e:
         sys.stderr.write(f"LoreConvo auto-save error: {e}\n")
         sys.exit(0)
+
+
+def _is_valid_transcript_path(transcript_path):
+    """Validate that transcript_path is within expected Claude directory (SH-10880).
+
+    Returns True if path is under ~/.claude, False otherwise.
+    Logs a warning if validation fails.
+    """
+    if not transcript_path:
+        return False
+    try:
+        normalized = Path(transcript_path).resolve()
+        expected_base = Path.home() / ".claude"
+        if normalized.is_relative_to(expected_base):
+            return True
+        sys.stderr.write(
+            f"LoreConvo: transcript_path outside expected directory boundaries: "
+            f"{transcript_path}; skipping async summarizer dispatch\n"
+        )
+        return False
+    except Exception as e:
+        sys.stderr.write(
+            f"LoreConvo: transcript_path validation failed: {e}; skipping dispatch\n"
+        )
+        return False
 
 
 def _dispatch_async_summarizer(session_id, transcript_path):
