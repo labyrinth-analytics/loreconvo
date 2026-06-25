@@ -243,8 +243,12 @@ At session end:
 ## Plans: Free vs Pro
 
 LoreConvo is local-first and free to use. Pro ($8/mo) removes the session limit and
-unlocks LLM-quality summaries, semantic (meaning-based) recall, and cross-product
-linking. Everything runs on your machine on either plan -- Pro adds no cloud component.
+unlocks LLM-quality summaries, hybrid retrieval search, and cross-product linking.
+Everything runs on your machine on either plan -- Pro adds no cloud component.
+
+Free tier search: keyword (FTS5) + recency ordering.
+Pro tier search: hybrid retrieval -- vector (BGE-small-en-v1.5), BM25 full-text, and
+recency reranking combined via RRF fusion. Finds sessions by meaning, not just keywords.
 
 | | Free | Pro ($8/mo) |
 |---|---|---|
@@ -256,7 +260,7 @@ linking. Everything runs on your machine on either plan -- Pro adds no cloud com
 | Local-first, no cloud, zero API costs | Yes | Yes |
 | Related-session discovery | Keyword co-occurrence | Embedding-based (BGE-small-en-v1.5) |
 | LLM async session summarization | -- | Yes (Claude Haiku, opt-in) |
-| Semantic search (`rebuild_semantic_index`) | -- | Yes |
+| Hybrid retrieval: vector + BM25 + recency reranking (`rebuild_semantic_index`) | -- | Yes (Pro) |
 | Cross-product document linking (`get_docs_for_session`, `session_link_doc`) | -- | Yes (also requires LoreDocs Pro) |
 | Team memory -- export/merge sessions across machines | -- | Yes |
 | Anthropic managed-agent export (`export_for_anthropic`) | -- | Yes |
