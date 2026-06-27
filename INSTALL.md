@@ -157,7 +157,7 @@ command = "/path/to/loreconvo/.venv/bin/python3"
 args = ["/path/to/loreconvo/src/server.py"]
 
 [mcp_servers.loreconvo.env]
-CODEX_HOME = "/Users/your-username/.codex"
+CODEX_HOME = "/Users/your-username/.codex"  # Required by Codex to locate its own config when running MCP servers as subprocesses
 LORECONVO_PRO = "your-license-key"
 ```
 
