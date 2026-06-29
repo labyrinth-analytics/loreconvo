@@ -166,6 +166,22 @@ END;
 """
 
 
+def _is_in_memory_db(db_path) -> bool:
+    """True for in-memory SQLite databases.
+
+    In-memory databases cannot use WAL -- ``PRAGMA journal_mode=WAL`` always
+    returns "memory" -- and there is no file for a second client to lock into a
+    conflicting mode, so the WAL mixing guard does not apply to them. Used by
+    tests (db_path=":memory:") and any in-memory URI form.
+    """
+    p = str(db_path)
+    if p == ":memory:":
+        return True
+    if p.startswith("file:"):
+        return ":memory:" in p or "mode=memory" in p
+    return False
+
+
 class SessionDatabase:
     def __init__(self, config: Optional[Config] = None):
         self.config = config or Config()
@@ -175,9 +191,12 @@ class SessionDatabase:
         # Set WAL mode and verify it took effect. If another client has switched
         # the DB to DELETE/TRUNCATE mode, the PRAGMA returns the current mode
         # instead of "wal" -- that is the mixing scenario that causes corruption.
+        # In-memory databases can never be WAL (they report "memory") and have no
+        # file to mix on, so they are exempt -- key the check on the configured
+        # path, not the returned mode, so a file DB that fails WAL still raises.
         row = self.conn.execute("PRAGMA journal_mode=WAL").fetchone()
         actual_mode = row[0] if row else "unknown"
-        if actual_mode != "wal":
+        if actual_mode != "wal" and not _is_in_memory_db(self.config.db_path):
             self.conn.close()
             raise RuntimeError(
                 f"Database at '{self.config.db_path}' is in '{actual_mode}' journal "
