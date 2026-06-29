@@ -392,7 +392,7 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 - **WAL journal-mode guardrail.** LoreConvo now detects and refuses to mix SQLite
   journal modes on the same database, avoiding a class of "database is locked" and
   integrity errors that could occur when a WAL-mode database was opened on an older
-  code path.
+  code path. In-memory databases (which cannot use WAL) are exempt.
 
 ### Packaging
 
