@@ -179,7 +179,14 @@ def _claim_cap_slot(conn: sqlite3.Connection) -> bool:
 
 def _open_db(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, timeout=10.0)
-    conn.execute("PRAGMA journal_mode=WAL")
+    row = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+    actual_mode = row[0] if row else "unknown"
+    if actual_mode != "wal":
+        conn.close()
+        raise RuntimeError(
+            f"Database at '{db_path}' is in '{actual_mode}' journal mode, expected WAL. "
+            "Another process may be using a conflicting journal mode."
+        )
     conn.execute("PRAGMA busy_timeout=10000")
     conn.row_factory = sqlite3.Row
     return conn
