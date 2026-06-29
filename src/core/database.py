@@ -172,20 +172,24 @@ class SessionDatabase:
         self.config.ensure_db_dir()
         self.conn = sqlite3.connect(self.config.db_path)
         self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA journal_mode=WAL")
+        # Set WAL mode and verify it took effect. If another client has switched
+        # the DB to DELETE/TRUNCATE mode, the PRAGMA returns the current mode
+        # instead of "wal" -- that is the mixing scenario that causes corruption.
+        row = self.conn.execute("PRAGMA journal_mode=WAL").fetchone()
+        actual_mode = row[0] if row else "unknown"
+        if actual_mode != "wal":
+            self.conn.close()
+            raise RuntimeError(
+                f"Database at '{self.config.db_path}' is in '{actual_mode}' journal "
+                "mode, expected WAL. Another process may be using a conflicting "
+                "journal mode. Close all other LoreConvo connections and retry."
+            )
         # Wait up to 5s for a competing writer instead of failing instantly
         # with "database is locked" under transient contention.
         self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self._lance_index = None  # lazy init; LanceIndex instance when Pro
         self._init_schema()
-
-    def _validate_journal_mode(self) -> None:
-        """Validate that SQLite WAL mode is enabled."""
-        cursor = self.conn.execute("PRAGMA journal_mode")
-        result = cursor.fetchone()
-        if result and result[0].lower() != "wal":
-            logger.warning(f"SQLite journal mode is {result[0]}, expected WAL mode")
 
     def _init_schema(self):
         self.conn.executescript(SCHEMA_SQL)
