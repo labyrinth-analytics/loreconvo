@@ -9,7 +9,7 @@ When a Claude Code session ends (for any reason except "resume"), the hook:
 1. Reads the transcript JSONL file
 2. Extracts user messages, assistant messages, tools used, and files modified
 3. Generates a summary of the session
-4. Saves everything to LoreConvo's SQLite database at `~/.loreconvo/loreconvo.db`
+4. Saves everything to LoreConvo's SQLite database at `~/.loreconvo/sessions.db`
 5. Logs activity to `~/.loreconvo/hook.log`
 
 The heavy parsing runs in the background so it never slows down session exit.
@@ -21,9 +21,9 @@ The heavy parsing runs in the background so it never slows down session exit.
 Copy both files into your LoreConvo installation:
 
 ```bash
-cp hooks/scripts/session-end-save.sh ~/projects/side_hustle/ron_skills/loreconvo/hooks/scripts/
-cp hooks/scripts/parse_transcript.py ~/projects/side_hustle/ron_skills/loreconvo/hooks/scripts/
-chmod +x ~/projects/side_hustle/ron_skills/loreconvo/hooks/scripts/session-end-save.sh
+cp hooks/scripts/session-end-save.sh <loreconvo-install-dir>/hooks/scripts/
+cp hooks/scripts/parse_transcript.py <loreconvo-install-dir>/hooks/scripts/
+chmod +x <loreconvo-install-dir>/hooks/scripts/session-end-save.sh
 ```
 
 ### Step 2: Register the hook globally
@@ -59,12 +59,12 @@ Start and end a Claude Code session, then check:
 cat ~/.loreconvo/hook.log
 
 # Query saved sessions
-sqlite3 ~/.loreconvo/loreconvo.db "SELECT session_id, project, user_message_count, ended_at FROM sessions ORDER BY ended_at DESC LIMIT 5;"
+sqlite3 ~/.loreconvo/sessions.db "SELECT session_id, project, user_message_count, ended_at FROM sessions ORDER BY ended_at DESC LIMIT 5;"
 ```
 
 ## Configuration
 
-**Custom LoreConvo location:** If LoreConvo is not at `~/projects/side_hustle/ron_skills/loreconvo/`, set the environment variable:
+**Custom LoreConvo location:** If your LoreConvo install is in a non-standard location, set the environment variable:
 
 ```bash
 export LORECONVO_DIR="/your/custom/path"

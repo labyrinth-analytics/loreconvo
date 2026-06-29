@@ -1,7 +1,7 @@
 // LoreConvo Data Model (sessions.db)
 // Cross-surface persistent memory for Claude sessions
-// Product: LoreConvo v0.3.2
-// Generated: 2026-04-17
+// Product: LoreConvo v0.7.4
+// Generated: 2026-06-29
 
 Project LoreConvo {
   database_type: 'SQLite'
@@ -75,7 +75,7 @@ Table session_links {
 }
 
 Table persona_sessions {
-  persona_name    text [not null, note: 'Named persona (e.g. ron, meg, brock)']
+  persona_name    text [not null, note: 'Named persona (e.g. builder, qa, security)']
   session_id      text [not null, ref: > sessions.id]
   relevance_note  text [note: 'Why this session is relevant to this persona']
 
