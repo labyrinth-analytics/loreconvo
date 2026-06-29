@@ -4,6 +4,43 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.7.4
+
+### Security
+
+- **Dependency security updates.** `cryptography` is upgraded from 46.0.7 to 49.0.0,
+  clearing an OpenSSL advisory (GHSA-537c-gmf6-5ccf). `starlette` is now pinned to
+  1.3.1, which clears five advisories. All runtime dependencies are exact-pinned.
+- **Transcript path validation.** The auto-save hook now verifies that the session
+  transcript path resolves inside `~/.claude` before reading it, so a crafted path
+  cannot point the reader somewhere else.
+
+### Reliability
+
+- **WAL journal-mode guardrail.** LoreConvo now detects and refuses to mix SQLite
+  journal modes on the same database, avoiding a class of "database is locked" and
+  integrity errors that could occur when a WAL-mode database was opened on an older
+  code path.
+
+### Packaging
+
+- License metadata migrated to SPDX form (`BUSL-1.1`); the build now requires
+  setuptools >= 77.
+
+### Docs
+
+- The install guide adds Codex and Hermes MCP setup sections. The README adds a
+  Free-vs-Pro plan comparison and removes stale team-tier wording.
+
+---
+
+## v0.7.3
+
+Internal packaging release: prepared plugin metadata for the MCP plugin registry
+submission. No user-facing functional changes.
+
+---
+
 ## v0.7.2
 
 ### Fixes
