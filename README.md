@@ -271,7 +271,7 @@ Check your current tier and usage with `get_tier`. Activate a Pro license with
 ## Features
 
 - **Automatic session capture**: Sessions save at session end and load at session start via Claude Code hooks -- no manual `save_session` call required
-- **Cross-surface memory**: Bridge context between Claude Code, Cowork, and Chat
+- **Cross-client memory**: Your context follows you across Claude Code, Cursor, Codex, and Hermes -- not locked to one IDE or machine
 - **Structured sessions**: Captures decisions, artifacts, open questions -- not just raw text; optional reasoning_notes field stores agent reasoning chains
 - **Project organization**: Group sessions by project with expected skill sets
 - **Skill tracking**: Record which skills were used for smart filtering
