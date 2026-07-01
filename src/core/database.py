@@ -188,20 +188,34 @@ class SessionDatabase:
         self.config.ensure_db_dir()
         self.conn = sqlite3.connect(self.config.db_path)
         self.conn.row_factory = sqlite3.Row
-        # Set WAL mode and verify it took effect. If another client has switched
-        # the DB to DELETE/TRUNCATE mode, the PRAGMA returns the current mode
-        # instead of "wal" -- that is the mixing scenario that causes corruption.
-        # In-memory databases can never be WAL (they report "memory") and have no
-        # file to mix on, so they are exempt -- key the check on the configured
-        # path, not the returned mode, so a file DB that fails WAL still raises.
+        # Attempt to set WAL mode. Some filesystems (network mounts, FUSE,
+        # or filesystems without POSIX shared-memory support) cannot
+        # establish WAL, and the PRAGMA silently returns the current mode
+        # (typically "delete" or "truncate") instead of "wal". The
+        # cross-process mixing scenario (one client holding WAL, another
+        # holding DELETE/TRUNCATE) causes corruption, but that requires
+        # multiple *processes* touching the file with different modes --
+        # in-process locking prevents it locally. Pre-0.7.4 LoreConvo ran
+        # fine in delete/truncate mode on these filesystems, so we
+        # warn-and-continue rather than abort. In-memory databases can
+        # never be WAL (they report "memory") and have no file to mix on,
+        # so they are exempt -- key the check on the configured path, not
+        # the returned mode, so a file DB that fails WAL is still surfaced
+        # as a warning.
         row = self.conn.execute("PRAGMA journal_mode=WAL").fetchone()
         actual_mode = row[0] if row else "unknown"
         if actual_mode != "wal" and not _is_in_memory_db(self.config.db_path):
-            self.conn.close()
-            raise RuntimeError(
-                f"Database at '{self.config.db_path}' is in '{actual_mode}' journal "
-                "mode, expected WAL. Another process may be using a conflicting "
-                "journal mode. Close all other LoreConvo connections and retry."
+            logger.warning(
+                "Database at '%s' is in '%s' journal mode; WAL is unavailable "
+                "on this filesystem (common with network mounts, FUSE, or "
+                "filesystems without POSIX shared-memory). Falling back to "
+                "'%s' mode. This process's own connection locking prevents "
+                "intra-process conflicts, but if other processes open the "
+                "same file with a different journal mode, corruption is "
+                "possible.",
+                self.config.db_path,
+                actual_mode,
+                actual_mode,
             )
         # Wait up to 5s for a competing writer instead of failing instantly
         # with "database is locked" under transient contention.
