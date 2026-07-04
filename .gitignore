@@ -1,7 +1,6 @@
 # Internal docs belong in docs/internal/loreconvo/ (private repo root)
 # This .gitignore exists as a safety net — nothing sensitive should
 # be stored in this directory in the first place.
-CLAUDE.md
 *.xlsx
 *.env
 
@@ -22,5 +21,6 @@ sessions.lance/
 *.lance/
 *.log
 .DS_Store
-# tests/ and test_*.py are TRACKED in the monorepo and stripped from public
-# repos at publish time by scripts/_subtree_push_filtered.sh. Do NOT re-ignore.
+# tests/, test_*.py, and CLAUDE.md are TRACKED in the monorepo and stripped
+# from public repos at publish time by scripts/_subtree_push_filtered.sh.
+# Do NOT re-ignore.
