@@ -4,6 +4,25 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.7.5
+
+### Security
+
+- **Dependency security updates.** `pydantic-settings` is upgraded from 2.13.1 to
+  2.14.2, clearing a moderate-severity advisory (GHSA-4xgf-cpjx-pc3j). `idna` is
+  upgraded from 3.11 to 3.15, clearing PYSEC-2026-215. All runtime dependencies
+  remain exact-pinned.
+
+### Docs
+
+- Removed a deprecated Cowork-surface restore guide that leaked an internal
+  filesystem path. The install-hook guide now uses a generic install-directory
+  placeholder and correctly names the session database file (`sessions.db`).
+  The schema diagram's version header and internal role names are updated to
+  match the current release.
+
+---
+
 ## v0.7.4
 
 ### Security
