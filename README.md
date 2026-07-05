@@ -8,11 +8,15 @@ LoreConvo is the only AI memory that carries your context across Claude Code, Co
 
 ## Why LoreConvo?
 
-### Your memory follows you across tools
+### Works wherever you work
 
-Every coding environment walls off context by machine and workspace. Claude Code, Codex, Cursor, Hermes Agent — each keeps its own memory. When you switch between them, you start over.
+LoreConvo works across Claude Code, Cursor, Codex, and Hermes -- the same memory
+layer, no matter which client you reach for. When you switch mid-project, your
+context travels with you automatically.
 
-LoreConvo treats your identity as portable. All your tools can access the same memory from a single install. Your context follows you, not your tool.
+Most tools wall off memory by machine or workspace. LoreConvo stores everything
+locally in a SQLite database you own, and surfaces it wherever you are. You decide
+what gets saved; nothing is written without your action.
 
 ### You control what gets saved
 
