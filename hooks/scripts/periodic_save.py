@@ -135,6 +135,8 @@ def _requeue_pending_summaries(db_path):
     """Dispatch async summarizer for sessions stuck in summary_pending or heuristic state.
 
     Only processes sessions with summary_retry_count < MAX_SUMMARY_RETRIES.
+    Explicitly excludes 'pre_migration_unknown' (pre-v0.7.0 quality indeterminate;
+    user can upgrade explicitly via save_session(summarize=True)).
     Fire-and-forget -- periodic_save returns immediately.
     """
     import sqlite3
