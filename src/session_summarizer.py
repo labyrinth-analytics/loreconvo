@@ -33,6 +33,7 @@ _LOG_PATH = Path.home() / ".loreconvo" / "summarizer.log"
 _SUMMARIZER_MODEL = "claude-haiku-4-5-20251001"
 _MAX_TRANSCRIPT_CHARS = 40000
 _SCHEMA_MIGRATION = "v06_v07"
+SKIP_SUMMARIZE_SOURCES = frozenset({'claude_api', 'claude_async', 'pre_migration_unknown'})
 
 _SUMMARY_PROMPT = """You are a session memory assistant. Given a Claude Code session transcript, extract:
 1. A concise title (max 80 chars)
@@ -334,9 +335,9 @@ def summarize_session(session_id: str, transcript_path: str = None) -> bool:
         current_source = row["summary_source"] or "heuristic"
         retry_count = row["summary_retry_count"] or 0
 
-        # Skip if already LLM-summarized or permanently failed.
-        if current_source in ("claude_api", "claude_async"):
-            log.info("Session %s already has LLM summary (%s) -- skipping", session_id, current_source)
+        # Skip if already LLM-summarized, pre-migration (unknown quality), or permanently failed.
+        if current_source in SKIP_SUMMARIZE_SOURCES:
+            log.info("Session %s already has sufficient summary quality (%s) -- skipping", session_id, current_source)
             return True
         if current_source == "permanently_heuristic":
             log.info("Session %s permanently heuristic (exhausted retries) -- skipping", session_id)
