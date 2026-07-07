@@ -1,6 +1,8 @@
 """Session Bridge MCP Server - FastMCP interface for LLM access."""
 
+import atexit
 import json
+import signal
 import sys
 import os
 from pathlib import Path
@@ -1333,9 +1335,177 @@ def get_server_info() -> dict:
     return {k: v for k, v in result.items() if k != "error_detail"}
 
 
+_PID_LOCK = Path.home() / ".loreconvo" / "server.pid"
+
+
+def _acquire_pid_lock():
+    """Acquire the server PID lockfile. Raises RuntimeError if another server is running."""
+    if _PID_LOCK.exists():
+        try:
+            existing_pid = int(_PID_LOCK.read_text().strip())
+            os.kill(existing_pid, 0)
+            raise RuntimeError(
+                f"Another LoreConvo server (PID {existing_pid}) is already running "
+                f"against this database. Multiple instances sharing sessions.db are "
+                f"unsupported. Stop the other instance first."
+            )
+        except (ValueError, OSError):
+            pass  # file unreadable or process dead -- take over the lockfile
+    _PID_LOCK.write_text(str(os.getpid()))
+
+
+def _release_pid_lock():
+    """Release the server PID lockfile. Safe to call even if the file is absent."""
+    try:
+        _PID_LOCK.unlink()
+    except OSError:
+        pass
+
+
+# -- Anti-pattern storage tools (v0.8.0) --
+
+@mcp.tool(title="Get Anti-Patterns")
+def get_anti_patterns(
+    topic: str | None = None,
+    limit: int = 10,
+    project: str | None = None,
+) -> list[dict]:
+    """Retrieve sessions marked as anti-patterns.
+
+    Returns a list of dicts with a 'truncated' boolean. Use at session start
+    or before attempting a known-tricky approach to surface past failures.
+
+    Args:
+        topic: Optional keyword to filter within anti-patterns. Omit for all
+               anti-patterns ordered by recency. When provided, uses FTS5 with
+               a fan-out heuristic; result may be truncated if anti-patterns are
+               sparse in the corpus.
+        limit: Max results to return (1-100). Defaults to 10.
+        project: Restrict to a specific project slug. Case-sensitive.
+    """
+    if not isinstance(limit, int) or limit < 1 or limit > 100:
+        return [{"error": "limit must be an integer 1-100", "status": "error"}]
+
+    topic_clean = (topic or "").strip()[:500]
+    project_clean = (project or "").strip() or None
+    truncated = False
+
+    if not topic_clean:
+        params: list = []
+        sql = """
+            SELECT s.*
+            FROM sessions s
+            JOIN anti_pattern_sessions ap ON ap.session_id = s.id
+        """
+        if project_clean:
+            sql += " WHERE s.project = ?"
+            params.append(project_clean)
+        sql += " ORDER BY s.start_date DESC LIMIT ?"
+        params.append(limit)
+        rows = db.conn.execute(sql, params).fetchall()
+        sessions_list = [db._row_to_session(r) for r in rows]
+    else:
+        fetch_limit = min(limit * 4, 400)
+        fts_results = db.search_sessions(
+            query=topic_clean,
+            project=project_clean,
+            limit=fetch_limit,
+        )
+        if not fts_results:
+            sessions_list = []
+        else:
+            candidate_ids = [r.session.id for r in fts_results]
+            placeholders = ",".join("?" * len(candidate_ids))
+            anti_ids = set(
+                row[0] for row in db.conn.execute(
+                    f"SELECT session_id FROM anti_pattern_sessions "
+                    f"WHERE session_id IN ({placeholders})",
+                    candidate_ids
+                ).fetchall()
+            )
+            sessions_list = [
+                r.session for r in fts_results if r.session.id in anti_ids
+            ][:limit]
+        # FTS path can under-return when anti-patterns are sparse in corpus.
+        truncated = len(sessions_list) < limit
+
+    return [
+        {
+            "session_id": s.id or "",
+            "session_title": s.title or "",
+            "date": s.start_date or "",
+            "project": s.project or "",
+            "summary": (s.summary or "")[:2000],
+            "decisions": list(s.decisions) if isinstance(s.decisions, list) else [],
+            "open_questions": list(s.open_questions) if isinstance(s.open_questions, list) else [],
+            "truncated": truncated,
+        }
+        for s in sessions_list
+    ]
+
+
+@mcp.tool(title="Tag Session as Anti-Pattern")
+def tag_as_anti_pattern(session_id: str,
+                         source: str = "unknown",
+                         reason: str = "") -> dict:
+    """Mark an existing session as an anti-pattern. Idempotent.
+
+    Args:
+        session_id: The sessions.id value to mark (TEXT <= 255 chars).
+        source: Attribution for this tag (e.g., 'claude-code', 'agent:gina').
+        reason: Human-readable reason for the tag. Stored in audit log.
+    """
+    try:
+        result = db.mark_anti_pattern(session_id, source=source, reason=reason)
+        return {"status": result, "session_id": session_id}
+    except (ValueError, LookupError) as exc:
+        return {"status": "error", "error": str(exc)}
+    except RuntimeError as exc:
+        return {"status": "error", "error": str(exc), "error_code": "rate_limit_exceeded"}
+
+
+@mcp.tool(title="Untag Anti-Pattern")
+def untag_anti_pattern(session_id: str,
+                        source: str = "unknown",
+                        reason: str = "") -> dict:
+    """Remove an anti-pattern tag from a session. Idempotent.
+
+    The audit log row is written on successful removal; not written if the
+    session was not tagged (idempotent no-op case).
+
+    Args:
+        session_id: The sessions.id value to untag (TEXT <= 255 chars).
+        source: Attribution for this untag (e.g., 'claude-code', 'admin').
+        reason: Human-readable reason for the removal. Stored in audit log.
+    """
+    try:
+        result = db.remove_anti_pattern(session_id, source=source, reason=reason)
+        return {"status": result, "session_id": session_id}
+    except ValueError as exc:
+        return {"status": "error", "error": str(exc)}
+
+
 def main():
     """Entry point for uvx / console script execution."""
+    import argparse
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--dry-run-validate", action="store_true",
+                        help="Validate schema and exit (exit 1 on failure, exit 0 on success).")
+    args, _ = parser.parse_known_args()
+
+    if args.dry_run_validate:
+        from core.database import _validate_anti_pattern_schema
+        try:
+            _validate_anti_pattern_schema(db.conn)
+            print("Schema validation: OK", file=sys.stderr)
+            sys.exit(0)
+        except RuntimeError as exc:
+            print(f"Schema validation FAILED: {exc}", file=sys.stderr)
+            sys.exit(1)
+
     _compat_emit(_compat_check())
+    _acquire_pid_lock()
+    atexit.register(_release_pid_lock)
     from core import idle_watchdog
     # Reap this process if the client parks it idle (releases any held DB lock).
     idle_watchdog.install(mcp, env_var="LORECONVO_IDLE_TIMEOUT")

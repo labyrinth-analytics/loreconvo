@@ -1,5 +1,6 @@
 """SQLite database operations with FTS5 search."""
 
+import calendar
 import hashlib
 import json
 import logging
@@ -7,6 +8,8 @@ import os
 import re
 import socket
 import sqlite3
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -27,6 +30,9 @@ _IMPORT_FIELD_CAPS = {
 _MAX_SESSIONS_PER_FILE = 10_000
 _MAX_IMPORT_BYTES = 50 * 1024 * 1024  # 50 MB
 _INTERNAL_SOURCES = ("file_memory", "periodic")
+
+_TAG_RATE_WINDOW = 60.0   # seconds per rate-limit window
+_TAG_RATE_MAX = 20        # max tag_as_anti_pattern calls per window
 
 _STOPWORDS = frozenset({
     "a", "about", "after", "again", "ago", "all", "also", "an", "and",
@@ -166,6 +172,174 @@ END;
 """
 
 
+ANTI_PATTERN_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS anti_pattern_sessions (
+    session_id TEXT NOT NULL,
+    tagged_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    source     TEXT NOT NULL DEFAULT 'unknown',
+    PRIMARY KEY (session_id),
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_anti_pattern_tagged_at
+    ON anti_pattern_sessions (tagged_at DESC);
+
+CREATE TABLE IF NOT EXISTS anti_pattern_audit_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  TEXT NOT NULL,
+    action      TEXT NOT NULL CHECK(action IN ('tag', 'untag')),
+    source      TEXT NOT NULL DEFAULT 'unknown',
+    reason      TEXT,
+    occurred_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ap_audit_session
+    ON anti_pattern_audit_log (session_id, occurred_at DESC);
+
+CREATE TABLE IF NOT EXISTS anti_pattern_rate_state (
+    operation    TEXT NOT NULL PRIMARY KEY,
+    window_start TEXT NOT NULL,
+    call_count   INTEGER NOT NULL DEFAULT 0
+);
+"""
+
+
+def _open_conn(db_path) -> sqlite3.Connection:
+    """Open a SQLite connection with all required pragmas for LoreConvo.
+
+    Sets isolation_level=None (autocommit), row_factory=Row, WAL mode (with
+    warning on filesystems that do not support WAL), busy_timeout=5000ms,
+    and foreign_keys=ON. All connection open paths must use this helper so FK
+    enforcement is guaranteed on every connection.
+    """
+    conn = sqlite3.connect(str(db_path), isolation_level=None, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+    actual_mode = row[0] if row else "unknown"
+    if actual_mode != "wal" and not _is_in_memory_db(db_path):
+        logger.warning(
+            "Database at '%s' is in '%s' journal mode; WAL is unavailable "
+            "on this filesystem (common with network mounts, FUSE, or "
+            "filesystems without POSIX shared-memory). Falling back to "
+            "'%s' mode. This process's own connection locking prevents "
+            "intra-process conflicts, but if other processes open the "
+            "same file with a different journal mode, corruption is "
+            "possible.",
+            db_path,
+            actual_mode,
+            actual_mode,
+        )
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
+def _validate_anti_pattern_schema(conn: sqlite3.Connection) -> None:
+    """Validate anti_pattern_sessions schema at startup. Raises RuntimeError on mismatch.
+
+    Checks column presence, PRIMARY KEY structure, FK existence, and FK enforcement.
+    Called after CREATE TABLE IF NOT EXISTS so a fresh database always passes.
+    """
+    EXPECTED_COLS = {"session_id": "TEXT", "tagged_at": "TEXT", "source": "TEXT"}
+    cols_info = conn.execute("PRAGMA table_info(anti_pattern_sessions)").fetchall()
+    actual_by_name = {row[1]: row for row in cols_info}
+
+    for col in EXPECTED_COLS:
+        if col not in actual_by_name:
+            row_count = conn.execute(
+                "SELECT COUNT(*) FROM anti_pattern_sessions"
+            ).fetchone()[0]
+            backup_sql = (
+                "CREATE TABLE anti_pattern_sessions_bak AS SELECT * FROM anti_pattern_sessions; "
+                if row_count > 0 else "(table is empty -- safe to drop without backup)"
+            )
+            raise RuntimeError(
+                f"anti_pattern_sessions schema mismatch: missing column '{col}'. "
+                f"Found columns: {list(actual_by_name.keys())}. "
+                f"Row count: {row_count}. "
+                f"Backup if needed: {backup_sql} "
+                f"Then: DROP TABLE anti_pattern_sessions; and restart."
+            )
+
+    pk_cols = [row[1] for row in cols_info if row[5] > 0]
+    if pk_cols != ['session_id']:
+        row_count = conn.execute(
+            "SELECT COUNT(*) FROM anti_pattern_sessions"
+        ).fetchone()[0]
+        if row_count == 0:
+            conn.execute("DROP TABLE anti_pattern_sessions")
+            conn.executescript("""
+                CREATE TABLE anti_pattern_sessions (
+                    session_id TEXT NOT NULL,
+                    tagged_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                    source     TEXT NOT NULL DEFAULT 'unknown',
+                    PRIMARY KEY (session_id),
+                    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_anti_pattern_tagged_at
+                    ON anti_pattern_sessions (tagged_at DESC);
+            """)
+            logger.warning("auto-migrated empty anti_pattern_sessions table to v0.8.0 schema")
+            return
+        raise RuntimeError(
+            f"anti_pattern_sessions PRIMARY KEY mismatch. "
+            f"Expected pk=['session_id'], got pk={pk_cols}. "
+            f"Row count: {row_count}. "
+            "Backup: CREATE TABLE anti_pattern_sessions_bak AS SELECT * FROM anti_pattern_sessions; "
+            "DROP TABLE anti_pattern_sessions; then restart to recreate."
+        )
+
+    fk_list = conn.execute("PRAGMA foreign_key_list(anti_pattern_sessions)").fetchall()
+    fk_cascade = [
+        r for r in fk_list
+        if r[2] == 'sessions' and r[3] == 'session_id'
+        and r[4] == 'id' and r[6] == 'CASCADE'
+    ]
+    if not fk_cascade:
+        row_count = conn.execute(
+            "SELECT COUNT(*) FROM anti_pattern_sessions"
+        ).fetchone()[0]
+        if row_count == 0:
+            conn.execute("DROP TABLE anti_pattern_sessions")
+            conn.executescript("""
+                CREATE TABLE anti_pattern_sessions (
+                    session_id TEXT NOT NULL,
+                    tagged_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                    source     TEXT NOT NULL DEFAULT 'unknown',
+                    PRIMARY KEY (session_id),
+                    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_anti_pattern_tagged_at
+                    ON anti_pattern_sessions (tagged_at DESC);
+            """)
+            logger.warning("auto-migrated empty anti_pattern_sessions table to v0.8.0 schema (FK)")
+            return
+        recreate_ddl = (
+            "CREATE TABLE anti_pattern_sessions ("
+            "session_id TEXT NOT NULL, "
+            "tagged_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), "
+            "source TEXT NOT NULL DEFAULT 'unknown', "
+            "PRIMARY KEY (session_id), "
+            "FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE);"
+        )
+        backup_clause = (
+            "Backup: CREATE TABLE anti_pattern_sessions_bak AS SELECT * FROM anti_pattern_sessions; "
+            if row_count > 0 else "(table is empty -- safe to drop without backup) "
+        )
+        raise RuntimeError(
+            "anti_pattern_sessions missing FOREIGN KEY to sessions(id) ON DELETE CASCADE. "
+            f"Row count: {row_count}. "
+            f"{backup_clause}"
+            f"DROP TABLE anti_pattern_sessions; {recreate_ddl} then restart."
+        )
+
+    fk_status = conn.execute("PRAGMA foreign_keys").fetchone()
+    if not fk_status or fk_status[0] != 1:
+        raise RuntimeError(
+            "PRAGMA foreign_keys = ON failed to take effect after _open_conn(). "
+            "Check _open_conn() in database.py -- it must call "
+            "conn.execute('PRAGMA foreign_keys = ON') before returning."
+        )
+
+
 def _is_in_memory_db(db_path) -> bool:
     """True for in-memory SQLite databases.
 
@@ -186,41 +360,11 @@ class SessionDatabase:
     def __init__(self, config: Optional[Config] = None):
         self.config = config or Config()
         self.config.ensure_db_dir()
-        self.conn = sqlite3.connect(self.config.db_path)
-        self.conn.row_factory = sqlite3.Row
-        # Attempt to set WAL mode. Some filesystems (network mounts, FUSE,
-        # or filesystems without POSIX shared-memory support) cannot
-        # establish WAL, and the PRAGMA silently returns the current mode
-        # (typically "delete" or "truncate") instead of "wal". The
-        # cross-process mixing scenario (one client holding WAL, another
-        # holding DELETE/TRUNCATE) causes corruption, but that requires
-        # multiple *processes* touching the file with different modes --
-        # in-process locking prevents it locally. Pre-0.7.4 LoreConvo ran
-        # fine in delete/truncate mode on these filesystems, so we
-        # warn-and-continue rather than abort. In-memory databases can
-        # never be WAL (they report "memory") and have no file to mix on,
-        # so they are exempt -- key the check on the configured path, not
-        # the returned mode, so a file DB that fails WAL is still surfaced
-        # as a warning.
-        row = self.conn.execute("PRAGMA journal_mode=WAL").fetchone()
-        actual_mode = row[0] if row else "unknown"
-        if actual_mode != "wal" and not _is_in_memory_db(self.config.db_path):
-            logger.warning(
-                "Database at '%s' is in '%s' journal mode; WAL is unavailable "
-                "on this filesystem (common with network mounts, FUSE, or "
-                "filesystems without POSIX shared-memory). Falling back to "
-                "'%s' mode. This process's own connection locking prevents "
-                "intra-process conflicts, but if other processes open the "
-                "same file with a different journal mode, corruption is "
-                "possible.",
-                self.config.db_path,
-                actual_mode,
-                actual_mode,
-            )
-        # Wait up to 5s for a competing writer instead of failing instantly
-        # with "database is locked" under transient contention.
-        self.conn.execute("PRAGMA busy_timeout=5000")
-        self.conn.execute("PRAGMA foreign_keys=ON")
+        # _open_conn() sets isolation_level=None, WAL, busy_timeout=5000,
+        # foreign_keys=ON, check_same_thread=False, row_factory=Row.
+        self.conn = _open_conn(self.config.db_path)
+        # In-process write serialization for multi-statement mutations.
+        self._write_lock = threading.Lock()
         self._lance_index = None  # lazy init; LanceIndex instance when Pro
         self._init_schema()
 
@@ -238,7 +382,9 @@ class SessionDatabase:
         self._migrate_add_previous_summary_column()
         self._migrate_add_summary_source_columns()
         self._migrate_add_cross_product_columns()
-        self.conn.commit()
+        self.conn.executescript(ANTI_PATTERN_SCHEMA_SQL)
+        _validate_anti_pattern_schema(self.conn)
+        self._sweep_anti_pattern_orphans()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
         null_rows = self.conn.execute(
@@ -492,6 +638,189 @@ class SessionDatabase:
                 self.conn.execute(col_sql)
             except sqlite3.OperationalError:
                 pass  # column already exists
+
+    # -- Anti-pattern storage (v0.8.0) --
+
+    @contextmanager
+    def _write_context(self):
+        """Structural write-lock context manager. ALL mutations MUST use this.
+
+        Acquires self._write_lock and yields self.conn. Does not manage
+        transactions -- callers issue BEGIN IMMEDIATE / COMMIT / ROLLBACK
+        explicitly (required for cross-process serialization via SQLite WAL).
+        Read-only SELECT calls do NOT use this context manager.
+        """
+        with self._write_lock:
+            yield self.conn
+
+    def _sweep_anti_pattern_orphans(self):
+        """Startup fallback: remove orphaned anti_pattern_sessions rows.
+
+        Called after _ensure_schema. Safe to run repeatedly; no-op when all
+        rows have matching sessions entries. Logs a warning with the count if
+        any orphans are removed (indicates prior FK enforcement gap).
+        """
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            self.conn.execute("""
+                DELETE FROM anti_pattern_sessions
+                WHERE session_id NOT IN (SELECT id FROM sessions)
+            """)
+            orphan_count = self.conn.execute("SELECT changes()").fetchone()[0]
+            self.conn.execute("COMMIT")
+        except Exception:
+            self.conn.execute("ROLLBACK")
+            raise
+
+        if orphan_count > 0:
+            logger.warning(
+                "Startup sweep removed %d orphaned anti_pattern_sessions rows. "
+                "PRAGMA foreign_keys may not have been enforced on all prior connections. "
+                "Verify _open_conn() is used for every connection in database.py.",
+                orphan_count,
+            )
+
+    def _check_rate_limit_db(self, conn) -> bool:
+        """DB-backed rate limit check. Called inside an open BEGIN IMMEDIATE transaction.
+
+        Returns True if the call is within the rate limit, False if exceeded.
+        Caller must already hold _write_lock (via _write_context).
+        """
+        import time as _time
+        now = _time.time()
+        now_iso = _time.strftime('%Y-%m-%dT%H:%M:%SZ', _time.gmtime(now))
+
+        row = conn.execute(
+            "SELECT window_start, call_count FROM anti_pattern_rate_state WHERE operation = 'tag'"
+        ).fetchone()
+
+        if row is None:
+            conn.execute(
+                "INSERT INTO anti_pattern_rate_state (operation, window_start, call_count) "
+                "VALUES ('tag', ?, 1)",
+                (now_iso,)
+            )
+            return True
+
+        try:
+            window_start_ts = calendar.timegm(
+                _time.strptime(row[0], '%Y-%m-%dT%H:%M:%SZ')
+            )
+        except ValueError:
+            logger.warning(
+                "anti_pattern_rate_state: malformed window_start %r, resetting rate window",
+                row[0],
+            )
+            window_start_ts = now - _TAG_RATE_WINDOW - 1
+
+        if now - window_start_ts > _TAG_RATE_WINDOW:
+            conn.execute(
+                "UPDATE anti_pattern_rate_state SET window_start = ?, call_count = 1 "
+                "WHERE operation = 'tag'",
+                (now_iso,)
+            )
+            return True
+
+        if row[1] >= _TAG_RATE_MAX:
+            return False
+
+        conn.execute(
+            "UPDATE anti_pattern_rate_state SET call_count = call_count + 1 "
+            "WHERE operation = 'tag'"
+        )
+        return True
+
+    def mark_anti_pattern(self, session_id: str,
+                           source: str = "unknown",
+                           reason: str = "") -> str:
+        """Mark a session as an anti-pattern. Idempotent.
+
+        Returns 'added' or 'already_present'. Writes an audit log row on every call.
+
+        Raises:
+            ValueError: on invalid session_id format.
+            LookupError: if session does not exist.
+            RuntimeError: if rate limit exceeded (use str(exc) for the error message).
+        """
+        if not isinstance(session_id, str) or not session_id.strip() or len(session_id) > 255:
+            raise ValueError("Invalid session_id: must be a non-empty string <= 255 chars")
+
+        source = (source or "unknown").strip()[:128]
+        reason = (reason or "").strip()[:500]
+
+        with self._write_context() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                if not self._check_rate_limit_db(conn):
+                    conn.execute("ROLLBACK")
+                    raise RuntimeError("rate_limit_exceeded: tag_as_anti_pattern")
+
+                row = conn.execute(
+                    "SELECT id FROM sessions WHERE id = ?", (session_id,)
+                ).fetchone()
+                if row is None:
+                    conn.execute("ROLLBACK")
+                    raise LookupError(f"Session not found: {session_id}")
+
+                conn.execute(
+                    "INSERT OR IGNORE INTO anti_pattern_sessions (session_id, source) VALUES (?, ?)",
+                    (session_id, source)
+                )
+                # Capture changes() immediately after INSERT OR IGNORE, before audit INSERT
+                changes = conn.execute("SELECT changes()").fetchone()[0]
+
+                conn.execute(
+                    "INSERT INTO anti_pattern_audit_log (session_id, action, source, reason) "
+                    "VALUES (?, 'tag', ?, ?)",
+                    (session_id, source, reason or None)
+                )
+                conn.execute("COMMIT")
+            except (LookupError, RuntimeError):
+                raise
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+        return "added" if changes else "already_present"
+
+    def remove_anti_pattern(self, session_id: str,
+                             source: str = "unknown",
+                             reason: str = "") -> str:
+        """Remove an anti-pattern tag from a session. Idempotent.
+
+        Returns 'removed' or 'not_present'. Writes an audit log row only on
+        successful removal (no-op path skips audit).
+
+        Raises:
+            ValueError: on invalid session_id format.
+        """
+        if not isinstance(session_id, str) or not session_id.strip() or len(session_id) > 255:
+            raise ValueError("Invalid session_id: must be a non-empty string <= 255 chars")
+
+        source = (source or "unknown").strip()[:128]
+        reason = (reason or "").strip()[:500]
+
+        with self._write_context() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(
+                    "DELETE FROM anti_pattern_sessions WHERE session_id = ?",
+                    (session_id,)
+                )
+                changes = conn.execute("SELECT changes()").fetchone()[0]
+
+                if changes > 0:
+                    conn.execute(
+                        "INSERT INTO anti_pattern_audit_log (session_id, action, source, reason) "
+                        "VALUES (?, 'untag', ?, ?)",
+                        (session_id, source, reason or None)
+                    )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+        return "removed" if changes else "not_present"
 
     def _migrate_index_existing_cooccurrences(self):
         """Populate session_cooccurrences for existing sessions on first run.
