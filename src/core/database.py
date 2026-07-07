@@ -600,10 +600,12 @@ class SessionDatabase:
             except sqlite3.OperationalError:
                 pass  # column already exists
 
-        # Backfill: existing rows with a summary are heuristic; without are NULL-summary.
-        # All pre-v0.7.0 summaries were heuristic (no LLM path existed before).
+        # Backfill: existing rows with a summary are pre_migration_unknown.
+        # Pre-v0.7.0 summaries may be LLM-quality (from v0.5.1 save_session(summarize=True))
+        # or heuristic; we cannot distinguish reliably. Use 'pre_migration_unknown'
+        # and do not re-summarize unless user explicitly upgrades via save_session(summarize=True).
         self.conn.execute(
-            "UPDATE sessions SET summary_source='heuristic' "
+            "UPDATE sessions SET summary_source='pre_migration_unknown' "
             "WHERE summary_source IS NULL AND summary IS NOT NULL"
         )
 
