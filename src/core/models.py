@@ -28,6 +28,7 @@ class Session:
     external_tool_session: bool = False   # True = session from an external tool (e.g. Anthropic managed agent); excluded from auto-load and search by default
     reasoning_notes: Optional[str] = None
     previous_summary: Optional[str] = None
+    keep_forever: bool = False  # True = excluded from auto-cleanup and expiry
 
 
 @dataclass
