@@ -22,6 +22,126 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+# DDL constants for keep_forever schema components.
+# Used for both creation (slow path) and body validation (fast path).
+_CREATE_TRIGGER_SQL = (
+    "CREATE TRIGGER prevent_delete_pinned_sessions "
+    "BEFORE DELETE ON sessions "
+    "WHEN old.keep_forever = 1 "
+    "BEGIN "
+    "SELECT RAISE(ABORT, "
+    "'LORECONVO_PINNED_SESSION: Cannot delete a pinned session. "
+    "Unpin with set_keep_forever(id, False) before deleting.'); "
+    "END"
+)
+_CREATE_SESSIONS_PRUNABLE_VIEW_SQL = (
+    "CREATE VIEW sessions_prunable AS "
+    "SELECT * FROM sessions WHERE keep_forever = 0"
+)
+_CREATE_SESSIONS_PRUNABLE_DELETE_SQL = (
+    "CREATE TRIGGER sessions_prunable_delete "
+    "INSTEAD OF DELETE ON sessions_prunable "
+    "BEGIN "
+    "DELETE FROM sessions WHERE id = OLD.id AND keep_forever = 0; "
+    "END"
+)
+
+
+def _create_keep_forever_index(conn: sqlite3.Connection) -> None:
+    """Create partial index on keep_forever if SQLite >= 3.9.0, full index otherwise."""
+    version = tuple(
+        int(x) for x in
+        conn.execute("SELECT sqlite_version()").fetchone()[0].split(".")
+    )
+    if version >= (3, 9, 0):
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sessions_keep_forever "
+            "ON sessions(keep_forever) WHERE keep_forever = 1"
+        )
+    else:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sessions_keep_forever "
+            "ON sessions(keep_forever)"
+        )
+
+
+def _pinning_enabled(db) -> bool:
+    """Return False if session pinning is disabled via env var or config file.
+
+    Tier 1: LORECONVO_DISABLE_PINNING env var (any non-empty value disables).
+    Tier 2: ~/.loreconvo/config.json with {"pinning_enabled": false}.
+    """
+    if os.environ.get("LORECONVO_DISABLE_PINNING"):
+        return False
+    config_path = Path(db.config.db_path).parent / "config.json"
+    if config_path.exists():
+        try:
+            import json as _json
+            cfg = _json.loads(config_path.read_text(encoding="utf-8"))
+            if cfg.get("pinning_enabled") is False:
+                return False
+        except Exception:
+            pass  # malformed config -> pinning remains enabled (safe default)
+    return True
+
+
+def parse_session_id(raw: str) -> tuple:
+    """Return (session_id, None) on success or (None, error_dict) on failure.
+
+    Validates UUID format and canonicalizes to lowercase.
+    SQL injection is prevented by parameterized queries in all callers.
+    """
+    import uuid as _uuid
+    if not isinstance(raw, str) or not raw.strip():
+        return None, {
+            "ok": False,
+            "code": "invalid_session_id",
+            "message": "session_id must be a non-empty string.",
+        }
+    raw = raw.strip().lower()
+    try:
+        _uuid.UUID(raw)
+    except ValueError:
+        return None, {
+            "ok": False,
+            "code": "invalid_session_id",
+            "message": "session_id must be a valid UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
+        }
+    return raw, None
+
+
+def _check_shared_environment_warning() -> None:
+    """Warn if running over SSH on a shared account (unsupported trust model)."""
+    if os.environ.get("LORECONVO_SKIP_SSH_WARN"):
+        return
+    ssh_indicators = ("SSH_CLIENT", "SSH_TTY", "SSH_CONNECTION")
+    if any(os.environ.get(k) for k in ssh_indicators):
+        logger.warning(
+            "LoreConvo is running over an SSH connection. If this host has "
+            "multiple OS users sharing an account, the trust model (OS user = "
+            "sole authorized user) does not hold. Shared-account SSH environments "
+            "are not a supported configuration. Set LORECONVO_SKIP_SSH_WARN=1 "
+            "to suppress this warning."
+        )
+
+
+def _check_network_filesystem_warning(db_path: str) -> None:
+    """Warn if sessions.db appears to be on a network filesystem."""
+    if os.environ.get("LORECONVO_SKIP_NETWORK_FS_WARN"):
+        return
+    path = str(db_path)
+    network_prefixes = ("/Volumes/", "/net/", "/mnt/smb", "/mnt/nfs",
+                        "/media/nfs", "//")
+    if any(path.startswith(p) for p in network_prefixes):
+        logger.warning(
+            "sessions.db path '%s' appears to be on a network filesystem. "
+            "chmod 600 does not prevent access by root-level backup agents "
+            "or NFS/SMB servers. Move sessions.db to local storage if this "
+            "is a concern. Set LORECONVO_SKIP_NETWORK_FS_WARN=1 to suppress.",
+            path
+        )
+
+
 _IMPORT_FIELD_CAPS = {
     "title": 500,
     "summary": 100_000,
@@ -227,7 +347,7 @@ def _open_conn(db_path) -> sqlite3.Connection:
             actual_mode,
             actual_mode,
         )
-    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA busy_timeout=10000")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
@@ -360,12 +480,14 @@ class SessionDatabase:
     def __init__(self, config: Optional[Config] = None):
         self.config = config or Config()
         self.config.ensure_db_dir()
-        # _open_conn() sets isolation_level=None, WAL, busy_timeout=5000,
+        # _open_conn() sets isolation_level=None, WAL, busy_timeout=10000,
         # foreign_keys=ON, check_same_thread=False, row_factory=Row.
         self.conn = _open_conn(self.config.db_path)
         # In-process write serialization for multi-statement mutations.
         self._write_lock = threading.Lock()
         self._lance_index = None  # lazy init; LanceIndex instance when Pro
+        _check_shared_environment_warning()
+        _check_network_filesystem_warning(str(self.config.db_path))
         self._init_schema()
 
     def _init_schema(self):
@@ -385,6 +507,7 @@ class SessionDatabase:
         self.conn.executescript(ANTI_PATTERN_SCHEMA_SQL)
         _validate_anti_pattern_schema(self.conn)
         self._sweep_anti_pattern_orphans()
+        self._ensure_keep_forever_schema()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
         null_rows = self.conn.execute(
@@ -640,6 +763,225 @@ class SessionDatabase:
                 self.conn.execute(col_sql)
             except sqlite3.OperationalError:
                 pass  # column already exists
+
+    # -- keep_forever / session pinning (v0.8.1) --
+
+    def _keep_forever_schema_present(self) -> bool:
+        """Quick read-only check: True only if all keep_forever schema components
+        are present AND their bodies are valid.
+
+        Called before acquiring the EXCLUSIVE lock to avoid blocking short-lived
+        CLI invocations on every startup. Returns False on any error or body
+        mismatch (triggers slow path).
+        """
+        try:
+            rows = self.conn.execute("PRAGMA table_info(sessions)").fetchall()
+            if not any(row[1] == "keep_forever" for row in rows):
+                return False
+            view_row = self.conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='view' "
+                "AND name='sessions_prunable'"
+            ).fetchone()
+            if not view_row:
+                return False
+            view_sql = view_row[0] or ""
+            if "keep_forever" not in view_sql or "= 0" not in view_sql:
+                return False
+            bt_row = self.conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='trigger' "
+                "AND name='prevent_delete_pinned_sessions'"
+            ).fetchone()
+            if not bt_row:
+                return False
+            bt_sql = bt_row[0] or ""
+            if "RAISE(ABORT" not in bt_sql or "LORECONVO_PINNED_SESSION" not in bt_sql:
+                return False
+            iodt_row = self.conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='trigger' "
+                "AND name='sessions_prunable_delete'"
+            ).fetchone()
+            if not iodt_row:
+                return False
+            iodt_sql = iodt_row[0] or ""
+            if "keep_forever = 0" not in iodt_sql:
+                return False
+            return True
+        except Exception:
+            return False
+
+    def _ensure_keep_forever_schema(self) -> None:
+        """Ensure keep_forever column, view, index, and triggers exist. Idempotent.
+
+        Fast path: if _keep_forever_schema_present() returns True, returns
+        immediately without acquiring any lock.
+
+        Slow path: acquires BEGIN EXCLUSIVE for DDL serialization. EXCLUSIVE
+        failure raises RuntimeError immediately.
+        """
+        if self._keep_forever_schema_present():
+            return
+        saved_isolation = self.conn.isolation_level
+        self.conn.isolation_level = None
+        try:
+            try:
+                self.conn.execute("BEGIN EXCLUSIVE")
+            except Exception as exc:
+                raise RuntimeError(
+                    "LoreConvo: keep_forever migration failed to acquire exclusive lock. "
+                    "Another process may be holding the DB connection. "
+                    "Recovery: ensure no other LoreConvo processes are running, then restart. "
+                    "Path: " + str(self.config.db_path)
+                ) from exc
+            try:
+                self._run_keep_forever_migration()
+                self.conn.execute("COMMIT")
+            except Exception:
+                try:
+                    self.conn.execute("ROLLBACK")
+                except Exception:
+                    pass
+                raise
+        finally:
+            self.conn.isolation_level = saved_isolation
+
+    def _run_keep_forever_migration(self) -> None:
+        """Execute migration steps inside an already-open EXCLUSIVE transaction."""
+        rows = list(self.conn.execute("PRAGMA table_info(sessions)"))
+        if not rows:
+            raise RuntimeError(
+                "LoreConvo: sessions table not found. The database may be corrupted "
+                "or not a LoreConvo database. "
+                "Recovery: restore sessions.db from your most recent backup. "
+                "Path: " + str(self.config.db_path)
+            )
+        try:
+            self.conn.execute("SELECT COUNT(*) FROM sessions LIMIT 1").fetchone()
+        except sqlite3.DatabaseError as exc:
+            raise RuntimeError(
+                "LoreConvo: sessions table is inaccessible despite table_info returning "
+                "rows. The database may be partially corrupted. "
+                "Recovery: restore sessions.db from your most recent backup. "
+                "Path: " + str(self.config.db_path)
+            ) from exc
+
+        col_map = {row[1]: row for row in rows}
+        if "keep_forever" not in col_map:
+            self.conn.execute(
+                "ALTER TABLE sessions ADD COLUMN keep_forever INTEGER NOT NULL DEFAULT 0"
+            )
+        else:
+            row = col_map["keep_forever"]
+            if row[2].upper() != "INTEGER":
+                raise RuntimeError(
+                    "LoreConvo: keep_forever column has type {!r} (expected INTEGER). "
+                    "Schema modified by incompatible tool. "
+                    "Recovery: (1) back up sessions.db, "
+                    "(2) ALTER TABLE sessions RENAME COLUMN keep_forever TO keep_forever_old, "
+                    "(3) ALTER TABLE sessions ADD COLUMN keep_forever INTEGER NOT NULL DEFAULT 0, "
+                    "(4) UPDATE sessions SET keep_forever = "
+                    "CASE WHEN typeof(keep_forever_old)='integer' "
+                    "AND keep_forever_old IN (0,1) THEN keep_forever_old ELSE 0 END.".format(row[2])
+                )
+            if row[3] != 1 or str(row[4]).strip("'") != "0":
+                logger.warning(
+                    "keep_forever column has non-standard nullability=%s or default=%s; "
+                    "expected NOT NULL DEFAULT 0. Values coerced to 0/1 by application code.",
+                    row[3], row[4]
+                )
+
+        existing_indexes = {
+            r[0] for r in self.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='index'"
+            )
+        }
+        if "idx_sessions_keep_forever" not in existing_indexes:
+            _create_keep_forever_index(self.conn)
+
+        trigger_row = self.conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='trigger' "
+            "AND name='prevent_delete_pinned_sessions'"
+        ).fetchone()
+        if trigger_row is None:
+            self.conn.execute(_CREATE_TRIGGER_SQL)
+        else:
+            sql_body = trigger_row[0] or ""
+            if "RAISE(ABORT" not in sql_body or "LORECONVO_PINNED_SESSION" not in sql_body:
+                logger.warning(
+                    "Trigger prevent_delete_pinned_sessions has unexpected body; recreating."
+                )
+                self.conn.execute("DROP TRIGGER prevent_delete_pinned_sessions")
+                self.conn.execute(_CREATE_TRIGGER_SQL)
+
+        view_row = self.conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='view' AND name='sessions_prunable'"
+        ).fetchone()
+        if view_row is None:
+            self.conn.execute(_CREATE_SESSIONS_PRUNABLE_VIEW_SQL)
+        else:
+            view_sql = view_row[0] or ""
+            if "keep_forever" not in view_sql or "= 0" not in view_sql:
+                logger.warning(
+                    "sessions_prunable view has unexpected body; recreating."
+                )
+                self.conn.execute("DROP TRIGGER IF EXISTS sessions_prunable_delete")
+                self.conn.execute("DROP VIEW sessions_prunable")
+                self.conn.execute(_CREATE_SESSIONS_PRUNABLE_VIEW_SQL)
+
+        del_trigger_row = self.conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='trigger' "
+            "AND name='sessions_prunable_delete'"
+        ).fetchone()
+        if del_trigger_row is None:
+            self.conn.execute(_CREATE_SESSIONS_PRUNABLE_DELETE_SQL)
+        else:
+            del_sql = del_trigger_row[0] or ""
+            if "keep_forever = 0" not in del_sql:
+                logger.warning(
+                    "sessions_prunable_delete trigger has unexpected body; recreating."
+                )
+                self.conn.execute("DROP TRIGGER sessions_prunable_delete")
+                self.conn.execute(_CREATE_SESSIONS_PRUNABLE_DELETE_SQL)
+
+        row = self.conn.execute(
+            "SELECT COUNT(*) FROM sessions WHERE keep_forever=1"
+        ).fetchone()
+        pinned_count = row[0] if row else 0
+        logger.info("keep_forever schema ready; %d session(s) pinned.", pinned_count)
+
+    def set_keep_forever(self, session_id: str, keep_forever: bool) -> bool:
+        """Set or clear keep_forever on a session. Returns False if not found.
+
+        When pinning: clears expires_at atomically in the same UPDATE.
+        When unpinning: leaves expires_at unchanged.
+        """
+        with self.conn:
+            if keep_forever:
+                cursor = self.conn.execute(
+                    "UPDATE sessions SET keep_forever=1, expires_at=NULL, "
+                    "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id=?",
+                    (session_id,),
+                )
+            else:
+                cursor = self.conn.execute(
+                    "UPDATE sessions SET keep_forever=0, "
+                    "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id=?",
+                    (session_id,),
+                )
+        return cursor.rowcount > 0
+
+    def prune_expired_sessions(self, cutoff_ts: str) -> int:
+        """Delete sessions with expires_at < cutoff_ts, excluding pinned. Returns count deleted."""
+        with self.conn:
+            cursor = self.conn.execute(
+                "DELETE FROM sessions_prunable WHERE expires_at < ?", (cutoff_ts,)
+            )
+        if cursor.rowcount == 0:
+            logger.debug(
+                "prune_expired_sessions: 0 rows deleted before %s "
+                "(no expired unpinned sessions, or all matching sessions are pinned).",
+                cutoff_ts
+            )
+        return cursor.rowcount
 
     # -- Anti-pattern storage (v0.8.0) --
 
@@ -2039,6 +2381,7 @@ class SessionDatabase:
             external_tool_session=bool(row["external_tool_session"]) if "external_tool_session" in row_keys else False,
             reasoning_notes=row["reasoning_notes"] if "reasoning_notes" in row_keys else None,
             previous_summary=row["previous_summary"] if "previous_summary" in row_keys else None,
+            keep_forever=bool(row["keep_forever"]) if "keep_forever" in row_keys else False,
         )
 
     def get_sessions_for_shared_export(
@@ -2213,18 +2556,26 @@ class SessionDatabase:
         }
 
     def delete_session(self, session_id: str) -> bool:
-        """Delete a session by ID. Returns True if deleted, False if not found."""
-        if not self.conn.execute(
-            "SELECT id FROM sessions WHERE id = ?", (session_id,)
-        ).fetchone():
+        """Delete a session by ID. Returns True if deleted, False if not found or pinned.
+
+        Pinned sessions (keep_forever=1) cannot be deleted; unpin first.
+        All deletes are routed through sessions_prunable to honour the
+        keep_forever enforcement layer.
+        """
+        row = self.conn.execute(
+            "SELECT keep_forever FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if not row:
             return False
+        if row["keep_forever"]:
+            return False  # caller should surface "unpin first" guidance
         self.conn.execute("DELETE FROM session_skills WHERE session_id = ?", (session_id,))
         self.conn.execute("DELETE FROM persona_sessions WHERE session_id = ?", (session_id,))
         self.conn.execute(
             "DELETE FROM session_links WHERE from_session_id = ? OR to_session_id = ?",
             (session_id, session_id)
         )
-        self.conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+        self.conn.execute("DELETE FROM sessions_prunable WHERE id = ?", (session_id,))
         self.conn.commit()
         return True
 
@@ -2394,19 +2745,26 @@ class SessionDatabase:
         )
         self.conn.commit()
 
-    def set_session_expiry(self, session_id: str, expires_at: Optional[str]) -> bool:
-        """Set or clear the expires_at field on a session. Returns False if not found."""
+    def set_session_expiry(self, session_id: str, expires_at: Optional[str]) -> dict:
+        """Set or clear the expires_at field on a session.
+
+        Returns dict with 'ok', 'code', and optionally 'message'.
+        Refuses to set expiry on a pinned (keep_forever=1) session.
+        """
         row = self.conn.execute(
-            "SELECT id FROM sessions WHERE id=?", (session_id,)
+            "SELECT keep_forever FROM sessions WHERE id=?", (session_id,)
         ).fetchone()
         if not row:
-            return False
+            return {"ok": False, "code": "session_not_found", "message": "Session not found."}
+        if row["keep_forever"]:
+            return {"ok": False, "code": "session_pinned",
+                    "message": "Session is pinned. Unpin before setting expiry."}
         self.conn.execute(
             "UPDATE sessions SET expires_at=? WHERE id=?",
             (expires_at, session_id)
         )
         self.conn.commit()
-        return True
+        return {"ok": True}
 
     def set_session_staleness(self, session_id: str, hint: Optional[str]) -> None:
         """Set or clear the staleness_hint field on a session."""
