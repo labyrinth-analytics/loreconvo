@@ -12,7 +12,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 from core.models import Session
-from core.database import SessionDatabase, SessionLimitReachedError, _MAX_IMPORT_BYTES, _MAX_SESSIONS_PER_FILE, _IMPORT_FIELD_CAPS
+from core.database import (
+    SessionDatabase, SessionLimitReachedError, _MAX_IMPORT_BYTES,
+    _MAX_SESSIONS_PER_FILE, _IMPORT_FIELD_CAPS,
+    _pinning_enabled, parse_session_id,
+)
 from core.config import Config, set_tier as _set_tier_config
 from core.license import get_license_status
 from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onboard_config_path
@@ -1002,6 +1006,7 @@ def inspect_sessions(
             "artifacts": session.artifacts,
             "open_questions": session.open_questions,
             "skills_used": session.skills_used,
+            "keep_forever": 1 if session.keep_forever else 0,
         }
 
     sessions = db.inspect_sessions(
@@ -1483,6 +1488,67 @@ def untag_anti_pattern(session_id: str,
         return {"status": result, "session_id": session_id}
     except ValueError as exc:
         return {"status": "error", "error": str(exc)}
+
+
+@mcp.tool(title="Pin Session")
+def pin_session(session_id: str, keep_forever: object = True) -> dict:
+    """Pin or unpin a session to exclude it from automated cleanup.
+
+    keep_forever=True (default): session excluded from future cleanup;
+      any existing expires_at is cleared atomically.
+    keep_forever=False: pin removed; session can receive expiry again.
+
+    Returns:
+        {"ok": True, "session_id": "...", "keep_forever": bool}
+        {"ok": False, "code": "invalid_session_id", "message": "..."}
+        {"ok": False, "code": "invalid_param", "message": "..."}
+        {"ok": False, "code": "session_not_found", "message": "..."}
+        {"ok": False, "code": "db_error", "message": "..."}
+        {"ok": False, "code": "feature_disabled", "message": "..."}
+    """
+    import logging
+    # Explicit bool coercion: accept True/False/1/0/"true"/"false"/"1"/"0"
+    if isinstance(keep_forever, str):
+        kf_lower = keep_forever.lower()
+        if kf_lower in ("true", "1"):
+            keep_forever = True
+        elif kf_lower in ("false", "0"):
+            keep_forever = False
+        else:
+            return {"ok": False, "code": "invalid_param",
+                    "message": "keep_forever must be true or false; got an unrecognized string."}
+    elif isinstance(keep_forever, int) and not isinstance(keep_forever, bool):
+        # Reject non-0/1 integers [r6 HIGH #6]
+        if keep_forever not in (0, 1):
+            return {"ok": False, "code": "invalid_param",
+                    "message": "keep_forever as an integer must be 0 or 1."}
+        keep_forever = bool(keep_forever)
+    elif not isinstance(keep_forever, bool):
+        return {"ok": False, "code": "invalid_param",
+                "message": "keep_forever must be a boolean."}
+
+    if not _pinning_enabled(db):
+        return {"ok": False, "code": "feature_disabled",
+                "message": "Session pinning is disabled by configuration."}
+
+    sid, err = parse_session_id(session_id)
+    if err:
+        return err
+    try:
+        found = db.set_keep_forever(sid, keep_forever)
+    except Exception as exc:
+        logging.getLogger("loreconvo").error(
+            "pin_session DB error for session %s: %s", sid, exc, exc_info=True
+        )
+        return {"ok": False, "code": "db_error",
+                "message": "Database error occurred. Check logs for details."}
+    if not found:
+        return {"ok": False, "code": "session_not_found",
+                "message": "No session found with the given id."}
+    logging.getLogger("loreconvo").info(
+        "pin_session: %s set to keep_forever=%s", sid, keep_forever
+    )
+    return {"ok": True, "session_id": sid, "keep_forever": keep_forever}
 
 
 def main():

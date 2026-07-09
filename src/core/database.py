@@ -957,14 +957,12 @@ class SessionDatabase:
         with self.conn:
             if keep_forever:
                 cursor = self.conn.execute(
-                    "UPDATE sessions SET keep_forever=1, expires_at=NULL, "
-                    "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id=?",
+                    "UPDATE sessions SET keep_forever=1, expires_at=NULL WHERE id=?",
                     (session_id,),
                 )
             else:
                 cursor = self.conn.execute(
-                    "UPDATE sessions SET keep_forever=0, "
-                    "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id=?",
+                    "UPDATE sessions SET keep_forever=0 WHERE id=?",
                     (session_id,),
                 )
         return cursor.rowcount > 0
