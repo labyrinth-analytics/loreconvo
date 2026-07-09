@@ -16,7 +16,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import click
 from core.models import Session
-from core.database import SessionDatabase, _MAX_IMPORT_BYTES, _MAX_SESSIONS_PER_FILE
+from core.database import (
+    SessionDatabase, _MAX_IMPORT_BYTES, _MAX_SESSIONS_PER_FILE,
+    _pinning_enabled, parse_session_id,
+)
 from core.config import Config
 
 db = SessionDatabase(Config())
@@ -41,7 +44,10 @@ def cli():
               help="Mark as an external tool session (excluded from auto-load and search by default)")
 @click.option("--reasoning-notes", "reasoning_notes", default=None,
               help="Optional reasoning chain notes")
-def save(title, surface, summary, project, decisions, skills, tags, external_tool_session, reasoning_notes):
+@click.option("--permanent", is_flag=True, default=False,
+              help="Exclude this session from automated cleanup (keep_forever=True).")
+def save(title, surface, summary, project, decisions, skills, tags,
+         external_tool_session, reasoning_notes, permanent):
     """Save a session to memory."""
     session = Session(
         title=title,
@@ -55,11 +61,15 @@ def save(title, surface, summary, project, decisions, skills, tags, external_too
         reasoning_notes=reasoning_notes if reasoning_notes else None,
     )
     session_id = db.save_session(session)
+    if permanent:
+        db.set_keep_forever(session_id, keep_forever=True)
     click.echo(f"Saved session: {session_id}")
     click.echo(f"  Title: {title}")
     click.echo(f"  Surface: {surface}")
     if project:
         click.echo(f"  Project: {project}")
+    if permanent:
+        click.echo("  Pinned: yes (excluded from automated cleanup)")
 
 
 @cli.command(name="list")
@@ -532,6 +542,37 @@ def rebuild_index():
     except Exception as exc:
         click.echo(f"error: rebuild failed: {exc}")
         sys.exit(1)
+
+
+@cli.command()
+@click.argument("session_id")
+@click.option("--unpin", is_flag=True, default=False,
+              help="Remove automated-cleanup exclusion instead of setting it.")
+def pin(session_id, unpin):
+    """Pin a session to exclude it from automated cleanup (or --unpin to remove).
+
+    A pinned session will not be auto-pruned. Any existing expiry date is
+    cleared when pinning.
+
+    Exit codes: 0 = success, 1 = user error, 2 = DB/system error.
+    """
+    if not _pinning_enabled(db):
+        click.echo("Error: session pinning is disabled by configuration.", err=True)
+        raise SystemExit(1)
+    sid, err = parse_session_id(session_id)
+    if err:
+        click.echo("Error: " + err["message"], err=True)
+        raise SystemExit(1)
+    try:
+        found = db.set_keep_forever(sid, keep_forever=not unpin)
+    except Exception:
+        click.echo("Error (db): database error. Check logs for details.", err=True)
+        raise SystemExit(2)
+    if not found:
+        click.echo("Error: session not found: " + sid, err=True)
+        raise SystemExit(1)
+    action = "Unpinned" if unpin else "Pinned"
+    click.echo(action + ": " + sid)
 
 
 if __name__ == "__main__":
