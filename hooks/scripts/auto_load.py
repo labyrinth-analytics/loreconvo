@@ -13,6 +13,7 @@ Scoring logic (higher = shown first):
   +1  session has artifacts
   +2  started within last 24 hours
   +1  started within last 3 days
+  +1  session is pinned (keep_forever=1, user-curation signal)
   -2  no summary, no decisions, no open questions, no artifacts (noise)
 
 Sessions that score <= 0 and are not the only results are filtered out.
@@ -94,6 +95,10 @@ def score_session(session, now):
     if not summary and not decisions and not open_questions and not artifacts:
         score -= 2
 
+    # User-curation signal: pinned sessions are explicitly valued by the user
+    if session.get("keep_forever"):
+        score += 1
+
     return score
 
 
@@ -129,19 +134,20 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
             " AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
             if "expires_at" in col_names else ""
         )
+        # Keep-forever user-curation signal (v0.8.1)
+        kf_col = ", keep_forever" if "keep_forever" in col_names else ""
 
         if cwd:
             cursor = conn.execute(
-                """SELECT id, title, summary, decisions, artifacts,
-                          open_questions, tags, start_date, end_date
-                   FROM sessions
-                   WHERE project LIKE ?
-                     AND start_date >= ?
-                     AND (source IS NULL OR source = 'session')"""
+                "SELECT id, title, summary, decisions, artifacts,"
+                " open_questions, tags, start_date, end_date"
+                + kf_col +
+                " FROM sessions"
+                " WHERE project LIKE ?"
+                " AND start_date >= ?"
+                " AND (source IS NULL OR source = 'session')"
                 + ext_filter + expiry_filter +
-                """
-                   ORDER BY start_date DESC
-                   LIMIT ?""",
+                " ORDER BY start_date DESC LIMIT ?",
                 (f"%{cwd}%", cutoff, limit),
             )
             sessions = [dict(row) for row in cursor.fetchall()]
@@ -149,14 +155,13 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
         # Fall back to most recent across all projects if no project matches
         if not sessions:
             cursor = conn.execute(
-                """SELECT id, title, summary, decisions, artifacts,
-                          open_questions, tags, start_date, end_date
-                   FROM sessions
-                   WHERE (source IS NULL OR source = 'session')"""
+                "SELECT id, title, summary, decisions, artifacts,"
+                " open_questions, tags, start_date, end_date"
+                + kf_col +
+                " FROM sessions"
+                " WHERE (source IS NULL OR source = 'session')"
                 + ext_filter + expiry_filter +
-                """
-                   ORDER BY start_date DESC
-                   LIMIT ?""",
+                " ORDER BY start_date DESC LIMIT ?",
                 (limit,),
             )
             sessions = [dict(row) for row in cursor.fetchall()]
