@@ -326,7 +326,7 @@ def _open_conn(db_path) -> sqlite3.Connection:
     """Open a SQLite connection with all required pragmas for LoreConvo.
 
     Sets isolation_level=None (autocommit), row_factory=Row, WAL mode (with
-    warning on filesystems that do not support WAL), busy_timeout=5000ms,
+    warning on filesystems that do not support WAL), busy_timeout=10000ms,
     and foreign_keys=ON. All connection open paths must use this helper so FK
     enforcement is guaranteed on every connection.
     """
