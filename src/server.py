@@ -1144,9 +1144,13 @@ def set_session_expiry(
         session_id: ID of the session to update
         expires_at: ISO 8601 date string (e.g. '2027-01-01T00:00:00Z'), or None to clear
     """
-    found = db.set_session_expiry(session_id, expires_at)
-    if not found:
-        return {"status": "not_found", "session_id": session_id}
+    result = db.set_session_expiry(session_id, expires_at)
+    if not result.get("ok"):
+        return {
+            "status": result.get("code", "error"),
+            "session_id": session_id,
+            "message": result.get("message"),
+        }
     return {
         "status": "ok",
         "session_id": session_id,
@@ -1340,11 +1344,17 @@ def get_server_info() -> dict:
     return {k: v for k, v in result.items() if k != "error_detail"}
 
 
-_PID_LOCK = Path.home() / ".loreconvo" / "server.pid"
+# Colocated with the DB this process actually serves (config.db_path), not a
+# fixed ~/.loreconvo/ path -- so instances pointed at different databases (e.g.
+# LORECONVO_DB=<tmpdir>/sessions.db in tests) don't contend for the same
+# lockfile. Default install still resolves to ~/.loreconvo/server.pid, since
+# the default db_path is ~/.loreconvo/sessions.db.
+_PID_LOCK = Path(db.config.db_path).parent / "server.pid"
 
 
 def _acquire_pid_lock():
-    """Acquire the server PID lockfile. Raises RuntimeError if another server is running."""
+    """Acquire the server PID lockfile. Raises RuntimeError if another server is
+    already running against the same database (see _PID_LOCK)."""
     if _PID_LOCK.exists():
         try:
             existing_pid = int(_PID_LOCK.read_text().strip())
