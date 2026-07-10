@@ -504,6 +504,7 @@ class SessionDatabase:
         self._migrate_add_previous_summary_column()
         self._migrate_add_summary_source_columns()
         self._migrate_add_cross_product_columns()
+        self._migrate_add_cascade_fks()
         self.conn.executescript(ANTI_PATTERN_SCHEMA_SQL)
         _validate_anti_pattern_schema(self.conn)
         self._sweep_anti_pattern_orphans()
@@ -764,6 +765,132 @@ class SessionDatabase:
             except sqlite3.OperationalError:
                 pass  # column already exists
 
+    def _migrate_add_cascade_fks(self):
+        """Add ON DELETE CASCADE to session_links, session_skills, persona_sessions (SH-12795).
+
+        Without CASCADE, prune_expired_sessions() fails with FK constraint errors
+        when linked/skilled sessions are deleted. This recreates those tables with
+        CASCADE directives. Idempotent: checks if migration already applied by
+        inspecting the table CREATE DDL for ON DELETE CASCADE.
+
+        If orphaned rows exist (FK references to deleted sessions), they are cleaned
+        up before migration to allow the new tables to be created with CASCADE.
+        """
+        try:
+            result = self.conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='session_links'"
+            ).fetchone()
+            if result and result[0] and 'ON DELETE CASCADE' in result[0]:
+                logger.info("Migration already applied: session_links has ON DELETE CASCADE")
+                return
+        except Exception as e:
+            logger.info(f"Error checking session_links migration status: {e}")
+
+        try:
+            logger.info("Starting migration to add ON DELETE CASCADE to foreign keys")
+
+            logger.info("Cleaning up stale migration tables if present")
+            self.conn.execute("DROP TABLE IF EXISTS session_links_new")
+            self.conn.execute("DROP TABLE IF EXISTS session_skills_new")
+            self.conn.execute("DROP TABLE IF EXISTS persona_sessions_new")
+
+            logger.info("Cleaning up orphaned rows in session_links")
+            self.conn.execute('''\
+                DELETE FROM session_links
+                WHERE from_session_id NOT IN (SELECT id FROM sessions)
+                   OR to_session_id NOT IN (SELECT id FROM sessions)
+            ''')
+
+            logger.info("Cleaning up orphaned rows in session_skills")
+            self.conn.execute('''\
+                DELETE FROM session_skills
+                WHERE session_id NOT IN (SELECT id FROM sessions)
+            ''')
+
+            logger.info("Cleaning up orphaned rows in persona_sessions")
+            self.conn.execute('''\
+                DELETE FROM persona_sessions
+                WHERE session_id NOT IN (SELECT id FROM sessions)
+            ''')
+
+            logger.info("Creating new session_links table with CASCADE")
+            self.conn.execute('''\
+                CREATE TABLE session_links_new (
+                    from_session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                    to_session_id   TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                    link_type       TEXT DEFAULT 'continues',
+                    PRIMARY KEY (from_session_id, to_session_id)
+                )
+            ''')
+
+            logger.info("Creating new session_skills table with CASCADE")
+            self.conn.execute('''\
+                CREATE TABLE session_skills_new (
+                    session_id       TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                    skill_name       TEXT NOT NULL,
+                    skill_source     TEXT,
+                    invocation_count INTEGER DEFAULT 1,
+                    PRIMARY KEY (session_id, skill_name)
+                )
+            ''')
+
+            logger.info("Creating new persona_sessions table with CASCADE")
+            self.conn.execute('''\
+                CREATE TABLE persona_sessions_new (
+                    persona_name    TEXT NOT NULL,
+                    session_id      TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                    relevance_note  TEXT,
+                    PRIMARY KEY (persona_name, session_id)
+                )
+            ''')
+
+            logger.info("Copying data to session_links_new")
+            self.conn.execute('''\
+                INSERT INTO session_links_new
+                SELECT from_session_id, to_session_id, link_type
+                FROM session_links
+            ''')
+
+            logger.info("Copying data to session_skills_new")
+            self.conn.execute('''\
+                INSERT INTO session_skills_new
+                SELECT session_id, skill_name, skill_source, invocation_count
+                FROM session_skills
+            ''')
+
+            logger.info("Copying data to persona_sessions_new")
+            self.conn.execute('''\
+                INSERT INTO persona_sessions_new
+                SELECT persona_name, session_id, relevance_note
+                FROM persona_sessions
+            ''')
+
+            logger.info("Dropping old session_links table")
+            self.conn.execute('DROP TABLE session_links')
+
+            logger.info("Dropping old session_skills table")
+            self.conn.execute('DROP TABLE session_skills')
+
+            logger.info("Dropping old persona_sessions table")
+            self.conn.execute('DROP TABLE persona_sessions')
+
+            logger.info("Renaming session_links_new to session_links")
+            self.conn.execute('ALTER TABLE session_links_new RENAME TO session_links')
+
+            logger.info("Renaming session_skills_new to session_skills")
+            self.conn.execute('ALTER TABLE session_skills_new RENAME TO session_skills')
+
+            logger.info("Renaming persona_sessions_new to persona_sessions")
+            self.conn.execute('ALTER TABLE persona_sessions_new RENAME TO persona_sessions')
+
+            self.conn.commit()
+            logger.info("Migration completed successfully: ON DELETE CASCADE applied")
+
+        except Exception as e:
+            self.conn.rollback()
+            logger.error(f"Migration failed with error: {e}")
+            raise
+
     # -- keep_forever / session pinning (v0.8.1) --
 
     def _keep_forever_schema_present(self) -> bool:
@@ -968,18 +1095,25 @@ class SessionDatabase:
         return cursor.rowcount > 0
 
     def prune_expired_sessions(self, cutoff_ts: str) -> int:
-        """Delete sessions with expires_at < cutoff_ts, excluding pinned. Returns count deleted."""
+        """Delete sessions with expires_at < cutoff_ts, excluding pinned. Returns count deleted.
+
+        INSTEAD OF triggers on views do not update cursor.rowcount on the originating
+        DELETE, so we must count rows before deletion to get the accurate count.
+        """
+        before = self.conn.execute(
+            "SELECT COUNT(*) FROM sessions_prunable WHERE expires_at < ?", (cutoff_ts,)
+        ).fetchone()[0]
         with self.conn:
-            cursor = self.conn.execute(
+            self.conn.execute(
                 "DELETE FROM sessions_prunable WHERE expires_at < ?", (cutoff_ts,)
             )
-        if cursor.rowcount == 0:
+        if before == 0:
             logger.debug(
                 "prune_expired_sessions: 0 rows deleted before %s "
                 "(no expired unpinned sessions, or all matching sessions are pinned).",
                 cutoff_ts
             )
-        return cursor.rowcount
+        return before
 
     # -- Anti-pattern storage (v0.8.0) --
 
