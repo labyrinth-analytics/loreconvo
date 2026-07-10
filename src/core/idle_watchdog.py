@@ -17,6 +17,8 @@ import sys
 import threading
 import time
 
+import mcp.types as types
+
 DEFAULT_IDLE_TIMEOUT = 300.0  # 5 minutes (was 1800; desktop app re-spawns on next call)
 
 
@@ -83,13 +85,25 @@ class IdleWatchdog:
         return self
 
 
+def _is_ping(message):
+    """True if an inbound _handle_message payload is a client PingRequest.
+
+    A client that parks the pipe open but keeps sending keepalive pings (e.g.
+    Hermes) would otherwise reset the idle timer forever, defeating the
+    watchdog for exactly the parked-connection case it exists to catch.
+    """
+    request = getattr(message, "request", None)
+    root = getattr(request, "root", None)
+    return isinstance(root, types.PingRequest)
+
+
 def install(mcp, env_var, default_timeout=DEFAULT_IDLE_TIMEOUT,
             clock=time.monotonic, exit_func=None, start=True):
     """Attach an IdleWatchdog to a FastMCP server.
 
     Wraps the low-level server's message handler so every inbound MCP message
-    resets the idle timer, then (by default) starts the watchdog thread.
-    Returns the watchdog so callers/tests can inspect it.
+    except a bare PingRequest resets the idle timer, then (by default) starts
+    the watchdog thread. Returns the watchdog so callers/tests can inspect it.
     """
     timeout = resolve_timeout(env_var, default_timeout)
     watchdog = IdleWatchdog(timeout, clock=clock, exit_func=exit_func)
@@ -98,7 +112,9 @@ def install(mcp, env_var, default_timeout=DEFAULT_IDLE_TIMEOUT,
     original_handle_message = server._handle_message
 
     async def _handle_message(*args, **kwargs):
-        watchdog.touch()
+        message = args[0] if args else None
+        if not _is_ping(message):
+            watchdog.touch()
         return await original_handle_message(*args, **kwargs)
 
     server._handle_message = _handle_message
