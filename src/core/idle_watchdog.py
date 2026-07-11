@@ -67,12 +67,19 @@ class IdleWatchdog:
         while True:
             time.sleep(self._check_interval)
             if self.expired():
-                sys.stderr.write(
-                    "[idle-watchdog] no MCP activity for %.0fs (>= %.0fs); "
-                    "exiting to release resources\n"
-                    % (self.idle_seconds(), self.timeout)
-                )
-                sys.stderr.flush()
+                try:
+                    sys.stderr.write(
+                        "[idle-watchdog] no MCP activity for %.0fs (>= %.0fs); "
+                        "exiting to release resources\n"
+                        % (self.idle_seconds(), self.timeout)
+                    )
+                    sys.stderr.flush()
+                except Exception:
+                    # stderr may be a broken pipe/socket once the client parks
+                    # or drops the connection. Logging must never block the
+                    # exit -- a raise here kills this thread and leaks the
+                    # process forever.
+                    pass
                 self._exit_func()
                 return
 
