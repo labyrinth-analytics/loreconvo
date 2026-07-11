@@ -332,6 +332,7 @@ def _open_conn(db_path) -> sqlite3.Connection:
     """
     conn = sqlite3.connect(str(db_path), isolation_level=None, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout=10000")
     row = conn.execute("PRAGMA journal_mode=WAL").fetchone()
     actual_mode = row[0] if row else "unknown"
     if actual_mode != "wal" and not _is_in_memory_db(db_path):
@@ -347,7 +348,6 @@ def _open_conn(db_path) -> sqlite3.Connection:
             actual_mode,
             actual_mode,
         )
-    conn.execute("PRAGMA busy_timeout=10000")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 

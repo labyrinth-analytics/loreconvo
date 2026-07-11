@@ -1,6 +1,5 @@
 """Session Bridge MCP Server - FastMCP interface for LLM access."""
 
-import atexit
 import json
 import signal
 import sys
@@ -1344,39 +1343,6 @@ def get_server_info() -> dict:
     return {k: v for k, v in result.items() if k != "error_detail"}
 
 
-# Colocated with the DB this process actually serves (config.db_path), not a
-# fixed ~/.loreconvo/ path -- so instances pointed at different databases (e.g.
-# LORECONVO_DB=<tmpdir>/sessions.db in tests) don't contend for the same
-# lockfile. Default install still resolves to ~/.loreconvo/server.pid, since
-# the default db_path is ~/.loreconvo/sessions.db.
-_PID_LOCK = Path(db.config.db_path).parent / "server.pid"
-
-
-def _acquire_pid_lock():
-    """Acquire the server PID lockfile. Raises RuntimeError if another server is
-    already running against the same database (see _PID_LOCK)."""
-    if _PID_LOCK.exists():
-        try:
-            existing_pid = int(_PID_LOCK.read_text().strip())
-            os.kill(existing_pid, 0)
-            raise RuntimeError(
-                f"Another LoreConvo server (PID {existing_pid}) is already running "
-                f"against this database. Multiple instances sharing sessions.db are "
-                f"unsupported. Stop the other instance first."
-            )
-        except (ValueError, OSError):
-            pass  # file unreadable or process dead -- take over the lockfile
-    _PID_LOCK.write_text(str(os.getpid()))
-
-
-def _release_pid_lock():
-    """Release the server PID lockfile. Safe to call even if the file is absent."""
-    try:
-        _PID_LOCK.unlink()
-    except OSError:
-        pass
-
-
 # -- Anti-pattern storage tools (v0.8.0) --
 
 @mcp.tool(title="Get Anti-Patterns")
@@ -1580,8 +1546,6 @@ def main():
             sys.exit(1)
 
     _compat_emit(_compat_check())
-    _acquire_pid_lock()
-    atexit.register(_release_pid_lock)
     from core import idle_watchdog
     # Reap this process if the client parks it idle (releases any held DB lock).
     idle_watchdog.install(mcp, env_var="LORECONVO_IDLE_TIMEOUT")
