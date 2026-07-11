@@ -4,6 +4,75 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.8.1 (2026-07-08)
+
+### New: User-Controlled Session Durability (keep_forever)
+
+Adds explicit session pinning so users can exclude sessions from automated
+cleanup, closing the parity gap with Recall's "Durable Memory" tier.
+
+**New MCP tool:** `pin_session(session_id, keep_forever=True)`
+  - Pin a session to exclude it from automated cleanup.
+  - Accepts bool, int (0/1), or string ("true"/"false"/"1"/"0") for keep_forever.
+  - Returns `{"ok": True, "session_id": "...", "keep_forever": bool}`.
+  - Returns `{"ok": False, "code": "feature_disabled", ...}` when pinning is
+    disabled via LORECONVO_DISABLE_PINNING or config.json.
+
+**New CLI command:** `loreconvo pin <session_id> [--unpin]`
+  - Pin a session: `loreconvo pin <uuid>`
+  - Unpin a session: `loreconvo pin <uuid> --unpin`
+
+**New CLI flag:** `loreconvo save --permanent`
+  - Save and immediately pin the session in one step.
+
+**Schema change:** `keep_forever INTEGER NOT NULL DEFAULT 0` column added to
+  the `sessions` table. Migration runs automatically on first startup.
+  All existing sessions read as `keep_forever=False` (DEFAULT 0).
+
+**Enforcement:** A `sessions_prunable` view (rows where `keep_forever=0`) with
+  an INSTEAD OF DELETE trigger is the primary enforcement layer. A BEFORE
+  DELETE trigger on `sessions` is a secondary defense-in-depth for raw-SQL tooling.
+
+**auto_load hook:** Pinned sessions receive a +1 scoring bonus (user-curation
+  signal), same weight as artifact presence.
+
+---
+
+## v0.8.0 (2026-06-26)
+
+### New: Anti-Pattern Storage
+
+Tag past sessions as anti-patterns so you and your agents can surface known
+failure modes before repeating them.
+
+**Three new MCP tools:**
+
+- `get_anti_patterns([topic], [limit], [project])` -- Retrieve sessions tagged
+  as anti-patterns. Call this at session start or before a tricky task to see
+  what has failed before. Filter by keyword (`topic`) or project slug.
+
+- `tag_as_anti_pattern(session_id, source, reason)` -- Mark a session as an
+  anti-pattern. Idempotent. Rate-limited to 20 calls per window.
+
+- `untag_anti_pattern(session_id, source, reason)` -- Remove an anti-pattern
+  tag. Idempotent. Both tag and untag record audit entries.
+
+**Database changes:** Three new tables added automatically on first startup
+after upgrade -- no manual migration needed.
+
+**Duplicate server prevention:** A PID lockfile (`~/.loreconvo/server.pid`)
+prevents two server instances from sharing the same database simultaneously.
+
+**Startup validation:** `--dry-run-validate` flag checks schema and exits
+without starting the server (exit 0 = OK, exit 1 = mismatch).
+
+**Rollback:** `rollback_anti_pattern_v080.py` removes the anti-pattern tables.
+Back up `sessions.db` before running.
+
+32 MCP tools, 8 CLI commands.
+
+---
+
 ## v0.7.5
 
 ### Security

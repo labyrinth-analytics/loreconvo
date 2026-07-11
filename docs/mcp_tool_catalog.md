@@ -1,6 +1,6 @@
 # LoreConvo MCP Tool Catalog
 
-LoreConvo provides 28 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all 26.
+LoreConvo provides 33 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all 33.
 
 This catalog explains what each tool does, when Claude uses it, and what parameters it accepts.
 
@@ -407,6 +407,107 @@ Returns recent consolidation log entries so you can see exactly what LoreConvo p
 
 ---
 
+## Anti-Pattern Storage (v0.8.0+)
+
+---
+
+### get_anti_patterns
+
+Retrieve sessions tagged as anti-patterns. Use this at the start of a session
+or before attempting a known-difficult task to surface past failures.
+
+**When Claude uses this tool:**
+> You: "What mistakes have we made with database migrations before?"
+> Claude: *calls get_anti_patterns with topic="database migrations"*
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `topic` | text | no | none | Keyword to filter anti-patterns. Omit to return all, newest first. |
+| `limit` | integer | no | 10 | Max results to return (1-100). |
+| `project` | text | no | none | Restrict to a specific project slug. Case-sensitive. |
+
+Each result includes: `session_id`, `session_title`, `date`, `project`,
+`summary`, `decisions`, `open_questions`, and a `truncated` boolean (true when
+keyword filtering may have missed some matches due to sparse tagging).
+
+---
+
+### tag_as_anti_pattern
+
+Mark a session as an anti-pattern so it surfaces in future `get_anti_patterns`
+calls. Idempotent -- tagging an already-tagged session is safe.
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `session_id` | text | yes | -- | UUID of the session to tag. |
+| `source` | text | yes | -- | Who is tagging (e.g. "user", "agent-name"). |
+| `reason` | text | no | none | Brief description of the failure mode. |
+
+Rate-limited to 20 calls per window. Every call writes an audit entry.
+
+---
+
+### untag_anti_pattern
+
+Remove an anti-pattern tag from a session. Idempotent -- untagging a session
+that is not currently tagged is safe. Also writes an audit entry.
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `session_id` | text | yes | -- | UUID of the session to untag. |
+| `source` | text | yes | -- | Who is removing the tag. |
+| `reason` | text | no | none | Reason for removal. |
+
+---
+
+## Session Durability (v0.8.1+)
+
+---
+
+### pin_session
+
+Pin a session to exclude it from automated cleanup. Use this for sessions that
+contain decisions or context you want to keep indefinitely.
+
+**When Claude uses this tool:**
+> You: "Make sure we keep that migration decision session forever."
+> Claude: *calls pin_session with the session UUID and keep_forever=True*
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `session_id` | text | yes | -- | UUID of the session to pin or unpin. |
+| `keep_forever` | boolean | no | true | true = pin (exclude from cleanup); false = unpin. Accepts bool, 0/1, or "true"/"false". |
+
+Returns `{"ok": true, "session_id": "...", "keep_forever": bool}` on success.
+
+Pinning can be disabled globally via `LORECONVO_DISABLE_PINNING=1` or
+`{"pinning_enabled": false}` in `~/.loreconvo/config.json`.
+
+---
+
+## Compatibility
+
+---
+
+### get_server_info
+
+Return MCP SDK compatibility status for the running server. Useful for
+diagnosing version mismatches without restarting.
+
+Returns: `product_name`, `product_version`, `mcp_installed`, `mcp_tested`,
+`mcp_accepted`, `status` (ok | mismatch | undetermined | disabled | internal_error),
+and a `note` field with details.
+
+---
+
 ## Quick Reference
 
 | Tool | One-line summary |
@@ -439,3 +540,8 @@ Returns recent consolidation log entries so you can see exactly what LoreConvo p
 | `loreconvo_onboard` | First-time setup wizard |
 | `get_docs_for_session` | Retrieve LoreDocs documents linked to a session (Pro -- requires LoreDocs Pro) |
 | `session_link_doc` | Manually link a session to a LoreDocs document (Pro -- requires LoreDocs Pro) |
+| `get_anti_patterns` | Retrieve sessions tagged as anti-patterns (optionally filtered by keyword or project) |
+| `tag_as_anti_pattern` | Mark a session as an anti-pattern for future avoidance |
+| `untag_anti_pattern` | Remove an anti-pattern tag from a session |
+| `pin_session` | Pin or unpin a session to exclude it from automated cleanup |
+| `get_server_info` | Return MCP SDK version and compatibility status for the running server |
