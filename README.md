@@ -1,4 +1,4 @@
-# LoreConvo v0.7.5
+# LoreConvo v0.8.1
 
 Your memory follows your identity, not your tool — with your consent.
 
