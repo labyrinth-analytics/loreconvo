@@ -71,10 +71,20 @@ def _connect(db_path=None):
 # -- Save session --
 
 def save_session(args):
-    """Save a session to LoreConvo, matching the MCP tool's behavior exactly."""
+    """Save a session to LoreConvo, matching the MCP tool's behavior exactly.
+
+    SH-12871: when args.session_id is provided (Claude Code's native session
+    ID, e.g. threaded through by agent_session_end.py from the transcript
+    file), upsert by that ID instead of always minting a fresh UUID. Without
+    this, a PreCompact-hook stub for the same real session (which DOES key by
+    that native ID) gets permanently orphaned the moment SessionEnd inserts an
+    unrelated row under a random UUID -- the stub's truncated content is all
+    that's ever findable. getattr() with a default keeps every existing caller
+    (none of which pass session_id) on today's behavior unchanged.
+    """
     conn, db_path = _connect(args.db_path)
 
-    session_id = str(uuid.uuid4())
+    provided_id = getattr(args, "session_id", None)
     now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
     # Parse JSON list args (accept both JSON strings and plain strings)
@@ -93,6 +103,42 @@ def save_session(args):
     artifacts = parse_list(args.artifacts)
     open_questions = parse_list(args.open_questions)
     tags = parse_list(args.tags)
+
+    if provided_id:
+        existing = conn.execute(
+            "SELECT id FROM sessions WHERE id = ?", (provided_id,)
+        ).fetchone()
+        if existing:
+            # Merge into the existing row (e.g. a PreCompact stub). start_date
+            # and created_at are the true session start -- left untouched.
+            conn.execute(
+                """UPDATE sessions SET title = ?, surface = ?, project = ?,
+                   end_date = ?, summary = ?, decisions = ?, artifacts = ?,
+                   open_questions = ?, tags = ?
+                   WHERE id = ?""",
+                (
+                    args.title,
+                    args.surface,
+                    args.project,
+                    args.end_date or now,
+                    args.summary,
+                    json.dumps(decisions),
+                    json.dumps(artifacts),
+                    json.dumps(open_questions),
+                    json.dumps(tags),
+                    provided_id,
+                )
+            )
+            conn.commit()
+            conn.close()
+
+            print(f"Saved session {provided_id} to {db_path}")
+            print(f"  title: {args.title}")
+            print(f"  surface: {args.surface}")
+            return provided_id
+        session_id = provided_id
+    else:
+        session_id = str(uuid.uuid4())
 
     conn.execute(
         """INSERT INTO sessions
@@ -280,6 +326,11 @@ def main():
     parser.add_argument("--tags", type=str, help="JSON list of tags")
     parser.add_argument("--start-date", type=str, dest="start_date", help="ISO 8601 start time")
     parser.add_argument("--end-date", type=str, dest="end_date", help="ISO 8601 end time")
+    parser.add_argument("--session-id", type=str, dest="session_id",
+                        help="Claude Code's native session ID. When provided and a row "
+                             "already exists under it (e.g. a PreCompact-hook stub), this "
+                             "save updates that row instead of inserting a disconnected "
+                             "duplicate under a fresh UUID.")
 
     # Read/search args
     parser.add_argument("--limit", type=int, default=5, help="Max sessions to return (default: 5)")
