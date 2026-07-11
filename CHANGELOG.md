@@ -54,7 +54,51 @@ cleanup, closing the parity gap with Recall's "Durable Memory" tier (SH-11449).
 
 ## v0.8.0 (2026-06-26)
 
-Anti-pattern storage: tag sessions with observed failure modes for future
-avoidance. 32 MCP tools, CLI 8 commands.
+### New: Anti-Pattern Storage
+
+Tag past sessions as anti-patterns so you and your agents can surface known
+failure modes before repeating them.
+
+**Three new MCP tools:**
+
+- `get_anti_patterns([topic], [limit], [project])` -- Retrieve sessions tagged
+  as anti-patterns. Call this at session start or before a tricky task to see
+  what has failed before. Filter by keyword (`topic`) or project slug.
+  Returns session ID, title, date, summary, decisions, and open questions for
+  each match. Tagging is sparse by design, so FTS5 results may be slightly
+  under-complete when `topic` is supplied -- the `truncated` field signals this.
+
+- `tag_as_anti_pattern(session_id, source, reason)` -- Mark a session as an
+  anti-pattern. Idempotent: tagging an already-tagged session is safe.
+  Rate-limited to 20 calls per window to prevent bulk misuse.
+
+- `untag_anti_pattern(session_id, source, reason)` -- Remove an anti-pattern
+  tag. Idempotent. Both tag and untag record an audit entry so you can see the
+  full tagging history for any session.
+
+**Database changes:** Three new tables added automatically on first startup
+after upgrade -- no manual migration needed:
+- `anti_pattern_sessions` -- which sessions are tagged and when
+- `anti_pattern_audit_log` -- full audit trail of every tag/untag operation
+- `anti_pattern_rate_state` -- rate-limit state per caller
+
+**Schema validation at startup:** LoreConvo now validates the anti-pattern
+table schema on startup and exits immediately if a mismatch is detected
+(protects against partial upgrades). Use the `--dry-run-validate` flag to run
+just this check without starting the server: exit 0 = schema OK, exit 1 = mismatch.
+
+**Duplicate server prevention:** A PID lockfile (`~/.loreconvo/server.pid`)
+prevents two server instances from sharing the same database simultaneously.
+If you launch a second server against the same database, it exits with an error
+pointing to the running process ID. The lockfile is cleaned up automatically on
+exit.
+
+**Rollback:** `rollback_anti_pattern_v080.py` drops the three anti-pattern
+tables and reverts to v0.7.5 schema. Back up `sessions.db` first; rolling back
+discards all anti-pattern tags permanently.
+
+32 MCP tools, 8 CLI commands.
+
+---
 
 (Earlier changelog entries not included; see git log for full history.)
