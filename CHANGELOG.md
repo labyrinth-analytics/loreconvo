@@ -1,5 +1,39 @@
 # LoreConvo Changelog
 
+## v0.8.2 (2026-07-11)
+
+### Fixed: Concurrent MCP clients no longer crash the server
+
+Removed the single-instance PID lock (introduced incidentally in v0.8.0).
+MCP clients that open more than one connection to the same server (some agent
+frontends race parallel discovery threads at startup) previously hit a
+RuntimeError crash-loop when the second connection arrived. LoreConvo now
+relies on the same WAL + busy_timeout=10000ms concurrent-access protection
+LoreDocs uses, so multiple simultaneous connections work. Covered by the new
+`test_concurrent_instances.py`.
+
+Also fixed pragma ordering in `_open_conn`: `busy_timeout` is now set before
+the `journal_mode=WAL` switch, so the timeout covers the mode-switch pragma
+under concurrent startup.
+
+### Security: sessions.db file permissions hardened (SH-12873)
+
+`sessions.db` is now chmod'd to owner-only permissions (0600) on every
+connection open in `_open_conn`, so a database created or touched by an
+earlier version (or a permissive umask) is corrected automatically.
+
+### Fixed: idle watchdog survives a broken stderr (SH-12881)
+
+The 5-minute idle watchdog no longer dies if its stderr pipe is closed when
+it fires (e.g. the parent client already disconnected). The shutdown itself
+proceeds normally.
+
+### Removed
+
+`scripts/rollback_anti_pattern_v080.py` -- the one-time rollback safety net
+for the v0.8.0 anti-pattern tables. Those tables are a permanent feature as
+of v0.8.1; the script was inert and nothing referenced it.
+
 ## v0.8.1 (2026-07-08)
 
 ### New: User-Controlled Session Durability (keep_forever)
