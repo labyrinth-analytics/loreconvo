@@ -349,6 +349,17 @@ def _open_conn(db_path) -> sqlite3.Connection:
             actual_mode,
         )
     conn.execute("PRAGMA foreign_keys=ON")
+    # sessions.db is created with umask-derived permissions (644 on standard 022
+    # systems). Force 600 unconditionally so session data is never world-readable.
+    # WAL sidecar files are chmod'd if they already exist; they are created lazily
+    # by SQLite on first write and will be corrected on the next open.
+    if not _is_in_memory_db(db_path):
+        _p = str(db_path)
+        if os.path.exists(_p):
+            os.chmod(_p, 0o600)
+        for _sidecar in (_p + '-shm', _p + '-wal'):
+            if os.path.exists(_sidecar):
+                os.chmod(_sidecar, 0o600)
     return conn
 
 
