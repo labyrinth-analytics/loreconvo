@@ -4,9 +4,13 @@ import json
 import signal
 import sys
 import os
+import logging
+import importlib.metadata
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+logger = logging.getLogger(__name__)
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,6 +24,64 @@ from core.config import Config, set_tier as _set_tier_config
 from core.license import get_license_status
 from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onboard_config_path
 from compat_check import check as _compat_check, emit_startup_warnings as _compat_emit
+
+
+_EGG_INFO_CANDIDATES = (
+    Path("src/loreconvo.egg-info"),
+    Path("loreconvo.egg-info"),
+)
+
+
+def _check_egg_info_conflict() -> None:
+    """Warn if a stale egg-info directory may shadow installed metadata.
+
+    Runs at server startup. Does not raise, since editable dev installs
+    legitimately have an egg-info on disk; we only flag version mismatch.
+    """
+    product = "loreconvo"
+    try:
+        installed_version = importlib.metadata.version(product)
+    except importlib.metadata.PackageNotFoundError:
+        logger.debug("loreconvo not installed via pip; skipping egg-info check")
+        return
+
+    for egg_info_path in _EGG_INFO_CANDIDATES:
+        if not egg_info_path.is_dir():
+            continue
+        pkg_info = egg_info_path / "PKG-INFO"
+        if not pkg_info.is_file():
+            logger.warning(
+                "stale loreconvo.egg-info detected at %s (missing PKG-INFO). "
+                "This may shadow installed metadata. "
+                "Consider deleting it or running 'pip install -e .' to update.",
+                egg_info_path,
+            )
+            continue
+        egg_version = None
+        for line in pkg_info.read_text(encoding="ascii", errors="replace").splitlines():
+            if line.startswith("Version:"):
+                egg_version = line.split(":", 1)[1].strip()
+                break
+        if egg_version is None:
+            logger.warning(
+                "stale loreconvo.egg-info detected at %s (no Version field in PKG-INFO). "
+                "This may shadow installed metadata.",
+                egg_info_path,
+            )
+        elif egg_version != installed_version:
+            logger.warning(
+                "stale loreconvo.egg-info detected at %s. "
+                "egg-info version: %s, installed version: %s. "
+                "This may shadow installed metadata. "
+                "Consider deleting it or running 'pip install -e .' to update.",
+                egg_info_path, egg_version, installed_version,
+            )
+        else:
+            logger.debug(
+                "egg-info found at %s (version %s) matches installed version",
+                egg_info_path, egg_version,
+            )
+
 
 mcp = FastMCP(
     "loreconvo",
@@ -1546,6 +1608,7 @@ def main():
             sys.exit(1)
 
     _compat_emit(_compat_check())
+    _check_egg_info_conflict()
     from core import idle_watchdog
     # Reap this process if the client parks it idle (releases any held DB lock).
     idle_watchdog.install(mcp, env_var="LORECONVO_IDLE_TIMEOUT")
