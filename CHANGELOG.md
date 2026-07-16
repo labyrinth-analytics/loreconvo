@@ -1,5 +1,13 @@
 # LoreConvo Changelog
 
+## v0.8.3 (2026-07-15)
+
+### Security: Updated click to 8.3.3 (CVE-2026-7246)
+
+Bumped the `click` dependency from 8.3.1 to 8.3.3 to pick up the fix for
+CVE-2026-7246. No functional or API changes; this is a security-only patch
+release.
+
 ## v0.8.2 (2026-07-11)
 
 ### Fixed: Concurrent MCP clients no longer crash the server
