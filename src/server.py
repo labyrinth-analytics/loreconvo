@@ -1151,6 +1151,7 @@ def get_memory_digest(
     project: str,
     surface: str | None = None,
     disable: bool | None = None,
+    max_tokens: int = 2000,
 ) -> dict:
     """Retrieve the current memory digest for a project without re-running consolidation.
 
@@ -1163,6 +1164,8 @@ def get_memory_digest(
         project: Project name
         surface: Surface filter (or None for all)
         disable: If provided, update the disabled flag on the digest
+        max_tokens: Truncate digest_markdown to this estimated token limit (len // 4).
+                    Default 2000. If truncated, appends [TRUNCATED] marker.
     """
     if disable is not None:
         db.update_digest_disabled(project, surface, disabled=disable)
@@ -1174,6 +1177,16 @@ def get_memory_digest(
             "project": project,
             "surface": surface,
         }
+    digest_md = digest.get("digest_markdown", "")
+    if digest_md and max_tokens > 0:
+        estimated_tokens = len(digest_md) // 4
+        if estimated_tokens > max_tokens:
+            # Truncate at estimated token boundary (max_tokens * 4 chars)
+            truncate_at = max_tokens * 4
+            digest_md = digest_md[:truncate_at] + (
+                "\n\n[TRUNCATED -- request smaller max_tokens or "
+                "run consolidation with fewer sources]"
+            )
     return {
         "status": "ok",
         "project": digest["project"],
@@ -1182,7 +1195,7 @@ def get_memory_digest(
         "source_count": digest.get("source_count", 0),
         "updated_at": digest.get("updated_at", ""),
         "disabled": bool(digest.get("disabled", 0)),
-        "digest_markdown": digest.get("digest_markdown", ""),
+        "digest_markdown": digest_md,
         "decisions": digest.get("decisions"),
         "open_questions": digest.get("open_questions"),
         "known_stack": digest.get("known_stack"),
