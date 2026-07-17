@@ -18,13 +18,13 @@ from pathlib import Path
 def auto_save_tags():
     """Tags for an auto-saved session.
 
-    Always includes 'auto-saved'. When the environment provides LORECONVO_AGENT
+    Always includes 'auto-captured'. When the environment provides LORECONVO_AGENT
     and/or AGENT_RUN_SESSION_ID (set by the scheduled-agent launcher), also tag
     the agent and run so agent-tagged recall can find these stubs. Ordinary
     interactive sessions, which set neither var, are unchanged: just
-    ['auto-saved'].
+    ['auto-captured'].
     """
-    tags = ["auto-saved"]
+    tags = ["auto-captured"]
     agent = os.environ.get("LORECONVO_AGENT")
     if agent:
         tags.append("agent:" + agent)
