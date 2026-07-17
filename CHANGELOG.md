@@ -1,5 +1,29 @@
 # LoreConvo Changelog
 
+## v0.8.4 (2026-07-17)
+
+### Added: Durable Pro license persistence
+
+Your Pro license is now stored durably in a per-user file
+(`~/.loreconvo/license.json`, owner-only permissions) instead of depending on an
+environment variable being present in every shell. Once activated, Pro persists
+across restarts and new sessions. The license is resolved in a stable order:
+an environment variable takes precedence, then the file store, and a key
+supplied via the environment is written through to the file store automatically
+so it survives after the variable goes away. A short grace-period cache keeps
+Pro working through brief license-validation outages.
+
+Legacy installs that were granting Pro from an unverified local tier flag now
+get a bounded 30-day grace window instead of indefinite access; after that a
+verified key is required.
+
+### Added: Automatic session capture on stop
+
+LoreConvo now captures your session automatically when a Claude Code session is
+halted mid-work, via a Stop hook, so context is saved even when you do not run a
+manual save. The capture is overwritten by the normal end-of-session save when
+the session closes cleanly.
+
 ## v0.8.3 (2026-07-15)
 
 ### Security: Updated click to 8.3.3 (CVE-2026-7246)
