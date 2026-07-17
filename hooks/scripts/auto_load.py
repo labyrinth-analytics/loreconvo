@@ -17,7 +17,7 @@ Scoring logic (higher = shown first):
   -2  no summary, no decisions, no open questions, no artifacts (noise)
 
 Sessions that score <= 0 and are not the only results are filtered out.
-Total formatted context is capped at MAX_CONTEXT_CHARS to avoid bloat.
+Total formatted context is capped at _MAX_CONTEXT_TOKENS to avoid bloat.
 """
 
 import json
@@ -29,7 +29,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-MAX_CONTEXT_CHARS = 4000  # Soft cap on total output length
+# Token-based soft cap (replaces char-based MAX_CONTEXT_CHARS).
+# Default 1000 tokens = today's 4000 chars (len // 4), behavior-preserving.
+# Configurable via LORECONVO_AUTO_LOAD_MAX_TOKENS env var.
+_MAX_CONTEXT_TOKENS = int(os.environ.get("LORECONVO_AUTO_LOAD_MAX_TOKENS", "1000"))
 
 
 MEMORY_MD_NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # URL namespace
@@ -269,7 +272,7 @@ def format_context(sessions, cwd, db_path=None):
     Output is plain text that Claude Code injects into the session.
     Includes open_questions (missing from old version) as they are highest-signal.
     If project instructions exist, includes them after project name.
-    Enforces MAX_CONTEXT_CHARS soft cap to prevent system prompt bloat.
+    Enforces _MAX_CONTEXT_TOKENS soft cap to prevent system prompt bloat.
     """
     if not sessions:
         return ""
@@ -303,6 +306,7 @@ def format_context(sessions, cwd, db_path=None):
     lines.append("")
 
     total_chars = sum(len(l) for l in lines)
+    total_tokens = total_chars // 4
 
     for i, session in enumerate(sessions, 1):
         block = []
@@ -363,12 +367,14 @@ def format_context(sessions, cwd, db_path=None):
         block.append("")
 
         block_chars = sum(len(l) for l in block)
-        if total_chars + block_chars > MAX_CONTEXT_CHARS and i > 1:
+        block_tokens = block_chars // 4
+        if total_tokens + block_tokens > _MAX_CONTEXT_TOKENS and i > 1:
             # Soft cap reached -- stop adding more sessions
             break
 
         lines.extend(block)
         total_chars += block_chars
+        total_tokens += block_tokens
 
     lines.append("---")
     lines.append("Use this context to avoid re-asking questions or repeating work from prior sessions.")
