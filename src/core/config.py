@@ -25,6 +25,7 @@ def set_tier(db_dir: Path, tier: str) -> None:
             pass
     config["tier"] = tier
     config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    os.chmod(str(config_path), 0o600)
 
 
 @dataclass
@@ -43,7 +44,7 @@ class Config:
 
     def ensure_db_dir(self):
         db_dir = Path(self.db_path).parent
-        db_dir.mkdir(parents=True, exist_ok=True)
+        db_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
 
     @property
     def is_pro(self) -> bool:
