@@ -2,6 +2,7 @@
 
 import datetime
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -24,6 +25,7 @@ def _load_config(path: Path) -> dict:
 def _save_config(path: Path, config: dict) -> None:
     config["last_updated"] = datetime.datetime.now().isoformat()
     path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    os.chmod(str(path), 0o600)
 
 
 def _generate_reference_doc(config: dict) -> str:
