@@ -63,6 +63,8 @@ def _setup_logging() -> None:
     handler.setFormatter(logging.Formatter(
         "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     ))
+    if os.path.exists(str(_LOG_PATH)):
+        os.chmod(str(_LOG_PATH), 0o600)
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     root.addHandler(handler)
