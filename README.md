@@ -1,4 +1,4 @@
-# LoreConvo v0.8.4
+# LoreConvo v0.8.5
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -380,29 +380,23 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.8.4 (2026-07-17)
+## v0.8.5 (2026-07-21)
 
-### Added: Durable Pro license persistence
+### Security: file and folder permissions hardened
 
-Your Pro license is now stored durably in a per-user file
-(`~/.loreconvo/license.json`, owner-only permissions) instead of depending on an
-environment variable being present in every shell. Once activated, Pro persists
-across restarts and new sessions. The license is resolved in a stable order:
-an environment variable takes precedence, then the file store, and a key
-supplied via the environment is written through to the file store automatically
-so it survives after the variable goes away. A short grace-period cache keeps
-Pro working through brief license-validation outages.
+v0.8.4 locked down the session database itself. This release extends the same
+owner-only protection to everything else LoreConvo keeps in `~/.loreconvo/`:
+the folder is now created private to you, and your config files and the
+session-summarizer log are set to owner-only permissions whenever they are
+written. Files left readable by an earlier version, or by a permissive system
+setting, are corrected automatically the next time LoreConvo writes them. No
+action needed on your part.
 
-Legacy installs that were granting Pro from an unverified local tier flag now
-get a bounded 30-day grace window instead of indefinite access; after that a
-verified key is required.
+### Fixed: spurious compatibility warning on startup
 
-### Added: Automatic session capture on stop
-
-LoreConvo now captures your session automatically when a Claude Code session is
-halted mid-work, via a Stop hook, so context is saved even when you do not run a
-manual save. The capture is overwritten by the normal end-of-session save when
-the session closes cleanly.
+Some installs showed an MCP version-mismatch warning even though the shipped
+version was correct: the compatibility check was comparing against the wrong
+reference version. The warning no longer appears on a correct install.
 
 <!-- WHATS_NEW:END -->
 
