@@ -1,5 +1,24 @@
 # LoreConvo Changelog
 
+## v0.8.5 (2026-07-21)
+
+### Security: auxiliary file and directory permissions hardened (SH-12892)
+
+v0.8.4 hardened `sessions.db` itself; this release extends the same owner-only
+treatment to everything else LoreConvo writes under `~/.loreconvo/`. The data
+directory is now created with mode 0700, and `config.json` (both the tier
+config in `core/config.py` and the onboarding config in `core/onboard_tool.py`)
+plus the session-summarizer log file are chmod'd to 0600 on write. Files
+created by an earlier version or under a permissive umask are corrected the
+next time LoreConvo writes them.
+
+### Fixed: spurious MCP compatibility warning (SH-12969)
+
+The compatibility guard declared its tested MCP version as 1.27.2 while the
+pinned dependency is 1.27.0, so the guard reported a version mismatch against
+LoreConvo's own shipped pin. The constant now matches the pin and the warning
+no longer fires on a correct install.
+
 ## v0.8.4 (2026-07-17)
 
 ### Added: Durable Pro license persistence

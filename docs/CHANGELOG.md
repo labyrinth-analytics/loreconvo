@@ -4,6 +4,26 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.8.5 (2026-07-21)
+
+### Security: file and folder permissions hardened
+
+v0.8.4 locked down the session database itself. This release extends the same
+owner-only protection to everything else LoreConvo keeps in `~/.loreconvo/`:
+the folder is now created private to you, and your config files and the
+session-summarizer log are set to owner-only permissions whenever they are
+written. Files left readable by an earlier version, or by a permissive system
+setting, are corrected automatically the next time LoreConvo writes them. No
+action needed on your part.
+
+### Fixed: spurious compatibility warning on startup
+
+Some installs showed an MCP version-mismatch warning even though the shipped
+version was correct: the compatibility check was comparing against the wrong
+reference version. The warning no longer appears on a correct install.
+
+---
+
 ## v0.8.4 (2026-07-17)
 
 ### Added: Durable Pro license persistence
