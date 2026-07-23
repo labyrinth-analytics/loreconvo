@@ -83,7 +83,7 @@ Replace `/path/to/loreconvo` with wherever you saved the source folder.
 
 After making code changes, use `/reload-plugins` to refresh without restarting.
 
-Once loaded, Claude has access to all 33 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
+Once loaded, Claude has access to all 32 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
 
 ### Cowork (Desktop App)
 
@@ -289,7 +289,7 @@ Check your current tier and usage with `get_tier`. Activate a Pro license with
 
 ## MCP Tools
 
-LoreConvo provides 33 MCP tools that Claude calls automatically during sessions.
+LoreConvo provides 32 MCP tools that Claude calls automatically during sessions.
 The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs/mcp_tool_catalog.md) for the complete reference.
 
 | Tool | What it does |
@@ -326,7 +326,6 @@ The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs
 | `get_anti_patterns` | List sessions tagged as anti-patterns (approaches to avoid) |
 | `tag_as_anti_pattern` | Tag a session as an anti-pattern so future recalls flag it |
 | `untag_anti_pattern` | Remove an anti-pattern tag from a session |
-| `get_server_info` | Report MCP compatibility status for this LoreConvo server |
 
 ## Requirements
 
