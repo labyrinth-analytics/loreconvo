@@ -1,6 +1,6 @@
 # LoreConvo MCP Tool Catalog
 
-LoreConvo provides 33 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all 33.
+LoreConvo provides 32 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all 32.
 
 This catalog explains what each tool does, when Claude uses it, and what parameters it accepts.
 
@@ -493,21 +493,6 @@ Pinning can be disabled globally via `LORECONVO_DISABLE_PINNING=1` or
 
 ---
 
-## Compatibility
-
----
-
-### get_server_info
-
-Return MCP SDK compatibility status for the running server. Useful for
-diagnosing version mismatches without restarting.
-
-Returns: `product_name`, `product_version`, `mcp_installed`, `mcp_tested`,
-`mcp_accepted`, `status` (ok | mismatch | undetermined | disabled | internal_error),
-and a `note` field with details.
-
----
-
 ## Quick Reference
 
 | Tool | One-line summary |
@@ -544,4 +529,3 @@ and a `note` field with details.
 | `tag_as_anti_pattern` | Mark a session as an anti-pattern for future avoidance |
 | `untag_anti_pattern` | Remove an anti-pattern tag from a session |
 | `pin_session` | Pin or unpin a session to exclude it from automated cleanup |
-| `get_server_info` | Return MCP SDK version and compatibility status for the running server |
