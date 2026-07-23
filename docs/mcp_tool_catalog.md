@@ -536,7 +536,7 @@ and a `note` field with details.
 | `get_stats` | Show usage statistics: session count, surface breakdown |
 | `inspect_sessions` | Inspect session internals for debugging |
 | `export_for_anthropic` | Export sessions in Anthropic managed-agent format (Pro) |
-| `rebuild_semantic_index` | Rebuild the LanceDB semantic search index (Pro) |
+| `rebuild_index` | Rebuild the LanceDB semantic search index (Pro) |
 | `loreconvo_onboard` | First-time setup wizard |
 | `get_docs_for_session` | Retrieve LoreDocs documents linked to a session (Pro -- requires LoreDocs Pro) |
 | `session_link_doc` | Manually link a session to a LoreDocs document (Pro -- requires LoreDocs Pro) |

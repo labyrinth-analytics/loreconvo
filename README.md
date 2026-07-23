@@ -83,7 +83,7 @@ Replace `/path/to/loreconvo` with wherever you saved the source folder.
 
 After making code changes, use `/reload-plugins` to refresh without restarting.
 
-Once loaded, Claude has access to all 28 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
+Once loaded, Claude has access to all 33 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
 
 ### Cowork (Desktop App)
 
@@ -264,7 +264,7 @@ recency reranking combined via RRF fusion. Finds sessions by meaning, not just k
 | Local-first, no cloud, zero API costs | Yes | Yes |
 | Related-session discovery | Keyword co-occurrence | Embedding-based (BGE-small-en-v1.5) |
 | LLM async session summarization | -- | Yes (Claude Haiku, opt-in) |
-| Hybrid retrieval: vector + BM25 + recency reranking (`rebuild_semantic_index`) | -- | Yes (Pro) |
+| Hybrid retrieval: vector + BM25 + recency reranking (`rebuild_index`) | -- | Yes (Pro) |
 | Cross-product document linking (`get_docs_for_session`, `session_link_doc`) | -- | Yes (also requires LoreDocs Pro) |
 | Team memory -- export/merge sessions across machines | -- | Yes |
 | Anthropic managed-agent export (`export_for_anthropic`) | -- | Yes |
@@ -289,7 +289,7 @@ Check your current tier and usage with `get_tier`. Activate a Pro license with
 
 ## MCP Tools
 
-LoreConvo provides 28 MCP tools that Claude calls automatically during sessions.
+LoreConvo provides 33 MCP tools that Claude calls automatically during sessions.
 The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs/mcp_tool_catalog.md) for the complete reference.
 
 | Tool | What it does |
@@ -317,11 +317,16 @@ The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs
 | `get_stats` | Show usage statistics (session count, surface breakdown) |
 | `inspect_sessions` | Inspect session internals for debugging |
 | `export_for_anthropic` | Export sessions in Anthropic managed-agent format (Pro) |
-| `rebuild_semantic_index` | Rebuild the LanceDB semantic search index (Pro) |
+| `rebuild_index` | Rebuild the LanceDB semantic search index (Pro) |
 | `loreconvo_onboard` | First-time setup wizard |
 | `get_dream_log` | View the consolidation activity log |
 | `get_docs_for_session` | Retrieve LoreDocs documents linked to a specific session (Pro -- requires LoreDocs Pro) |
 | `session_link_doc` | Manually create a link between a session and a LoreDocs document (Pro -- requires LoreDocs Pro) |
+| `pin_session` | Pin or unpin a session to exclude it from automated cleanup |
+| `get_anti_patterns` | List sessions tagged as anti-patterns (approaches to avoid) |
+| `tag_as_anti_pattern` | Tag a session as an anti-pattern so future recalls flag it |
+| `untag_anti_pattern` | Remove an anti-pattern tag from a session |
+| `get_server_info` | Report MCP compatibility status for this LoreConvo server |
 
 ## Requirements
 
