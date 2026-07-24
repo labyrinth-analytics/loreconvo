@@ -1,5 +1,18 @@
 # LoreConvo Changelog
 
+## v0.8.6 (2026-07-24)
+
+### Docs: corrected MCP tool count and tool references
+
+The README and MCP tool catalog now report the accurate public tool count of 32
+(previously listed as 28). Four tools that ship in the server but were missing
+from the catalog are now documented: `pin_session`, `get_anti_patterns`,
+`tag_as_anti_pattern`, and `untag_anti_pattern`. A reference to a nonexistent
+`rebuild_semantic_index` tool was corrected to its real name, `rebuild_index`.
+The `get_server_info` version-compatibility diagnostic is now excluded from the
+advertised count, so "32 MCP tools" reflects user-facing tools only. This is a
+documentation-only release with no code or behavior changes.
+
 ## v0.8.5 (2026-07-21)
 
 ### Security: auxiliary file and directory permissions hardened (SH-12892)
