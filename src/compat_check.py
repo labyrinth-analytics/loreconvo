@@ -237,8 +237,7 @@ def main() -> None:
     """CLI entry point. Prints CompatResult JSON and exits with a status code."""
     import json
     result = check()
-    output = {k: v for k, v in result.items() if k != "error_detail"}
-    print(json.dumps(output, indent=2))
+    print(json.dumps(result, indent=2))
     status = result["status"]
     if status == "ok":
         sys.exit(0)
