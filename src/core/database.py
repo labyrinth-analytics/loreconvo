@@ -1743,12 +1743,30 @@ class SessionDatabase:
         if existing:
             prior_summary = existing[0]
         self.conn.execute(
-            """INSERT OR REPLACE INTO sessions
+            """INSERT INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
                 decisions, artifacts, open_questions, tags, created_at, source,
                 shared_by, origin_machine, content_hash, external_tool_session,
                 reasoning_notes, previous_summary)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+               title = excluded.title,
+               surface = excluded.surface,
+               project = excluded.project,
+               start_date = excluded.start_date,
+               end_date = excluded.end_date,
+               summary = excluded.summary,
+               decisions = excluded.decisions,
+               artifacts = excluded.artifacts,
+               open_questions = excluded.open_questions,
+               tags = excluded.tags,
+               source = excluded.source,
+               shared_by = excluded.shared_by,
+               origin_machine = excluded.origin_machine,
+               content_hash = excluded.content_hash,
+               external_tool_session = excluded.external_tool_session,
+               reasoning_notes = excluded.reasoning_notes,
+               previous_summary = excluded.previous_summary""",
             (
                 session.id, session.title, session.surface, session.project,
                 session.start_date, session.end_date, session.summary,
@@ -3091,11 +3109,27 @@ class SessionDatabase:
         )
         origin_machine = session.origin_machine or self._get_origin_machine()
         self.conn.execute(
-            """INSERT OR REPLACE INTO sessions
+            """INSERT INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
                 decisions, artifacts, open_questions, tags, created_at, source,
                 shared_by, origin_machine, content_hash, external_tool_session)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+               title = excluded.title,
+               surface = excluded.surface,
+               project = excluded.project,
+               start_date = excluded.start_date,
+               end_date = excluded.end_date,
+               summary = excluded.summary,
+               decisions = excluded.decisions,
+               artifacts = excluded.artifacts,
+               open_questions = excluded.open_questions,
+               tags = excluded.tags,
+               source = excluded.source,
+               shared_by = excluded.shared_by,
+               origin_machine = excluded.origin_machine,
+               content_hash = excluded.content_hash,
+               external_tool_session = excluded.external_tool_session""",
             (
                 session.id, session.title, session.surface, session.project,
                 session.start_date, session.end_date, session.summary,
