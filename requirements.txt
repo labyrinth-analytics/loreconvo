@@ -3,6 +3,7 @@
 mcp==1.27.2
 click==8.3.3
 anthropic==0.87.0
+packaging==25.0
 # Pro-tier optional deps (hybrid semantic search): install with pip install loreconvo[pro]
 # lancedb==0.30.2
 # sentence-transformers==5.5.0
