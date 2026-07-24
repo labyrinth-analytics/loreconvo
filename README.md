@@ -15,18 +15,20 @@ layer, no matter which client you reach for. When you switch mid-project, your
 context travels with you automatically.
 
 Most tools wall off memory by machine or workspace. LoreConvo stores everything
-locally in a SQLite database you own, and surfaces it wherever you are. You decide
-what gets saved; nothing is written without your action.
+locally in a SQLite database you own, and surfaces it wherever you are. Capture
+happens two ways: explicitly via the save tools, or automatically at session end
+if you install the optional hooks. Either way, you can inspect, edit, or delete
+any memory at any time.
 
 ### You control what gets saved
 
-Competing tools auto-write to memory without asking. LoreConvo puts you in control: you decide what's worth keeping, and you can delete any memory at any time.
+LoreConvo puts you in control: automatic capture only runs if you choose to install the session hooks, every save is inspectable, and you can delete any memory at any time.
 
 Every memory shows you exactly where it came from — which surface captured it, when, what project context it belongs to, and which skill generated it. No mystery. Full provenance.
 
 ### Your memory stays on your machine
 
-LoreConvo stores everything in a SQLite database on your own machine. No data leaves your computer. No cloud accounts. No vendor with access to your session history.
+LoreConvo stores everything in a SQLite database on your own machine. Your data stays local unless you explicitly enable the optional AI summarization feature (Pro, off by default), which sends a transcript excerpt to the Anthropic API using your own key. No cloud accounts. No vendor with access to your session history.
 
 Your sessions live in `~/.loreconvo/sessions.db` -- a file you own, can back up, and can delete whenever you want.
 
@@ -339,7 +341,7 @@ LoreConvo is **local-first**. All data lives in `~/.loreconvo/sessions.db` on yo
 
 - **Data collected:** Session titles, summaries, tags, surface identifiers, project names, and skill names you provide when saving. No telemetry, usage analytics, or identifiers are collected automatically.
 - **Storage:** SQLite database at `~/.loreconvo/sessions.db`. No cloud storage. Override the path with the `LORECONVO_DB` environment variable.
-- **Third-party sharing:** None. Data never leaves your machine.
+- **Third-party sharing:** None by default. Data leaves your machine only if you enable optional AI summarization (Pro) by setting `LORECONVO_ANTHROPIC_API_KEY`, which sends a bounded transcript excerpt to the Anthropic API under your own key. Leave the key unset and everything stays local.
 - **Retention:** Data is retained until you delete it via `delete_session` or remove the database file manually. No automatic expiry.
 - **Contact:** info@labyrinthanalyticsconsulting.com
 
