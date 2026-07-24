@@ -4,6 +4,20 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.8.6 (2026-07-24)
+
+### Docs: accurate MCP tool listing
+
+The documentation now lists the correct number of MCP tools LoreConvo provides
+(32, previously shown as 28) and includes four tools that were already available
+but missing from the reference: pinning a session, and the anti-pattern tools
+for tagging, untagging, and listing sessions to avoid. A reference to a tool
+under an old name (`rebuild_semantic_index`) was corrected to its current name
+(`rebuild_index`). This release only updates documentation; nothing changes in
+how LoreConvo runs.
+
+---
+
 ## v0.8.5 (2026-07-21)
 
 ### Security: file and folder permissions hardened
