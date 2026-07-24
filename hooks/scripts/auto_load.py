@@ -141,31 +141,18 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
         kf_col = ", keep_forever" if "keep_forever" in col_names else ""
 
         if cwd:
+            project = os.path.basename(cwd.rstrip("/"))
             cursor = conn.execute(
                 "SELECT id, title, summary, decisions, artifacts,"
                 " open_questions, tags, start_date, end_date"
                 + kf_col +
                 " FROM sessions"
-                " WHERE project LIKE ?"
+                " WHERE project = ?"
                 " AND start_date >= ?"
                 " AND (source IS NULL OR source = 'session')"
                 + ext_filter + expiry_filter +
                 " ORDER BY start_date DESC LIMIT ?",
-                (f"%{cwd}%", cutoff, limit),
-            )
-            sessions = [dict(row) for row in cursor.fetchall()]
-
-        # Fall back to most recent across all projects if no project matches
-        if not sessions:
-            cursor = conn.execute(
-                "SELECT id, title, summary, decisions, artifacts,"
-                " open_questions, tags, start_date, end_date"
-                + kf_col +
-                " FROM sessions"
-                " WHERE (source IS NULL OR source = 'session')"
-                + ext_filter + expiry_filter +
-                " ORDER BY start_date DESC LIMIT ?",
-                (limit,),
+                (project, cutoff, limit),
             )
             sessions = [dict(row) for row in cursor.fetchall()]
 
