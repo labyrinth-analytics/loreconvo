@@ -1415,7 +1415,7 @@ def get_server_info() -> dict:
     mcp_accepted, status (ok|mismatch|undetermined|disabled|internal_error), note.
     """
     result = _compat_check()
-    return {k: v for k, v in result.items() if k != "error_detail"}
+    return dict(result)
 
 
 # -- Anti-pattern storage tools (v0.8.0) --
