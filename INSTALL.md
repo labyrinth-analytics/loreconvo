@@ -8,16 +8,26 @@ context automatically. Works with Claude Code and Cowork.
 
 ## Prerequisites
 
-- **Python 3.10 or newer** (macOS/Linux)
+- **uv** (which provides `uvx`) -- this is the only thing you need to install
 - Claude Code or Cowork installed
 
-Check your Python version:
+LoreConvo runs through `uvx`, which downloads a pinned copy of the server and
+manages its own Python. You do not need to create a virtual environment, and you
+do not need a particular system Python.
+
+Install uv if you do not have it:
 
 ```bash
-python3 --version
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-If you see 3.10 or higher, you are good to go.
+Check it is available:
+
+```bash
+uvx --version
+```
+
+If that prints a version, you are good to go.
 
 ---
 
@@ -50,19 +60,22 @@ bash install.sh
 ```
 
 The installer will:
-1. Create a Python virtual environment at `.venv/`
-2. Install the LoreConvo package and all dependencies
-3. Set the correct execute permissions on the hook scripts
-4. Verify the entry point binary was created
-5. Create the database directory at `~/.loreconvo/`
+1. Check that `uv` is available (nothing is pip-installed)
+2. Set the correct execute permissions on the hook scripts
+3. Create the database directory at `~/.loreconvo/`
 
 You should see output ending with `Installation complete!`.
 
-### Manual install (if you prefer):
+The server itself is not installed into a virtual environment. It runs via
+`uvx loreconvo==<version>`, pinned to the version the plugin shipped with, and
+uvx fetches it on first use.
+
+### Running from a working copy
+
+To run the code in your clone rather than the published version:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install .
+uv run --with . loreconvo
 ```
 
 ---
@@ -75,13 +88,18 @@ After installation, register LoreConvo with Claude Code using the `claude mcp ad
 claude mcp add --scope user \
   "--env=LORECONVO_PRO=<your-license-key>" \
   loreconvo -- \
-  /path/to/loreconvo/.venv/bin/python \
-  /path/to/loreconvo/src/server.py
+  uvx loreconvo==<version>
 ```
 
-Replace `/path/to/loreconvo` with the actual path to your LoreConvo installation. To find it, run `pwd` from inside the loreconvo directory.
+Replace `<version>` with the version you want to pin to (for example `0.8.6`).
+There is no path to substitute: uvx resolves the package itself.
 
 The `--env=LORECONVO_PRO=<your-license-key>` flag is optional -- omit it if you are using the free tier. The `--scope user` flag registers LoreConvo for all Claude Code sessions (not just the current project).
+
+> **Why pin an exact version?** The pin is what makes an install reproducible
+> and an upgrade deliberate. An unpinned `uvx loreconvo` can change underneath
+> you mid-session. The plugin ships a generated `.mcp.json` carrying the pin for
+> exactly this reason.
 
 > **Why `claude mcp add` instead of editing settings.json?** Claude Code reads
 > user-level MCP servers from `~/.claude.json`, managed by `claude mcp add --scope user`.
@@ -131,8 +149,8 @@ Cursor uses the same MCP protocol as Claude Code. Configure it by creating a `.c
 {
   "mcpServers": {
     "loreconvo": {
-      "command": "/path/to/loreconvo/.venv/bin/python",
-      "args": ["/path/to/loreconvo/src/server.py"],
+      "command": "uvx",
+      "args": ["loreconvo==<version>"],
       "env": {
         "LORECONVO_PRO": "your-license-key"
       }
@@ -153,15 +171,15 @@ Codex uses a TOML config file at `~/.codex/config.toml`. Add a `[mcp_servers.lor
 
 ```toml
 [mcp_servers.loreconvo]
-command = "/path/to/loreconvo/.venv/bin/python3"
-args = ["/path/to/loreconvo/src/server.py"]
+command = "uvx"
+args = ["loreconvo==<version>"]
 
 [mcp_servers.loreconvo.env]
 CODEX_HOME = "/Users/your-username/.codex"  # Required by Codex to locate its own config when running MCP servers as subprocesses
 LORECONVO_PRO = "your-license-key"
 ```
 
-Replace `/path/to/loreconvo` with the absolute path where you cloned or installed LoreConvo (the directory containing `src/server.py`). Replace `your-username` and `your-license-key` with your values.
+Replace `<version>` with the version you want to pin to, and `your-username` / `your-license-key` with your values. There is no install path to substitute -- uvx resolves the package itself.
 
 **macOS note:** `~/.Codex/config.toml` (capital C) resolves to the same location on a case-insensitive filesystem. The canonical path is lowercase `~/.codex/config.toml`.
 
@@ -176,15 +194,15 @@ Hermes Agent uses its own YAML config file at `~/.hermes/config.yaml` -- it does
 ```yaml
 mcp_servers:
   loreconvo:
-    command: /path/to/loreconvo/.venv/bin/python3
+    command: uvx
     args:
-      - /path/to/loreconvo/src/server.py
+      - loreconvo==<version>
     enabled: true
     env:
       LORECONVO_PRO: your-license-key
 ```
 
-Replace `/path/to/loreconvo` with the absolute path where you cloned or installed LoreConvo. Replace `your-license-key` with your Pro license key. Omit the `LORECONVO_PRO` line if you are using the free tier.
+Replace `<version>` with the version you want to pin to and `your-license-key` with your Pro license key. Omit the `LORECONVO_PRO` line if you are using the free tier. There is no install path to substitute -- uvx resolves the package itself.
 
 Restart Hermes Agent after saving the file. LoreConvo MCP tools will be available in the next Hermes session.
 
@@ -249,8 +267,7 @@ claude mcp add --scope user \
   "--env=LORECONVO_PRO=<your-license-key>" \
   "--env=LORECONVO_PROJECT_PATH=/Users/YOUR_USERNAME/projects/my_project" \
   loreconvo -- \
-  /path/to/loreconvo/.venv/bin/python \
-  /path/to/loreconvo/src/server.py
+  uvx loreconvo==<version>
 ```
 
 Replace `YOUR_USERNAME` and `my_project` with your actual values. Use the full absolute path -- do not use `~` or `$HOME`.
@@ -383,14 +400,16 @@ Troubleshooting section below.
 
 **"Module not found" or "command not found" error**
 
-This means the install did not complete correctly. Delete the `.venv/` folder and
-reinstall:
+Usually the pinned environment is incomplete or stale. Refresh it -- uvx rebuilds
+the environment from scratch:
 
 ```bash
-cd /path/to/loreconvo
-rm -rf .venv
-bash install.sh
+uvx --refresh loreconvo==<version>
 ```
+
+Use the same version your client is configured with (see `.mcp.json`). There is
+no `.venv/` to delete: since the unified-uvx release, nothing is pip-installed
+into the source tree.
 
 **Hooks are not running (no auto-save/load)**
 
@@ -514,8 +533,7 @@ claude mcp add --scope user \
   "--env=LORECONVO_PRO=<your-license-key>" \
   "--env=HF_HUB_OFFLINE=1" \
   loreconvo -- \
-  /path/to/loreconvo/.venv/bin/python \
-  /path/to/loreconvo/src/server.py
+  uvx loreconvo==<version>
 ```
 
 With `HF_HUB_OFFLINE=1`, the model loads from the local cache and all HuggingFace
