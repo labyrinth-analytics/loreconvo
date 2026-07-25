@@ -1,23 +1,15 @@
 #!/bin/bash
-# LoreConvo - Auto-install dependencies on session start
-# Uses CLAUDE_PLUGIN_DATA for persistent storage across sessions
+# LoreConvo - one-time uv prerequisite check (spec 2026-07-24).
+# The MCP server and hooks run via uvx; nothing is pip-installed anymore.
 
 PLUGIN_DATA="${CLAUDE_PLUGIN_DATA:-$HOME/.loreconvo}"
-MARKER="$PLUGIN_DATA/.deps-installed"
-REQUIREMENTS="${CLAUDE_PLUGIN_ROOT}/requirements.txt"
-
-# Create data directory if needed
+MARKER="$PLUGIN_DATA/.uv-check-shown"
 mkdir -p "$PLUGIN_DATA"
 
-# Only install if requirements have changed or never installed
-if [ ! -f "$MARKER" ] || ! diff -q "$REQUIREMENTS" "$PLUGIN_DATA/requirements.txt" >/dev/null 2>&1; then
-    echo "LoreConvo: Installing dependencies..."
-    pip3 install -q -r "$REQUIREMENTS" --break-system-packages 2>>"$PLUGIN_DATA/install.log" || pip3 install -q -r "$REQUIREMENTS" 2>>"$PLUGIN_DATA/install.log"
-    if [ $? -eq 0 ]; then
-        cp "$REQUIREMENTS" "$PLUGIN_DATA/requirements.txt"
-        touch "$MARKER"
-        echo "LoreConvo: Dependencies installed successfully."
-    else
-        echo "LoreConvo: Warning - could not install dependencies. Run: pip install mcp click"
-    fi
+if ! command -v uv >/dev/null 2>&1 && [ ! -f "$MARKER" ]; then
+    echo "LoreConvo: 'uv' is required but not installed. Install it with:"
+    echo "  curl -LsSf https://astral.sh/uv/install.sh | sh"
+    echo "then restart Claude Code. (This message shows once.)"
+    touch "$MARKER"
 fi
+exit 0
