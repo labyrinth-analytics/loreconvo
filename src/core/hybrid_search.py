@@ -1,8 +1,11 @@
 """LanceDB hybrid search for LoreConvo Pro.
 
 Provides LanceIndex: manages sessions.lance/ embedding index alongside sessions.db.
-All lancedb, sentence-transformers, and pyarrow imports are lazy -- free-tier users
-who have not installed Pro deps will never trigger them.
+lancedb, fastembed, and pyarrow are BASE dependencies since 2026-07-25 (spec
+amendment A1) -- there is no separate Pro install. Their imports stay lazy so a
+free-tier user never loads them or downloads the embedding model: the semantic
+path is gated on the Pro license in SessionDatabase.search_sessions, not on
+whether the packages are present.
 
 ADR: docs/agent-reports/architecture/proposals/lancedb_hybrid_search_evaluation_20260511.md
 Stage: 2A (LoreConvo). Stage 2B (LoreDocs) deferred until 2A ships.
