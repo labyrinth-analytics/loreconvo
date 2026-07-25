@@ -26,7 +26,7 @@ PLUGIN_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Hooks must never break a session: if uv is missing, warn and no-op.
 PIN=$(cat "$PLUGIN_ROOT/.runtime-pin" 2>/dev/null)
 if [ -z "$PIN" ] || ! command -v uvx >/dev/null 2>&1; then
-    echo "[$(date)] loreconvo hook skipped: uv/uvx not available or .runtime-pin missing (install uv: https://docs.astral.sh/uv/)" >> ~/.loreconvo/hook.log 2>/dev/null
+    echo "[$(date)] loreconvo hook skipped: uv/uvx not available or .runtime-pin missing (install uv: https://docs.astral.sh/uv/)" >> ~/.loreconvo/hook.log
     exit 0
 fi
 RUN_PYTHON="uvx --from loreconvo==$PIN python"
