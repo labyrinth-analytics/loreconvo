@@ -201,11 +201,24 @@ def index_memory_md(db_path, project_dir):
                 pass  # column already exists
 
             conn.execute(
-                """INSERT OR REPLACE INTO sessions
+                """INSERT INTO sessions
                    (id, title, surface, project, start_date, end_date,
                     summary, decisions, artifacts, open_questions, tags,
                     created_at, source)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                   title = excluded.title,
+                   surface = excluded.surface,
+                   project = excluded.project,
+                   start_date = excluded.start_date,
+                   end_date = excluded.end_date,
+                   summary = excluded.summary,
+                   decisions = excluded.decisions,
+                   artifacts = excluded.artifacts,
+                   open_questions = excluded.open_questions,
+                   tags = excluded.tags,
+                   created_at = excluded.created_at,
+                   source = excluded.source""",
                 (
                     session_id,
                     f"MEMORY.md: {project_name}",
