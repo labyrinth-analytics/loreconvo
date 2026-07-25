@@ -279,15 +279,26 @@ CREATE TRIGGER IF NOT EXISTS sessions_ai AFTER INSERT ON sessions BEGIN
     VALUES (new.rowid, new.title, new.summary, new.decisions, new.tags, new.open_questions, new.reasoning_notes);
 END;
 
+-- sessions_fts is an EXTERNAL-CONTENT table (content=sessions). Rows must be
+-- removed with the special 'delete' command carrying the OLD column values --
+-- a plain UPDATE/DELETE corrupts the index (SH-13438). Do not "simplify" these
+-- back to ordinary DML.
 CREATE TRIGGER IF NOT EXISTS sessions_au AFTER UPDATE ON sessions BEGIN
-    UPDATE sessions_fts SET title = new.title, summary = new.summary,
-        decisions = new.decisions, tags = new.tags,
-        open_questions = new.open_questions,
-        reasoning_notes = new.reasoning_notes WHERE rowid = old.rowid;
+    INSERT INTO sessions_fts(sessions_fts, rowid, title, summary, decisions,
+        tags, open_questions, reasoning_notes)
+    VALUES ('delete', old.rowid, old.title, old.summary, old.decisions,
+        old.tags, old.open_questions, old.reasoning_notes);
+    INSERT INTO sessions_fts(rowid, title, summary, decisions, tags,
+        open_questions, reasoning_notes)
+    VALUES (new.rowid, new.title, new.summary, new.decisions, new.tags,
+        new.open_questions, new.reasoning_notes);
 END;
 
 CREATE TRIGGER IF NOT EXISTS sessions_ad AFTER DELETE ON sessions BEGIN
-    DELETE FROM sessions_fts WHERE rowid = old.rowid;
+    INSERT INTO sessions_fts(sessions_fts, rowid, title, summary, decisions,
+        tags, open_questions, reasoning_notes)
+    VALUES ('delete', old.rowid, old.title, old.summary, old.decisions,
+        old.tags, old.open_questions, old.reasoning_notes);
 END;
 """
 
@@ -516,6 +527,9 @@ class SessionDatabase:
         self._migrate_add_summary_source_columns()
         self._migrate_add_cross_product_columns()
         self._migrate_add_cascade_fks()
+        # LAST among the migrations on purpose: any earlier step that recreates
+        # the sessions table or its triggers is repaired by this one (SH-13438).
+        self._migrate_fts_v4_external_content_triggers()
         self.conn.executescript(ANTI_PATTERN_SCHEMA_SQL)
         _validate_anti_pattern_schema(self.conn)
         self._sweep_anti_pattern_orphans()
@@ -673,6 +687,51 @@ class SessionDatabase:
             FROM sessions
         """)
         self.conn.executescript(FTS_TRIGGERS)
+
+    def _migrate_fts_v4_external_content_triggers(self):
+        """Repair FTS5 external-content triggers on EXISTING databases (SH-13438).
+
+        FTS_TRIGGERS uses CREATE TRIGGER IF NOT EXISTS, so shipping the corrected
+        constant fixes only NEWLY created databases -- every already-installed DB
+        keeps its broken trigger bodies forever. This migration force-replaces
+        them and rebuilds the index to discard tokens the old sessions_ad already
+        orphaned (one per re-save, for the life of the product).
+
+        Detection is on the trigger BODY, not a version counter: the defect
+        predates any schema-version marker, and the body is the ground truth.
+        Idempotent -- a DB whose triggers already carry the 'delete' command is
+        left untouched, so this costs one sqlite_master read on normal startup.
+        """
+        try:
+            rows = self.conn.execute(
+                "SELECT name, sql FROM sqlite_master "
+                "WHERE type = 'trigger' AND name IN ('sessions_au', 'sessions_ad')"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return  # no schema yet; _init_schema creates the correct form
+
+        if not rows:
+            return
+
+        legacy = [r for r in rows if r[1] and "'delete'" not in r[1]]
+        if not legacy:
+            return
+
+        logger.info(
+            "Migrating %d FTS5 trigger(s) to the external-content form and "
+            "rebuilding the index (SH-13438).", len(legacy)
+        )
+        self.conn.executescript("""
+            DROP TRIGGER IF EXISTS sessions_ai;
+            DROP TRIGGER IF EXISTS sessions_au;
+            DROP TRIGGER IF EXISTS sessions_ad;
+        """)
+        self.conn.executescript(FTS_TRIGGERS)
+        # Discard everything the broken triggers left behind. 'rebuild'
+        # regenerates the whole index from the content table, so orphaned rows
+        # and stale tokens both go away.
+        self.conn.execute("INSERT INTO sessions_fts(sessions_fts) VALUES('rebuild')")
+        self.conn.commit()
 
     def _migrate_add_dreaming_columns(self):
         """Add dreaming/recall columns and memory_digests table (v0.6.0).
