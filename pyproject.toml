@@ -26,6 +26,18 @@ dependencies = [
     "click==8.3.3",
     "cryptography==49.0.0",
     "packaging==25.0",
+    # Semantic search moved from the [pro] extra to base on 2026-07-25
+    # (spec amendment A1). fastembed runs BAAI/bge-small-en-v1.5 on
+    # onnxruntime instead of torch: same 384-dim vectors, ~130MB instead
+    # of ~300MB, one install path for every tier. Pro is a license flag.
+    "lancedb==0.30.2",
+    "pyarrow==24.0.0",
+    "fastembed==0.8.0",
+    # fastembed 0.8.0 caps onnxruntime <1.24 on Python <=3.13 but requires
+    # >=1.24.2 on 3.14, so no single pin covers requires-python >=3.10.
+    # Exact-pinned per marker rather than ranged (repo rule).
+    "onnxruntime==1.23.2; python_version < '3.14'",
+    "onnxruntime==1.28.0; python_version >= '3.14'",
 ]
 
 [project.optional-dependencies]
@@ -34,9 +46,8 @@ dev = [
     "pytest-asyncio==1.4.0",
 ]
 pro = [
-    "lancedb==0.30.2",
-    "sentence-transformers==5.5.0",
-    "pyarrow==24.0.0",
+    # semantic deps moved to base 2026-07-25 (spec amendment A1); kept so
+    # [pro] installs don't break
 ]
 bridge = [
     "anthropic==0.87.0",

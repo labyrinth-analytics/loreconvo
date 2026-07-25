@@ -132,9 +132,21 @@ class LanceIndex:
 
     def _get_model(self):
         if self._model is None:
-            from sentence_transformers import SentenceTransformer  # noqa: deferred Pro dep
-            self._model = SentenceTransformer('BAAI/bge-small-en-v1.5')
+            from fastembed import TextEmbedding  # ONNX runtime, no torch (spec A1)
+            _log.info(
+                "Loading embedding model BAAI/bge-small-en-v1.5; the first run "
+                "downloads it (~90MB) and may take a minute."
+            )
+            self._model = TextEmbedding('BAAI/bge-small-en-v1.5')
         return self._model
+
+    def _embed_one(self, text):
+        """Embed a single string -> list[float] of dim 384."""
+        return next(iter(self._get_model().embed([text]))).tolist()
+
+    def _embed_many(self, texts, batch_size=64):
+        """Embed many strings -> list of list[float], one per input, dim 384."""
+        return [v.tolist() for v in self._get_model().embed(texts, batch_size=batch_size)]
 
     def _get_db(self):
         if self._db is None:
@@ -199,9 +211,7 @@ class LanceIndex:
             return True
 
         try:
-            embedding = self._get_model().encode(
-                f"{title} {summary or ''}"
-            ).tolist()
+            embedding = self._embed_one(f"{title} {summary or ''}")
 
             tags_str = tags if isinstance(tags, str) else json.dumps(tags or [])
             row = {
@@ -257,7 +267,7 @@ class LanceIndex:
             return []
 
         try:
-            q_vec = self._get_model().encode(query).tolist()
+            q_vec = self._embed_one(query)
 
             where_clause: Optional[str] = None
             if project:
@@ -313,9 +323,8 @@ class LanceIndex:
         if not valid:
             return 0
 
-        model = self._get_model()
         texts = [f"{s['title']} {s.get('summary', '')}" for s in valid]
-        embeddings = model.encode(texts, show_progress_bar=False, batch_size=64)
+        embeddings = self._embed_many(texts)
 
         data = []
         for i, s in enumerate(valid):
@@ -329,7 +338,7 @@ class LanceIndex:
                 'title': s['title'],
                 'summary': (s.get('summary') or '')[:2000],
                 'tags': tags_raw if isinstance(tags_raw, str) else json.dumps(tags_raw),
-                'vector': embeddings[i].tolist(),
+                'vector': embeddings[i],
             })
 
         db = self._get_db()

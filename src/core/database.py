@@ -1453,7 +1453,7 @@ class SessionDatabase:
             lance = self._get_lance_index()
             table = lance._open_table()
             query_text = f"{session.title} {session.summary or ''}"
-            q_vec = lance._get_model().encode(query_text).tolist()
+            q_vec = lance._embed_one(query_text)
             raw = table.search(
                 q_vec,
                 vector_column_name="vector",
@@ -1881,10 +1881,13 @@ class SessionDatabase:
 
         try:
             import lancedb as _lancedb
-            from sentence_transformers import SentenceTransformer as _ST
+            from fastembed import TextEmbedding as _TE  # ONNX, no torch (spec A1)
 
-            model = _ST(_CROSS_LINK_EMBEDDING_MODEL)
-            q_vec = model.encode(query_text).tolist()
+            # Same BGE-small model as before, ONNX-quantized. Vectors differ
+            # slightly from the old torch fp32 output, which is why the 0.8.7
+            # CHANGELOG recommends a one-time rebuild_index.
+            model = _TE(_CROSS_LINK_EMBEDDING_MODEL)
+            q_vec = next(iter(model.embed([query_text]))).tolist()
 
             ld_lance_db = _lancedb.connect(str(lance_path))
             table = ld_lance_db.open_table("docs")
