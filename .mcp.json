@@ -1,12 +1,12 @@
 {
   "mcpServers": {
     "loreconvo": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/.venv/bin/python3",
+      "command": "uvx",
       "args": [
-        "${CLAUDE_PLUGIN_ROOT}/src/server.py"
+        "loreconvo==0.8.6"
       ],
       "env": {
-        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}/src"
+        "LORECONVO_PRO": ""
       }
     }
   }
