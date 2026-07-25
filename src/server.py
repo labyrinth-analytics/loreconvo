@@ -131,6 +131,26 @@ def _compress_summary(raw_summary: str) -> str:
         return raw_summary
 
 
+def _normalize_tags(tags: list[str] | None) -> list[str]:
+    if not tags:
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    for tag in tags:
+        if isinstance(tag, str) and ',' in tag:
+            parts = [t.strip() for t in tag.split(',') if t.strip()]
+            for part in parts:
+                if part not in seen:
+                    result.append(part)
+                    seen.add(part)
+        else:
+            tag_str = str(tag).strip() if tag else ''
+            if tag_str and tag_str not in seen:
+                result.append(tag_str)
+                seen.add(tag_str)
+    return result
+
+
 @mcp.tool(title="Save Session")
 def save_session(
     title: str,
@@ -207,7 +227,7 @@ def save_session(
         decisions=decisions or [],
         artifacts=merged_artifacts,
         open_questions=open_questions or [],
-        tags=tags or [],
+        tags=_normalize_tags(tags),
         skills_used=skills_used or [],
         project=project,
         external_tool_session=external_tool_session,
