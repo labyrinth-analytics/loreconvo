@@ -300,7 +300,10 @@ def summarize_session(session_id: str, transcript_path: str = None) -> bool:
 
     # Check Pro license.
     try:
-        from src.core.config import Config
+        try:
+            from loreconvo.core.config import Config
+        except ImportError:
+            from core.config import Config
         if not Config().is_pro:
             log.info("Non-Pro tier -- skipping async summarization")
             return False
