@@ -25,26 +25,38 @@
   "hooks": {
     "SessionStart": [
       {
-        "type": "command",
-        "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/setup.sh\""
-      },
-      {
-        "type": "command",
-        "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/on_session_start.sh\""
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/setup.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/on_session_start.sh\""
+          }
+        ]
       }
     ],
     "Stop": [
       {
-        "type": "command",
-        "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/on_stop.sh\"",
-        "timeout": 5
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/on_stop.sh\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "SessionEnd": [
       {
-        "type": "command",
-        "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/on_session_end.sh\"",
-        "timeout": 5
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/on_session_end.sh\"",
+            "timeout": 5
+          }
+        ]
       }
     ]
   }
