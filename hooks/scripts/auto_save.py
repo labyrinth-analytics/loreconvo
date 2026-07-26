@@ -15,6 +15,17 @@ from datetime import datetime
 from pathlib import Path
 
 
+_MAX_DECISION_LENGTH = 5000
+_MAX_SUMMARY_LENGTH = 50000
+
+
+def _truncate_if_needed(value, max_length, field_name):
+    """Truncate value to max_length chars, adding [TRUNCATED] marker if needed."""
+    if not value or len(value) <= max_length:
+        return value
+    return value[:max_length] + f" [TRUNCATED: {field_name} exceeds {max_length} chars]"
+
+
 def auto_save_tags():
     """Tags for an auto-saved session.
 
@@ -123,24 +134,20 @@ def parse_transcript(transcript_path):
         if i < len(assistant_messages):
             summary_parts.append(f"Assistant: {assistant_messages[i][:200]}")
     summary = "\n".join(summary_parts)
+    summary = _truncate_if_needed(summary, _MAX_SUMMARY_LENGTH, "summary")
 
-    # Truncate summary to reasonable length
-    if len(summary) > 2000:
-        summary = summary[:2000] + "..."
-
-    # Detect decisions (simple heuristic)
     decisions = []
     decision_keywords = ["decided", "agreed", "confirmed", "chose", "will use", "going with", "settled on"]
     for msg in assistant_messages:
         msg_lower = msg.lower()
         for keyword in decision_keywords:
             if keyword in msg_lower:
-                # Extract the sentence containing the keyword
                 for sentence in msg.split("."):
                     if keyword in sentence.lower():
                         clean = sentence.strip()
                         if clean and len(clean) > 10:
-                            decisions.append(clean[:200])
+                            truncated = _truncate_if_needed(clean, _MAX_DECISION_LENGTH, "decision")
+                            decisions.append(truncated)
                 break
 
     # Detect artifacts (file paths, URLs)
