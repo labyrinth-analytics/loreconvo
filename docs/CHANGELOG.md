@@ -4,6 +4,25 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.8.8 (2026-07-26)
+
+### Fixed: installing or updating LoreConvo from the marketplace
+
+Installing or updating LoreConvo from the plugin marketplace failed with
+"invalid manifest file ... Validation errors: hooks: Invalid input", and there
+was no way around it from the user's side.
+
+The plugin manifest declared its hooks in a shape the plugin loader does not
+accept. Nothing about LoreConvo itself was wrong, but the marketplace validates
+the manifest before it will install or update anything, so the whole plugin was
+rejected at the door. Versions 0.8.3 through 0.8.7 are all affected.
+
+This release fixes the manifest. Install and update both work again.
+
+If you are stuck on an older version, update normally; no manual cleanup is
+needed. There are no changes to the LoreConvo package itself in this release,
+so nothing about your data, settings, or saved sessions changes.
+
 ## v0.8.7 (2026-07-26)
 
 ### Installs and updates now work the way you would expect
