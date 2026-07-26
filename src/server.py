@@ -538,10 +538,12 @@ def create_project(
     expected_skills: list[str] | None = None,
     default_persona: str | None = None,
     instructions: str | None = None,
+    session_id: str | None = None,
 ) -> dict:
     """Create or update a project definition.
 
     Projects group related sessions and can auto-associate based on skill usage.
+    All changes to project instructions are logged for audit purposes.
 
     Args:
         name: Project identifier (e.g., 'secret-agent-man', 'project-ron')
@@ -549,8 +551,9 @@ def create_project(
         expected_skills: Skills typically used in this project's sessions
         default_persona: Auto-tag new sessions with this persona
         instructions: Optional project-wide instructions or constraints
+        session_id: Optional session ID for audit trail (typically provided by MCP context)
     """
-    db.create_project(name, description, expected_skills, default_persona, instructions)
+    db.create_project(name, description, expected_skills, default_persona, instructions, session_id=session_id)
     return {"status": "created", "project": name}
 
 

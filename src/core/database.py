@@ -241,6 +241,18 @@ CREATE TABLE IF NOT EXISTS session_cooccurrences (
 
 CREATE INDEX IF NOT EXISTS idx_cooccurrences_session ON session_cooccurrences(session_id);
 CREATE INDEX IF NOT EXISTS idx_cooccurrences_term ON session_cooccurrences(term);
+
+CREATE TABLE IF NOT EXISTS project_instruction_audit (
+    id              TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    project_name    TEXT NOT NULL REFERENCES projects(name),
+    session_id      TEXT,
+    changed_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    old_value       TEXT,
+    new_value       TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_project_instruction_audit_project ON project_instruction_audit(project_name);
+CREATE INDEX IF NOT EXISTS idx_project_instruction_audit_date ON project_instruction_audit(changed_at);
 """
 
 DREAMING_SCHEMA_SQL = """
@@ -2348,8 +2360,17 @@ class SessionDatabase:
         self, name: str, description: str = "",
         expected_skills: Optional[List[str]] = None,
         default_persona: Optional[str] = None,
-        instructions: Optional[str] = None
+        instructions: Optional[str] = None,
+        session_id: Optional[str] = None
     ):
+        old_row = self.conn.execute(
+            "SELECT instructions FROM projects WHERE name = ?", (name,)
+        ).fetchone()
+        old_instructions = old_row[0] if old_row else None
+
+        if instructions != old_instructions:
+            self._audit_log_instruction_change(name, old_instructions, instructions, session_id)
+
         self.conn.execute(
             """INSERT OR REPLACE INTO projects
                (name, description, expected_skills, default_persona, instructions)
@@ -2357,6 +2378,18 @@ class SessionDatabase:
             (name, description, json.dumps(expected_skills or []), default_persona, instructions)
         )
         self.conn.commit()
+
+    def _audit_log_instruction_change(
+        self, project_name: str, old_value: Optional[str],
+        new_value: Optional[str], session_id: Optional[str] = None
+    ):
+        """Log a change to project instructions for audit trail."""
+        self.conn.execute(
+            """INSERT INTO project_instruction_audit
+               (project_name, session_id, old_value, new_value)
+               VALUES (?, ?, ?, ?)""",
+            (project_name, session_id, old_value, new_value)
+        )
 
     def get_project(self, project_name: str) -> Optional[dict]:
         row = self.conn.execute(
