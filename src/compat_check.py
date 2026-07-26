@@ -58,8 +58,9 @@ def _get_installed_mcp_version() -> Optional[str]:
 def check() -> Dict:
     """Return MCP compatibility status. Never raises.
 
-    Result is cached on first call. To re-evaluate after env var changes,
-    restart the server -- cached state reflects startup configuration.
+    Result is cached on first call (except for internal_error). To re-evaluate
+    after env var changes, restart the server -- cached state reflects startup
+    configuration.
 
     Returns a dict with keys:
         product_name     -- "loreconvo"
@@ -75,10 +76,11 @@ def check() -> Dict:
     if _CACHED_RESULT is not None:
         return _CACHED_RESULT
 
+    product_version: Optional[str] = None
     try:
         # Get product version (best-effort; failure is non-fatal)
         try:
-            product_version: Optional[str] = importlib.metadata.version(_PRODUCT_DIST_NAME)
+            product_version = importlib.metadata.version(_PRODUCT_DIST_NAME)
         except Exception:
             product_version = None
 
@@ -203,7 +205,7 @@ def check() -> Dict:
     except Exception as exc:
         result = {
             "product_name": _PRODUCT_DIST_NAME,
-            "product_version": None,
+            "product_version": product_version,
             "mcp_installed": None,
             "mcp_tested": _MCP_TESTED_VERSION,
             "mcp_accepted": [],
@@ -211,7 +213,6 @@ def check() -> Dict:
             "note": "Unexpected error in MCP compatibility check; guard inactive",
             "error_detail": str(exc),
         }
-        _CACHED_RESULT = result
         return result
 
 
