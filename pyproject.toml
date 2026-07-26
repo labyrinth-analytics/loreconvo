@@ -1,6 +1,6 @@
 [project]
 name = "loreconvo"
-version = "0.8.6"
+version = "0.8.7"
 description = "Cross-surface persistent memory for Claude sessions. Vault conversations from Code, Cowork, and Chat -- recall decisions, artifacts, and context in any future session."
 readme = "README.md"
 license = "BUSL-1.1"
