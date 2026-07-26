@@ -27,7 +27,7 @@ import sys
 from typing import Dict, List, Optional
 
 _PRODUCT_DIST_NAME = "loreconvo"
-_MCP_TESTED_VERSION = "1.27.0"
+_MCP_TESTED_VERSION = "1.28.1"
 
 _CACHED_RESULT: Optional[Dict] = None
 
