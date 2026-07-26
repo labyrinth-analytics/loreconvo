@@ -1,5 +1,79 @@
 # LoreConvo Changelog
 
+## v0.8.7 (2026-07-26)
+
+### Installs and updates now work the way you would expect
+
+LoreConvo used to run from a Python virtual environment created in the source
+tree, or from `uvx loreconvo@latest`. Both had the same problem: what actually
+ran was not pinned. `@latest` resolves against a cache that can be stale, so a
+server could keep running an old version indefinitely, and "did the update take
+effect?" had no reliable answer. The venv had a sharper edge: its interpreter is
+a symlink to a system Python, so upgrading or removing that Python broke the
+server outright.
+
+The plugin now ships a configuration pinned to an exact version, and the server
+runs through `uvx` with its own managed Python. Installing or updating the
+plugin is what changes your version, and nothing else does. There is no virtual
+environment to create, break, or repair.
+
+If you installed a previous version, leftover packages from the old pip install
+are harmless; you can ignore them. Nothing needs to be uninstalled.
+
+### Fixed: "database disk image is malformed" during search, and stale search results
+
+A defect in the search index could corrupt it while saving a session, producing
+"database disk image is malformed" errors on subsequent searches. A related
+defect meant deleted sessions could leave fragments behind, so search sometimes
+matched text that no longer existed in any session.
+
+Both are fixed, and the fix is retroactive: upgrading repairs an index that has
+already been damaged. Your sessions are not affected either way, since the
+underlying data was never at risk, only the search index built over it. The
+repair runs automatically on first start after the upgrade and needs nothing
+from you. On a large history it may add a few seconds to that one startup.
+
+### Fixed: diagnostics no longer hide the reason for a failure
+
+`get_server_info` and the `loreconvo-compat-check` command reported that
+something was wrong without saying what: the underlying error text was being
+discarded. It is now included in the output. A missing `packaging` dependency
+was also causing the compatibility check to disable itself silently; that
+dependency is now declared, so the check runs and reports a real version.
+
+### One install, every tier: semantic search now works out of the box
+
+Semantic search used to be a separate install step. It needed the `[pro]`
+extra, which pulled in PyTorch: a large download, a second environment to keep
+up to date, and a common source of "why isn't semantic search working?"
+
+Semantic search now ships in the standard install. The same embedding model as
+before (BAAI/bge-small-en-v1.5) runs on ONNX Runtime instead of PyTorch, which
+is roughly a third of the download size. There is one install path and one
+environment for everyone. Pro is now purely a license flag: nothing extra to
+install to unlock it.
+
+`pip install loreconvo[pro]` still works and is now equivalent to a plain
+install, so existing scripts do not break.
+
+**Recommended one-time step:** run `rebuild_index` after upgrading. The new
+runtime produces very slightly different vectors than the old one, so an index
+built before this release will gradually drift out of step with new entries.
+Rebuilding brings everything back onto the same footing. Keyword search is
+unaffected and needs nothing.
+
+The first semantic search after upgrading downloads the model (about 90MB) and
+may take a minute. After that it is cached.
+
+### Updated: MCP SDK
+
+The bundled MCP SDK moves to 1.28.1, which carries fixes for three advisories in
+the versions LoreConvo previously pinned (CVE-2026-52870, CVE-2026-52869,
+CVE-2026-59950). None of them could affect LoreConvo: all three concern network
+transports and a multi-client task feature that LoreConvo does not use, since it
+runs over stdio as a single-client local server. The update means a security
+scan of your install comes back clean.
+
 ## v0.8.6 (2026-07-24)
 
 ### Docs: corrected MCP tool count and tool references
