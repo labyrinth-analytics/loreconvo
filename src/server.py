@@ -1435,8 +1435,11 @@ def get_server_info() -> dict:
     mcp_accepted, status (ok|mismatch|undetermined|disabled|internal_error), note,
     error_detail (set only on internal_error).
     """
+    # Defensive copy: check() returns its module-level cache object directly, so
+    # handing it out unwrapped lets any caller mutation corrupt the cache for
+    # every later call. Restored after SH-13429's second pass dropped it.
     result = _compat_check()
-    return result
+    return dict(result)
 
 
 # -- Anti-pattern storage tools (v0.8.0) --
