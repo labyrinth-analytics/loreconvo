@@ -1432,10 +1432,11 @@ def get_server_info() -> dict:
     servers without requiring a restart.
 
     Returns dict with: product_name, product_version, mcp_installed, mcp_tested,
-    mcp_accepted, status (ok|mismatch|undetermined|disabled|internal_error), note.
+    mcp_accepted, status (ok|mismatch|undetermined|disabled|internal_error), note,
+    error_detail (set only on internal_error).
     """
     result = _compat_check()
-    return dict(result)
+    return result
 
 
 # -- Anti-pattern storage tools (v0.8.0) --
