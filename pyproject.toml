@@ -74,3 +74,6 @@ packages = ["loreconvo", "loreconvo.core"]
 [tool.setuptools.package-dir]
 "loreconvo" = "src"
 "loreconvo.core" = "src/core"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
