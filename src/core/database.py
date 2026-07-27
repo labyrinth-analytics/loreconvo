@@ -2368,15 +2368,16 @@ class SessionDatabase:
         ).fetchone()
         old_instructions = old_row[0] if old_row else None
 
-        if instructions != old_instructions:
-            self._audit_log_instruction_change(name, old_instructions, instructions, session_id)
-
         self.conn.execute(
             """INSERT OR REPLACE INTO projects
                (name, description, expected_skills, default_persona, instructions)
                VALUES (?, ?, ?, ?, ?)""",
             (name, description, json.dumps(expected_skills or []), default_persona, instructions)
         )
+
+        if instructions != old_instructions:
+            self._audit_log_instruction_change(name, old_instructions, instructions, session_id)
+
         self.conn.commit()
 
     def _audit_log_instruction_change(
