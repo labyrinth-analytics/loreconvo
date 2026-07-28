@@ -1650,8 +1650,14 @@ def main():
     _compat_emit(_compat_check())
     _check_egg_info_conflict()
     from core import idle_watchdog
-    # Reap this process if the client parks it idle (releases any held DB lock).
-    idle_watchdog.install(mcp, env_var="LORECONVO_IDLE_TIMEOUT")
+    # Release the DB connection (and its write lock) when the client parks
+    # this process idle -- stays alive so Claude Code/Desktop (which do not
+    # re-spawn a stdio server that exits) keep a working connection (SH-13610).
+    idle_watchdog.install(
+        mcp, env_var="LORECONVO_IDLE_TIMEOUT",
+        release_func=db.release_idle_connection,
+        backstop_env_var="LORECONVO_IDLE_BACKSTOP_TIMEOUT",
+    )
     mcp.run(transport="stdio")
 
 
