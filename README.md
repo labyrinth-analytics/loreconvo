@@ -1,4 +1,4 @@
-# LoreConvo v0.8.8
+# LoreConvo v0.8.9
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -386,24 +386,26 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.8.8 (2026-07-26)
+## v0.8.9 (2026-07-28)
 
-### Fixed: installing or updating LoreConvo from the marketplace
+### Fixed: Idle-watchdog now releases resources cleanly instead of killing the server
 
-Installing or updating LoreConvo from the plugin marketplace failed with
-"invalid manifest file ... Validation errors: hooks: Invalid input", and there
-was no way around it from the user's side.
+The idle-watchdog timeout (5 minutes with no MCP messages) would force-exit the
+stdio server process when the timeout fired. Some clients (Claude Desktop, early
+Claude Code versions) park stdio servers open while they're idle instead of
+closing the pipe when they're done, causing the process to stay open, lock the
+database, and leak system resources.
 
-The plugin manifest declared its hooks in a shape the plugin loader does not
-accept. Nothing about LoreConvo itself was wrong, but the marketplace validates
-the manifest before it will install or update anything, so the whole plugin was
-rejected at the door. Versions 0.8.3 through 0.8.7 are all affected.
+Starting in v0.8.9, the watchdog closes its database connection and drops its
+cached Lance semantic-search index, then returns cleanly instead of exiting the
+process. The server stays parked, but releases the resources it was holding.
+Clients that do close the pipe promptly are not affected. Clients that park the
+connection will now stay stable and will not block other Claude instances from
+accessing the database.
 
-This release fixes the manifest. Install and update both work again.
-
-If you are stuck on an older version, update normally; no manual cleanup is
-needed. There are no changes to the LoreConvo package itself in this release,
-so nothing about your data, settings, or saved sessions changes.
+If you were using the workaround environment variable `LORECONVO_IDLE_TIMEOUT=86400`
+(1 day) to avoid the server exit, you can remove it — the fix handles the timeout
+without needing a workaround.
 
 <!-- WHATS_NEW:END -->
 
