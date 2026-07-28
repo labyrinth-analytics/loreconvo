@@ -4,6 +4,27 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.8.9 (2026-07-28)
+
+### Fixed: Idle-watchdog now releases resources cleanly instead of killing the server
+
+The idle-watchdog timeout (5 minutes with no MCP messages) would force-exit the
+stdio server process when the timeout fired. Some clients (Claude Desktop, early
+Claude Code versions) park stdio servers open while they're idle instead of
+closing the pipe when they're done, causing the process to stay open, lock the
+database, and leak system resources.
+
+Starting in v0.8.9, the watchdog closes its database connection and drops its
+cached Lance semantic-search index, then returns cleanly instead of exiting the
+process. The server stays parked, but releases the resources it was holding.
+Clients that do close the pipe promptly are not affected. Clients that park the
+connection will now stay stable and will not block other Claude instances from
+accessing the database.
+
+If you were using the workaround environment variable `LORECONVO_IDLE_TIMEOUT=86400`
+(1 day) to avoid the server exit, you can remove it — the fix handles the timeout
+without needing a workaround.
+
 ## v0.8.8 (2026-07-26)
 
 ### Fixed: installing or updating LoreConvo from the marketplace
