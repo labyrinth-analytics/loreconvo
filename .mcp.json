@@ -3,7 +3,7 @@
     "loreconvo": {
       "command": "uvx",
       "args": [
-        "loreconvo==0.8.8"
+        "loreconvo==0.8.9"
       ],
       "env": {
         "LORECONVO_PRO": ""
