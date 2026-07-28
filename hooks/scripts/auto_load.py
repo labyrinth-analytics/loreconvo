@@ -28,6 +28,14 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# Robust sibling import (SH-13436 r5): resolve this script's own directory
+# explicitly rather than relying on sys.path[0], which is invocation-path
+# dependent and could be set to something else by a future launcher/wrapper.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+import trust_framing
+
 
 # Token-based soft cap (replaces char-based MAX_CONTEXT_CHARS).
 # Default 1000 tokens = today's 4000 chars (len // 4), behavior-preserving.
@@ -139,13 +147,16 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
         )
         # Keep-forever user-curation signal (v0.8.1)
         kf_col = ", keep_forever" if "keep_forever" in col_names else ""
+        # summary_source drives provenance labeling (SH-13436); older DBs
+        # predating the async-summarization migration may not have it yet.
+        summary_source_col = ", summary_source" if "summary_source" in col_names else ""
 
         if cwd:
             project = os.path.basename(cwd.rstrip("/"))
             cursor = conn.execute(
                 "SELECT id, title, summary, decisions, artifacts,"
-                " open_questions, tags, start_date, end_date"
-                + kf_col +
+                " open_questions, tags, start_date, end_date, source"
+                + summary_source_col + kf_col +
                 " FROM sessions"
                 " WHERE project = ?"
                 " AND start_date >= ?"
@@ -266,16 +277,24 @@ def select_sessions(sessions, max_count=5):
     return [s for _, s in good[:max_count]]
 
 
-def format_context(sessions, cwd, db_path=None):
+def format_context(sessions, cwd, db_path=None, session_nonce=None):
     """Format session data into a concise context block for Claude.
 
     Output is plain text that Claude Code injects into the session.
     Includes open_questions (missing from old version) as they are highest-signal.
-    If project instructions exist, includes them after project name.
+    If project instructions exist, includes them after project name (project
+    instructions are user-authored config, not recalled content, so they stay
+    outside the untrusted-content wrapper below).
+    The session/digest block (but not the header or project instructions) is
+    wrapped in an explicit untrusted-data boundary (SH-13436) before being
+    returned, so Claude Code's injected context is never bare recalled text.
     Enforces _MAX_CONTEXT_TOKENS soft cap to prevent system prompt bloat.
     """
     if not sessions:
         return ""
+
+    if session_nonce is None:
+        session_nonce = trust_framing.derive_session_nonce(None)
 
     lines = []
     lines.append("# LoreConvo: Recent Session Context")
@@ -305,8 +324,14 @@ def format_context(sessions, cwd, db_path=None):
         lines.append("Recent sessions (no project filter):")
     lines.append("")
 
-    total_chars = sum(len(l) for l in lines)
-    total_tokens = total_chars // 4
+    # Wrapper overhead is subtracted from the budget once, up front, so the
+    # per-block cap check below still reflects the real total context size
+    # after wrapping (SH-13436).
+    budget_tokens = _MAX_CONTEXT_TOKENS - trust_framing.WRAPPER_OVERHEAD_TOKENS
+
+    body_lines = []
+    total_chars = 0
+    total_tokens = 0
 
     for i, session in enumerate(sessions, 1):
         block = []
@@ -324,6 +349,12 @@ def format_context(sessions, cwd, db_path=None):
         block.append(f"## Session {i}: {title}")
         if date_str:
             block.append(f"Date: {date_str}")
+        block.append(
+            "Provenance: "
+            + trust_framing.convo_provenance_tag(
+                session.get("source"), session.get("summary_source")
+            )
+        )
 
         # Summary (truncated)
         summary = session.get("summary") or ""
@@ -368,16 +399,24 @@ def format_context(sessions, cwd, db_path=None):
 
         block_chars = sum(len(l) for l in block)
         block_tokens = block_chars // 4
-        if total_tokens + block_tokens > _MAX_CONTEXT_TOKENS and i > 1:
+        if total_tokens + block_tokens > budget_tokens and i > 1:
             # Soft cap reached -- stop adding more sessions
             break
 
-        lines.extend(block)
+        body_lines.extend(block)
         total_chars += block_chars
         total_tokens += block_tokens
 
-    lines.append("---")
-    lines.append("Use this context to avoid re-asking questions or repeating work from prior sessions.")
+    if body_lines:
+        body_text = "\n".join(body_lines).rstrip("\n")
+        lines.append(trust_framing.wrap_untrusted(body_text, session_nonce=session_nonce))
+        lines.append("")
+
+    # A genuine system-authored hint, not recalled content -- stays outside
+    # the untrusted-content wrapper above. The prior free-floating imperative
+    # sentence directly instructing action on the wrapped content ("Use this
+    # context to avoid re-asking questions...") is deleted; that role is now
+    # played by the wrapper's own standing note (SH-13436).
     lines.append("If a prior session is directly relevant, query LoreConvo MCP tools for full details.")
 
     return "\n".join(lines)
@@ -473,22 +512,28 @@ def main():
 
         sessions = select_sessions(raw_sessions, max_count=max_count)
 
-        context = format_context(sessions, cwd, db_path)
+        session_nonce = trust_framing.derive_session_nonce(session_id)
 
-        # Additive digest injection: prepend memory digest if eligible
+        context = format_context(sessions, cwd, db_path, session_nonce=session_nonce)
+
+        # Additive digest injection: prepend memory digest if eligible.
+        # Wrapped separately (own untrusted-boundary + CONSOLIDATED DIGEST
+        # provenance tag, SH-13436) rather than prepended raw -- order is
+        # preserved as before: digest first, then sessions.
         project_name = os.path.basename(cwd) if cwd else ""
         surface = os.environ.get("LORECONVO_SURFACE", "code")
         digest_md = query_digest_for_injection(db_path, project_name, surface)
-        if digest_md and context:
-            context = digest_md + "\n\n" + context
-        elif digest_md:
-            context = digest_md
+        if digest_md:
+            digest_body = f"Provenance: {trust_framing.DIGEST_PROVENANCE_LABEL}\n\n{digest_md}"
+            wrapped_digest = trust_framing.wrap_untrusted(digest_body, session_nonce=session_nonce)
+            context = f"{wrapped_digest}\n\n{context}" if context else wrapped_digest
 
         if context:
             print(context)
             sys.stderr.write(
                 f"LoreConvo auto-load: Injected context from {len(sessions)} session(s) "
-                f"(scored from {len(raw_sessions)} candidates) for session {session_id}\n"
+                f"(scored from {len(raw_sessions)} candidates) for session {session_id} "
+                f"(trust-wrapped)\n"
             )
 
     except json.JSONDecodeError:
