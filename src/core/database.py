@@ -514,15 +514,74 @@ class SessionDatabase:
     def __init__(self, config: Optional[Config] = None):
         self.config = config or Config()
         self.config.ensure_db_dir()
+        # In-process write serialization for multi-statement mutations. Also
+        # guards reopening self._conn so the idle watchdog's release cannot
+        # close it out from under an in-flight write (see release_idle_connection).
+        self._write_lock = threading.Lock()
         # _open_conn() sets isolation_level=None, WAL, busy_timeout=10000,
         # foreign_keys=ON, check_same_thread=False, row_factory=Row.
-        self.conn = _open_conn(self.config.db_path)
-        # In-process write serialization for multi-statement mutations.
-        self._write_lock = threading.Lock()
+        self._conn = _open_conn(self.config.db_path)
+        # True only after an explicit close() -- distinguishes a terminal
+        # close from an idle-watchdog release, which must keep reopening.
+        self._closed = False
         self._lance_index = None  # lazy init; LanceIndex instance when Pro
         _check_shared_environment_warning()
         _check_network_filesystem_warning(str(self.config.db_path))
         self._init_schema()
+
+    @property
+    def conn(self) -> sqlite3.Connection:
+        """The live connection, reopened lazily if idle-released.
+
+        Fast path reads self._conn without the lock (a plain attribute read/
+        write is atomic under the GIL); the lock is only needed to reopen.
+        This leaves a narrow window where a reader can be handed a connection
+        that the watchdog closes a moment later -- accepted the same way the
+        wedged-writer risk is documented in loreconvo's CLAUDE.md, since
+        closing the window fully would require every read call site to hold
+        _write_lock for its whole duration.
+        """
+        conn = self._conn
+        if conn is not None:
+            return conn
+        with self._write_lock:
+            return self._ensure_conn_locked()
+
+    @conn.setter
+    def conn(self, value):
+        self._conn = value
+
+    def _ensure_conn_locked(self) -> sqlite3.Connection:
+        """Return the live connection, opening one if needed.
+
+        Caller must already hold self._write_lock. Raises if close() was
+        called -- a terminal close never reopens; only the idle-watchdog's
+        release_idle_connection() does.
+        """
+        if self._closed:
+            raise sqlite3.ProgrammingError(
+                "Cannot operate on a closed SessionDatabase; construct a new instance."
+            )
+        if self._conn is None:
+            self._conn = _open_conn(self.config.db_path)
+        return self._conn
+
+    def release_idle_connection(self) -> None:
+        """Close the connection to release the sqlite write lock while idle.
+
+        Called by the idle watchdog instead of exiting the process (SH-13610):
+        exiting a stdio server that a client parks (rather than re-spawns) left
+        Claude Code/Desktop with a permanently dead MCP connection. Closing the
+        connection still rolls back any dangling write transaction and releases
+        the write lock -- the original purpose of the watchdog (SH-12881) --
+        without killing the process. Blocks on _write_lock so it can never
+        close a connection mid-transaction; the next access reopens lazily via
+        the `conn` property / _write_context.
+        """
+        with self._write_lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
 
     def _init_schema(self):
         self.conn.executescript(SCHEMA_SQL)
@@ -1203,13 +1262,14 @@ class SessionDatabase:
     def _write_context(self):
         """Structural write-lock context manager. ALL mutations MUST use this.
 
-        Acquires self._write_lock and yields self.conn. Does not manage
-        transactions -- callers issue BEGIN IMMEDIATE / COMMIT / ROLLBACK
-        explicitly (required for cross-process serialization via SQLite WAL).
-        Read-only SELECT calls do NOT use this context manager.
+        Acquires self._write_lock and yields the live connection (reopening
+        it if the idle watchdog released it). Does not manage transactions --
+        callers issue BEGIN IMMEDIATE / COMMIT / ROLLBACK explicitly (required
+        for cross-process serialization via SQLite WAL). Read-only SELECT
+        calls do NOT use this context manager.
         """
         with self._write_lock:
-            yield self.conn
+            yield self._ensure_conn_locked()
 
     def _sweep_anti_pattern_orphans(self):
         """Startup fallback: remove orphaned anti_pattern_sessions rows.
@@ -1763,7 +1823,11 @@ class SessionDatabase:
         return {"version": 2, "sessions": sessions}
 
     def close(self):
-        self.conn.close()
+        with self._write_lock:
+            self._closed = True
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
 
     def __enter__(self):
         return self
