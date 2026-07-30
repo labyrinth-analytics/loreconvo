@@ -605,6 +605,7 @@ class SessionDatabase:
         _validate_anti_pattern_schema(self.conn)
         self._sweep_anti_pattern_orphans()
         self._ensure_keep_forever_schema()
+        self._migrate_add_agent_context_configs()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
         null_rows = self.conn.execute(
@@ -619,6 +620,44 @@ class SessionDatabase:
                     (new_id, row['rowid'])
                 )
             self.conn.commit()
+
+    def _migrate_add_agent_context_configs(self):
+        """Create agent_context_configs table (SH-12766, agent context injection).
+
+        One row per (agent_name, project) pair; topics stored as a JSON array
+        column (bounded at MAX_TOPICS_PER_CONFIG). Idempotent: CREATE TABLE/INDEX
+        IF NOT EXISTS, run unconditionally on every startup -- no PRAGMA
+        user_version gate. This deliberately diverges from the architecture
+        proposal's version-gated design (SH-12766 disposition, migration HIGH
+        findings): a version short-circuit can skip table creation if some other
+        component bumped user_version first, leaving agent_context_configs
+        missing despite the DB reporting itself "migrated." Following this
+        file's existing unconditional-idempotent _migrate_* convention instead
+        avoids that failure mode entirely.
+        """
+        self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS agent_context_configs (
+                agent_name            TEXT NOT NULL,
+                project               TEXT NOT NULL,
+                topics_json           TEXT NOT NULL DEFAULT '[]',
+                max_results_per_topic INTEGER NOT NULL DEFAULT 3
+                                          CHECK (max_results_per_topic BETWEEN 1 AND 10),
+                enabled               INTEGER NOT NULL DEFAULT 1
+                                          CHECK (enabled IN (0, 1)),
+                status                TEXT NOT NULL DEFAULT 'active'
+                                          CHECK (status IN ('active', 'retired')),
+                last_used_at          TEXT,
+                retired_at            TEXT,
+                created_at            TEXT NOT NULL
+                                          DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                updated_at            TEXT NOT NULL
+                                          DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                PRIMARY KEY (agent_name, project)
+            );
+            CREATE INDEX IF NOT EXISTS idx_agent_context_configs_project
+                ON agent_context_configs(project, enabled);
+        """)
+        self.conn.commit()
 
     def _migrate_fts_v2(self):
         """Migrate FTS5 index to v2: add tags and open_questions columns.
