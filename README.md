@@ -289,6 +289,22 @@ Check your current tier and usage with `get_tier`. Activate a Pro license with
 - **Cross-product document linking (Pro)**: Automatically discovers and links the LoreDocs documents most relevant to any session, and vice versa. Uses two new tools: `get_docs_for_session` and `session_link_doc`. Requires both LoreConvo Pro and LoreDocs Pro.
 - **Local-first**: SQLite database, no cloud dependency, zero API costs
 
+## Tiers
+
+**Free - 50 sessions**
+- Full feature set: auto-load, full-text search, tagging, session linking, export and import
+- Local SQLite storage -- your data, your machine, no cloud account required
+- One-click install via the Anthropic Marketplace
+
+**Pro - $8/month**
+- Unlimited sessions
+- Team memory: share sessions with teammates (local-first async export/import, no server required)
+- Related session discovery and semantic search
+- Anthropic managed-agents export
+- LLM-quality session summarization in the background (async)
+
+[Upgrade to Pro](https://www.labyrinthanalyticsconsulting.com/tools)
+
 ## MCP Tools
 
 LoreConvo provides 32 MCP tools that Claude calls automatically during sessions.
