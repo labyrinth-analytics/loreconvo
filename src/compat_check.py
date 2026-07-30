@@ -27,6 +27,12 @@ import sys
 from typing import Dict, List, Optional
 
 _PRODUCT_DIST_NAME = "loreconvo"
+
+# [SH-13566 / SH-13501 follow-up] When bumping this constant for a new mcp release,
+# check whether LATEST_PROTOCOL_VERSION is "2026-07-28" or later. If so, re-run the
+# SH-13566 spec-change grep (-32002, roots, sampling/create_message, Mcp-Session-Id)
+# against the new SDK to verify the stdio-only exemption still holds before assuming
+# this product needs no code changes for the new spec.
 _MCP_TESTED_VERSION = "1.28.1"
 
 _CACHED_RESULT: Optional[Dict] = None
