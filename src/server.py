@@ -1629,6 +1629,130 @@ def pin_session(session_id: str, keep_forever: object = True) -> dict:
     return {"ok": True, "session_id": sid, "keep_forever": keep_forever}
 
 
+# -- Structured memory items: decisions/questions/artifacts (SH-12768) --
+
+@mcp.tool(title="Save Memory Item")
+def save_memory_item(
+    item_type: str,
+    title: str,
+    body: str | None = None,
+    session_id: str | None = None,
+    project: str = "unspecified",
+    tags: list[str] | None = None,
+    metadata: dict | None = None,
+    external_id: str | None = None,
+    artifact_type: str | None = None,
+) -> dict:
+    """Save a structured memory item: a decision, open question, or artifact.
+
+    Replaces the old free-text decisions/open_questions/artifacts lists on
+    sessions with queryable, lifecycle-tracked rows. Idempotent when
+    external_id is given: a second save with the same (project, external_id)
+    returns the existing item (created=False) instead of creating a duplicate.
+
+    Args:
+        item_type: One of 'decision', 'open_question', 'artifact'.
+        title: The decision text, the question text, or the artifact identifier.
+        body: Free-text detail/rationale for decision/open_question. Ignored
+            for artifacts -- use artifact_type instead. Capped at 4096 chars.
+        session_id: Originating session, if any. Must reference an existing session.
+        project: Project namespace (default 'unspecified').
+        tags: Freeform tag list.
+        metadata: Freeform key-value metadata (mainly for artifacts).
+        external_id: Caller-supplied dedup key, unique per (project, external_id).
+        artifact_type: For item_type='artifact', the artifact's type (e.g. 'file', 'url').
+    """
+    return db.save_memory_item(
+        item_type=item_type, title=title, body=body, session_id=session_id,
+        project=project, tags=tags, metadata=metadata, external_id=external_id,
+        artifact_type=artifact_type,
+    )
+
+
+@mcp.tool(title="Query Memory Items")
+def query_memory_items(
+    item_type: str | None = None,
+    project: str | None = None,
+    status: str | None = None,
+    artifact_type: str | None = None,
+    days: int | None = None,
+    limit: int = 50,
+) -> dict:
+    """Query structured memory items by type, project, status, and recency.
+
+    Args:
+        item_type: Filter to 'decision', 'open_question', or 'artifact'.
+        project: Filter to a project namespace.
+        status: Filter to a lifecycle status (e.g. 'active', 'open', 'retired').
+        artifact_type: Filter artifacts by their artifact_type. Only applies
+            with item_type='artifact'.
+        days: Only items created in the last N days.
+        limit: Max rows to return (default 50, max 200).
+    """
+    return db.query_memory_items(
+        item_type=item_type, project=project, status=status,
+        artifact_type=artifact_type, days=days, limit=limit,
+    )
+
+
+@mcp.tool(title="Transition Memory Item")
+def transition_memory_item(
+    item_id: str,
+    transition: str,
+    reason: str | None = None,
+    closing_session_id: str | None = None,
+) -> dict:
+    """Move a memory item through its lifecycle.
+
+    Valid transitions: 'retire' (decision -> retired); 'answer' and
+    'wont-answer' (open_question -> answered / wont-answer). Already-closed
+    items return code='already_closed' so callers can retry idempotently.
+
+    Args:
+        item_id: The memory item's id.
+        transition: 'retire', 'answer', or 'wont-answer'.
+        reason: Optional free-text reason recorded on close.
+        closing_session_id: Session performing the transition, if any. Must
+            reference an existing session.
+    """
+    return db.transition_memory_item(
+        item_id=item_id, transition=transition, reason=reason,
+        closing_session_id=closing_session_id,
+    )
+
+
+@mcp.tool(title="Update Memory Item")
+def update_memory_item(
+    item_id: str,
+    title: str | None = None,
+    body: str | None = None,
+    tags: list[str] | None = None,
+    metadata: dict | None = None,
+    new_project: str | None = None,
+    allow_project_change: bool = False,
+) -> dict:
+    """Correct a memory item's title, body, tags, or metadata, or move it between projects.
+
+    Moving projects requires allow_project_change=True as an explicit guard
+    against accidental cross-project moves. If the item has an external_id,
+    the move is rejected with code='external_id_conflict' when the
+    destination project already has an item with that external_id.
+
+    Args:
+        item_id: The memory item's id.
+        title: New title, if changing.
+        body: New body, if changing. Capped at 4096 chars.
+        tags: New tag list, if changing (replaces, not merges).
+        metadata: New metadata dict, if changing (replaces, not merges).
+        new_project: Destination project, if moving.
+        allow_project_change: Must be True to actually move projects.
+    """
+    return db.update_memory_item(
+        item_id=item_id, title=title, body=body, tags=tags, metadata=metadata,
+        new_project=new_project, allow_project_change=allow_project_change,
+    )
+
+
 def main():
     """Entry point for uvx / console script execution."""
     import argparse
