@@ -1,6 +1,6 @@
 # LoreConvo Changelog
 
-## Unreleased
+## v0.8.10 (2026-07-31)
 
 ### Changed: Hook output format change -- recalled-content trust boundary
 
@@ -15,6 +15,18 @@ This is a framing/boundary-integrity fix (SH-13436), not a claim to solve
 prompt injection. The injected-context text format has never been a
 documented, stable contract for this hook; any external tooling parsing it
 structurally should expect this and future format changes.
+
+### Fixed: Auto-save length limits now match documented values
+
+Session auto-save was still capping saved summaries and decisions at limits
+left over from an earlier version of the hook (50,000 and 5,000 characters)
+rather than the smaller values actually intended for this release (8,000 and
+500). A separate bug in the truncation marker could also let a saved field
+run slightly past its limit instead of stopping at it.
+
+Starting in v0.8.10, saved summaries are capped at 8,000 characters and
+decisions at 500, and the `[TRUNCATED: ...]` marker is reserved inside that
+limit so a truncated field never exceeds it.
 
 ## v0.8.9 (2026-07-28)
 

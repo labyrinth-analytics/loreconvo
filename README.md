@@ -1,4 +1,4 @@
-# LoreConvo v0.8.9
+# LoreConvo v0.8.10
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -85,7 +85,7 @@ Replace `/path/to/loreconvo` with wherever you saved the source folder.
 
 After making code changes, use `/reload-plugins` to refresh without restarting.
 
-Once loaded, Claude has access to all 32 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
+Once loaded, Claude has access to all 36 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
 
 ### Cowork (Desktop App)
 
@@ -307,7 +307,7 @@ Check your current tier and usage with `get_tier`. Activate a Pro license with
 
 ## MCP Tools
 
-LoreConvo provides 32 MCP tools that Claude calls automatically during sessions.
+LoreConvo provides 36 MCP tools that Claude calls automatically during sessions.
 The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs/mcp_tool_catalog.md) for the complete reference.
 
 | Tool | What it does |
@@ -344,6 +344,10 @@ The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs
 | `get_anti_patterns` | List sessions tagged as anti-patterns (approaches to avoid) |
 | `tag_as_anti_pattern` | Tag a session as an anti-pattern so future recalls flag it |
 | `untag_anti_pattern` | Remove an anti-pattern tag from a session |
+| `save_memory_item` | Save a structured memory item: a decision, open question, or artifact |
+| `query_memory_items` | Query structured memory items by type, project, status, and recency |
+| `transition_memory_item` | Move a memory item through its lifecycle (retire, answer, wont-answer) |
+| `update_memory_item` | Correct a memory item's title, body, tags, or metadata, or move it between projects |
 
 ## Requirements
 
@@ -402,26 +406,33 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.8.9 (2026-07-28)
+## v0.8.10 (2026-07-31)
 
-### Fixed: Idle-watchdog now releases resources cleanly instead of killing the server
+### Changed: Hook output format change -- recalled-content trust boundary
 
-The idle-watchdog timeout (5 minutes with no MCP messages) would force-exit the
-stdio server process when the timeout fired. Some clients (Claude Desktop, early
-Claude Code versions) park stdio servers open while they're idle instead of
-closing the pipe when they're done, causing the process to stay open, lock the
-database, and leak system resources.
+The auto-load SessionStart hook now wraps recalled session/digest content in
+an explicit untrusted-data delimiter (`<system-reminder id="...">...</system-reminder>`)
+before injecting it into Claude Code's context, with a per-session nonce, a
+provenance line per session ("heuristic capture", "LLM summarized (Pro)",
+etc.), and the removal of the prior free-floating instruction-like sentence
+at the end of the block.
 
-Starting in v0.8.9, the watchdog closes its database connection and drops its
-cached Lance semantic-search index, then returns cleanly instead of exiting the
-process. The server stays parked, but releases the resources it was holding.
-Clients that do close the pipe promptly are not affected. Clients that park the
-connection will now stay stable and will not block other Claude instances from
-accessing the database.
+This is a framing/boundary-integrity fix (SH-13436), not a claim to solve
+prompt injection. The injected-context text format has never been a
+documented, stable contract for this hook; any external tooling parsing it
+structurally should expect this and future format changes.
 
-If you were using the workaround environment variable `LORECONVO_IDLE_TIMEOUT=86400`
-(1 day) to avoid the server exit, you can remove it — the fix handles the timeout
-without needing a workaround.
+### Fixed: Auto-save length limits now match documented values
+
+Session auto-save was still capping saved summaries and decisions at limits
+left over from an earlier version of the hook (50,000 and 5,000 characters)
+rather than the smaller values actually intended for this release (8,000 and
+500). A separate bug in the truncation marker could also let a saved field
+run slightly past its limit instead of stopping at it.
+
+Starting in v0.8.10, saved summaries are capped at 8,000 characters and
+decisions at 500, and the `[TRUNCATED: ...]` marker is reserved inside that
+limit so a truncated field never exceeds it.
 
 <!-- WHATS_NEW:END -->
 
