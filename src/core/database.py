@@ -6,9 +6,11 @@ import json
 import logging
 import os
 import re
+import shutil
 import socket
 import sqlite3
 import threading
+import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -108,6 +110,91 @@ def parse_session_id(raw: str) -> tuple:
             "message": "session_id must be a valid UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
         }
     return raw, None
+
+
+def _validate_memory_session_id(conn: sqlite3.Connection, session_id: Optional[str]) -> Optional[dict]:
+    """Return an error dict if session_id is provided but not found; None on success.
+
+    Belt-and-suspenders on top of the FK enforcement already active via
+    PRAGMA foreign_keys=ON (set for every connection in _open_conn) -- this
+    gives callers a structured application-layer error instead of a raw
+    sqlite3.IntegrityError. [SH-12768 r4 HIGH #5]
+    """
+    if session_id is None:
+        return None
+    exists = conn.execute(
+        "SELECT 1 FROM sessions WHERE id=?", (session_id,)
+    ).fetchone()
+    if not exists:
+        return {
+            "ok": False,
+            "code": "session_not_found",
+            "message": "The provided session_id does not exist.",
+        }
+    return None
+
+
+_MEMORY_ITEM_FIELD_CAP = 4096
+
+
+def _truncate_text(value):
+    """Cap plain text at _MEMORY_ITEM_FIELD_CAP chars. Returns (value, truncated)."""
+    if value is None or len(value) <= _MEMORY_ITEM_FIELD_CAP:
+        return value, False
+    return value[:_MEMORY_ITEM_FIELD_CAP], True
+
+
+def _truncate_json_list(items: list) -> tuple:
+    """Serialize a list to JSON, dropping trailing elements until it fits the cap.
+
+    Dropping (rather than char-slicing the encoded string) keeps the result
+    valid JSON, since memory_items.tags has CHECK(json_valid(tags) ...).
+    """
+    items = list(items)
+    encoded = json.dumps(items)
+    truncated = False
+    while len(encoded) > _MEMORY_ITEM_FIELD_CAP and items:
+        items.pop()
+        truncated = True
+        encoded = json.dumps(items)
+    return encoded, truncated
+
+
+def _truncate_json_dict(obj: dict) -> tuple:
+    """Serialize a dict to JSON, dropping trailing keys until it fits the cap.
+
+    Dropping (rather than char-slicing) keeps the result valid JSON, since
+    memory_items.metadata has CHECK(json_valid(metadata)).
+    """
+    obj = dict(obj)
+    encoded = json.dumps(obj)
+    truncated = False
+    while len(encoded) > _MEMORY_ITEM_FIELD_CAP and obj:
+        obj.popitem()
+        truncated = True
+        encoded = json.dumps(obj)
+    return encoded, truncated
+
+
+_MEMORY_ITEM_TYPES = ('decision', 'open_question', 'artifact')
+_MEMORY_ITEM_INITIAL_STATUS = {
+    'decision': 'active',
+    'open_question': 'open',
+    'artifact': 'active',
+}
+# (item_type, transition) -> resulting status. Artifacts have no transition
+# in v1 -- matches the architecture proposal's routing table, which only
+# defines 'retire' (decision) and 'answer'/'wont-answer' (open_question).
+_MEMORY_ITEM_TRANSITIONS = {
+    ('decision', 'retire'): 'retired',
+    ('open_question', 'answer'): 'answered',
+    ('open_question', 'wont-answer'): 'wont-answer',
+}
+_MEMORY_ITEM_TERMINAL_STATUSES = {
+    'decision': {'retired'},
+    'open_question': {'answered', 'wont-answer'},
+    'artifact': {'archived'},
+}
 
 
 def _check_shared_environment_warning() -> None:
@@ -606,6 +693,7 @@ class SessionDatabase:
         self._sweep_anti_pattern_orphans()
         self._ensure_keep_forever_schema()
         self._migrate_add_agent_context_configs()
+        self._migrate_add_memory_items_table()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
         null_rows = self.conn.execute(
@@ -658,6 +746,127 @@ class SessionDatabase:
                 ON agent_context_configs(project, enabled);
         """)
         self.conn.commit()
+
+    def _migrate_add_memory_items_table(self):
+        """Create memory_items table + indexes (SH-12768, structured memory layer r4).
+
+        Unconditional idempotent CREATE TABLE/INDEX IF NOT EXISTS, run on every
+        startup -- the same convention as _migrate_add_agent_context_configs
+        (SH-12766), not the schema_migration_log-gated apply/rollback design
+        in the architecture proposal (SH-12363 r4). That gated design was
+        rejected here for the same reason SH-12766 rejected it: a version
+        short-circuit can skip table creation if some other component wrote
+        the gate row first, leaving the table missing despite the DB reporting
+        itself "migrated." No rollback function is added either, matching
+        every other _migrate_* in this file -- these are additive-only.
+
+        Degrades gracefully instead of blocking the whole feature: if this
+        SQLite build predates json1 (<3.38.0) memory_items is left disabled
+        entirely; if FTS5 is unavailable the table/indexes are still created
+        and CRUD works, only full-text search over items is disabled.
+        [SH-12768 r4 migration HIGH: "FTS5 prerequisite check blocks entire
+        0.8.0 feature with no degraded mode"]
+
+        PRAGMA foreign_keys=ON is already set for every connection in
+        _open_conn(), so session_id/closed_by_session_id FK enforcement is
+        active without any extra setup here. [r4 HIGH #8]
+        """
+        self._memory_items_available = False
+        self._memory_items_fts_available = False
+
+        version = tuple(
+            int(x) for x in
+            self.conn.execute("SELECT sqlite_version()").fetchone()[0].split(".")
+        )
+        if version < (3, 38, 0):
+            logger.warning(
+                "SQLite %s is older than 3.38.0 (no json_valid()): structured "
+                "memory items (decisions/questions/artifacts) are disabled on "
+                "this installation.",
+                ".".join(str(p) for p in version),
+            )
+            return
+
+        self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS memory_items (
+                id                   TEXT NOT NULL
+                                     CHECK(
+                                       length(id) = 36
+                                       AND substr(id, 9, 1) = '-'
+                                       AND substr(id, 14, 1) = '-'
+                                       AND substr(id, 19, 1) = '-'
+                                       AND substr(id, 24, 1) = '-'
+                                       AND id = lower(id)
+                                     ),
+                item_type            TEXT NOT NULL
+                                     CHECK(item_type IN ('decision','open_question','artifact')),
+                session_id           TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+                project              TEXT NOT NULL DEFAULT 'unspecified',
+                tags                 TEXT NOT NULL DEFAULT '[]'
+                                     CHECK(json_valid(tags) AND tags LIKE '[%]'),
+                metadata             TEXT NOT NULL DEFAULT '{}'
+                                     CHECK(json_valid(metadata)),
+                title                TEXT NOT NULL,
+                body                 TEXT,
+                status               TEXT NOT NULL
+                                     CHECK(
+                                       (item_type = 'decision'      AND status IN ('active','retired'))
+                                       OR (item_type = 'open_question' AND status IN ('open','answered','wont-answer'))
+                                       OR (item_type = 'artifact'      AND status IN ('active','archived'))
+                                     ),
+                external_id          TEXT,
+                closed_at            TEXT,
+                closed_reason        TEXT,
+                closed_by_session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+                created_at           TEXT NOT NULL,
+                updated_at           TEXT NOT NULL,
+                PRIMARY KEY (id),
+                CHECK(closed_by_session_id IS NULL OR closed_at IS NOT NULL),
+                UNIQUE (project, external_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_memory_items_project_type_status
+                ON memory_items(project, item_type, status);
+            CREATE INDEX IF NOT EXISTS idx_memory_items_session_id
+                ON memory_items(session_id);
+            CREATE INDEX IF NOT EXISTS idx_memory_items_project_external_id
+                ON memory_items(project, external_id)
+                WHERE external_id IS NOT NULL;
+        """)
+        self._memory_items_available = True
+
+        try:
+            self.conn.executescript("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS memory_items_fts USING fts5(
+                title, body, tags,
+                content=memory_items,
+                content_rowid=rowid
+            );
+            CREATE TRIGGER IF NOT EXISTS after_insert_memory_items
+                AFTER INSERT ON memory_items BEGIN
+                    INSERT INTO memory_items_fts(rowid, title, body, tags)
+                    VALUES (new.rowid, new.title, new.body, new.tags);
+                END;
+            CREATE TRIGGER IF NOT EXISTS after_delete_memory_items
+                AFTER DELETE ON memory_items BEGIN
+                    INSERT INTO memory_items_fts(memory_items_fts, rowid, title, body, tags)
+                    VALUES ('delete', old.rowid, old.title, old.body, old.tags);
+                END;
+            CREATE TRIGGER IF NOT EXISTS after_update_memory_items
+                AFTER UPDATE ON memory_items BEGIN
+                    INSERT INTO memory_items_fts(memory_items_fts, rowid, title, body, tags)
+                    VALUES ('delete', old.rowid, old.title, old.body, old.tags);
+                    INSERT INTO memory_items_fts(rowid, title, body, tags)
+                    VALUES (new.rowid, new.title, new.body, new.tags);
+                END;
+        """)
+        except Exception:
+            logger.warning(
+                "SQLite FTS5 extension is not available: memory_items "
+                "full-text search is disabled on this installation "
+                "(save/query/transition/update still work)."
+            )
+            return
+        self._memory_items_fts_available = True
 
     def _migrate_fts_v2(self):
         """Migrate FTS5 index to v2: add tags and open_questions columns.
@@ -3353,3 +3562,363 @@ class SessionDatabase:
                 )
         self.conn.commit()
         return "replaced" if existing else "imported"
+
+    # -- Memory items: structured decisions/questions/artifacts (SH-12768) --
+
+    def save_memory_item(
+        self, item_type: str, title: str, body: Optional[str] = None,
+        session_id: Optional[str] = None, project: str = "unspecified",
+        tags: Optional[list] = None, metadata: Optional[dict] = None,
+        external_id: Optional[str] = None, artifact_type: Optional[str] = None,
+    ) -> dict:
+        """Save a decision, open_question, or artifact as a memory_items row.
+
+        Idempotent when external_id is given: a second save with the same
+        (project, external_id) returns the existing row (created=False)
+        instead of raising on the UNIQUE constraint. [r4 interfaces]
+
+        id is always server-generated (uuid4) -- callers cannot supply one,
+        preventing collision/replay/confusion. [r4 "ID generation (mandatory)"]
+        """
+        if item_type not in _MEMORY_ITEM_TYPES:
+            return {
+                "ok": False, "code": "invalid_item_type",
+                "message": "item_type must be one of {}.".format(_MEMORY_ITEM_TYPES),
+            }
+        if not self._memory_items_available:
+            return {
+                "ok": False, "code": "memory_items_unavailable",
+                "message": "Structured memory items require SQLite >= 3.38.0 "
+                           "(json1); unavailable on this installation.",
+            }
+        if not title or not title.strip():
+            return {"ok": False, "code": "invalid_title", "message": "title is required and must be non-empty."}
+
+        # Mutable default argument fix: None in, fresh list/dict per call. [r4 mandatory]
+        tags = list(tags) if tags else []
+        metadata = dict(metadata) if metadata else {}
+
+        err = _validate_memory_session_id(self.conn, session_id)
+        if err is not None:
+            return err
+
+        stored_body = artifact_type if item_type == "artifact" else body
+        stored_body, body_truncated = _truncate_text(stored_body)
+        tags_json, tags_truncated = _truncate_json_list(tags)
+        metadata_json, metadata_truncated = _truncate_json_dict(metadata)
+        truncated = body_truncated or tags_truncated or metadata_truncated
+
+        item_id = str(uuid.uuid4())
+        status = _MEMORY_ITEM_INITIAL_STATUS[item_type]
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        with self._write_context() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(
+                    """INSERT OR IGNORE INTO memory_items
+                       (id, item_type, session_id, project, tags, metadata, title,
+                        body, status, external_id, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (item_id, item_type, session_id, project, tags_json, metadata_json,
+                     title, stored_body, status, external_id, now, now)
+                )
+                changes = conn.execute("SELECT changes()").fetchone()[0]
+                if changes == 0 and external_id is not None:
+                    existing = conn.execute(
+                        "SELECT id, status FROM memory_items WHERE project=? AND external_id=?",
+                        (project, external_id)
+                    ).fetchone()
+                    conn.execute("COMMIT")
+                    if existing is None:
+                        return {
+                            "ok": False, "code": "insert_failed",
+                            "message": "Could not save memory item.",
+                        }
+                    return {
+                        "ok": True, "id": existing["id"], "status": existing["status"],
+                        "created": False,
+                    }
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+        return {"ok": True, "id": item_id, "status": status, "created": True, "truncated": truncated}
+
+    def query_memory_items(
+        self, item_type: Optional[str] = None, project: Optional[str] = None,
+        status: Optional[str] = None, artifact_type: Optional[str] = None,
+        days: Optional[int] = None, limit: int = 50,
+    ) -> dict:
+        """Query memory_items by type, project, status, artifact_type, and recency.
+
+        Date comparison uses lexicographic ISO 8601 UTC string comparison
+        (correct for fixed-width zero-padded timestamps); a defensive LIKE
+        filter excludes malformed created_at rows from the days window.
+        """
+        if not self._memory_items_available:
+            return {
+                "ok": False, "code": "memory_items_unavailable",
+                "message": "Structured memory items require SQLite >= 3.38.0 "
+                           "(json1); unavailable on this installation.",
+            }
+        if item_type is not None and item_type not in _MEMORY_ITEM_TYPES:
+            return {
+                "ok": False, "code": "invalid_item_type",
+                "message": "item_type must be one of {}.".format(_MEMORY_ITEM_TYPES),
+            }
+
+        limit = max(1, min(int(limit), 200))
+        clauses = []
+        params = []
+        if item_type is not None:
+            clauses.append("item_type = ?")
+            params.append(item_type)
+        if project is not None:
+            clauses.append("project = ?")
+            params.append(project)
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status)
+        if artifact_type is not None:
+            clauses.append("item_type = 'artifact' AND body = ?")
+            params.append(artifact_type)
+        if days is not None:
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=int(days))).strftime("%Y-%m-%dT%H:%M:%SZ")
+            clauses.append("created_at >= ?")
+            params.append(cutoff)
+            clauses.append("created_at LIKE '____-__-__T__:__:__Z'")
+
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        rows = self.conn.execute(
+            "SELECT * FROM memory_items {} ORDER BY created_at DESC LIMIT ?".format(where),
+            (*params, limit)
+        ).fetchall()
+
+        items = []
+        for r in rows:
+            item = dict(r)
+            item["tags"] = json.loads(item["tags"]) if item.get("tags") else []
+            item["metadata"] = json.loads(item["metadata"]) if item.get("metadata") else {}
+            items.append(item)
+
+        return {"ok": True, "items": items, "count": len(items)}
+
+    def transition_memory_item(
+        self, item_id: str, transition: str, reason: Optional[str] = None,
+        closing_session_id: Optional[str] = None,
+    ) -> dict:
+        """Move a memory item through its lifecycle.
+
+        Validates the (item_type, transition) pair server-side before any
+        write -- invalid transitions return code='invalid_transition' rather
+        than a stringly-typed silent failure. [r4 interfaces HIGH #3]
+        Already-closed items return code='already_closed' so callers can
+        retry idempotently. [r4 "transition_memory_item"]
+        """
+        if not self._memory_items_available:
+            return {
+                "ok": False, "code": "memory_items_unavailable",
+                "message": "Structured memory items require SQLite >= 3.38.0 "
+                           "(json1); unavailable on this installation.",
+            }
+        err = _validate_memory_session_id(self.conn, closing_session_id)
+        if err is not None:
+            return err
+
+        new_status = None
+        with self._write_context() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = conn.execute(
+                    "SELECT item_type, status FROM memory_items WHERE id = ?", (item_id,)
+                ).fetchone()
+                if row is None:
+                    conn.execute("ROLLBACK")
+                    return {"ok": False, "code": "not_found", "message": "No memory item with the given id."}
+
+                item_type, current_status = row["item_type"], row["status"]
+                if current_status in _MEMORY_ITEM_TERMINAL_STATUSES.get(item_type, set()):
+                    conn.execute("ROLLBACK")
+                    return {
+                        "ok": False, "code": "already_closed",
+                        "message": "This item is already in a terminal state.",
+                    }
+
+                new_status = _MEMORY_ITEM_TRANSITIONS.get((item_type, transition))
+                if new_status is None:
+                    conn.execute("ROLLBACK")
+                    return {
+                        "ok": False, "code": "invalid_transition",
+                        "message": "The requested transition is not valid for this item's type.",
+                    }
+
+                now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                conn.execute(
+                    """UPDATE memory_items SET status=?, closed_at=?, closed_reason=?,
+                       closed_by_session_id=?, updated_at=? WHERE id=?""",
+                    (new_status, now, reason, closing_session_id, now, item_id)
+                )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+        return {"ok": True, "id": item_id, "status": new_status}
+
+    def update_memory_item(
+        self, item_id: str, title: Optional[str] = None, body: Optional[str] = None,
+        tags: Optional[list] = None, metadata: Optional[dict] = None,
+        new_project: Optional[str] = None, allow_project_change: bool = False,
+    ) -> dict:
+        """Correct a memory item's fields, or move it between projects.
+
+        Moving projects requires allow_project_change=True as an explicit
+        guard against accidental cross-project moves. The external_id
+        conflict check and the UPDATE are in one transaction. [r4 interfaces
+        "Cross-project move atomicity"] The conflict error omits identifiers
+        (project name, external_id, conflicting item id) so callers must
+        issue a targeted query to resolve rather than leaking them into MCP
+        error text. [r4 interfaces HIGH #6]
+        """
+        if not self._memory_items_available:
+            return {
+                "ok": False, "code": "memory_items_unavailable",
+                "message": "Structured memory items require SQLite >= 3.38.0 "
+                           "(json1); unavailable on this installation.",
+            }
+
+        truncated = False
+        with self._write_context() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = conn.execute("SELECT * FROM memory_items WHERE id = ?", (item_id,)).fetchone()
+                if row is None:
+                    conn.execute("ROLLBACK")
+                    return {"ok": False, "code": "not_found", "message": "No memory item with the given id."}
+
+                if new_project and allow_project_change and row["external_id"] is not None:
+                    conflict = conn.execute(
+                        "SELECT 1 FROM memory_items WHERE project=? AND external_id=? AND id!=?",
+                        (new_project, row["external_id"], item_id)
+                    ).fetchone()
+                    if conflict is not None:
+                        conn.execute("ROLLBACK")
+                        return {
+                            "ok": False,
+                            "code": "external_id_conflict",
+                            "message": "The requested external_id is already used by another item "
+                                       "in the destination project. Query destination project items to resolve.",
+                        }
+
+                set_clauses = []
+                params = []
+                if title is not None:
+                    if not title.strip():
+                        conn.execute("ROLLBACK")
+                        return {"ok": False, "code": "invalid_title", "message": "title must be non-empty."}
+                    set_clauses.append("title = ?")
+                    params.append(title)
+                if body is not None:
+                    new_body, body_truncated = _truncate_text(body)
+                    truncated = truncated or body_truncated
+                    set_clauses.append("body = ?")
+                    params.append(new_body)
+                if tags is not None:
+                    tags_json, tags_truncated = _truncate_json_list(list(tags))
+                    truncated = truncated or tags_truncated
+                    set_clauses.append("tags = ?")
+                    params.append(tags_json)
+                if metadata is not None:
+                    metadata_json, metadata_truncated = _truncate_json_dict(dict(metadata))
+                    truncated = truncated or metadata_truncated
+                    set_clauses.append("metadata = ?")
+                    params.append(metadata_json)
+                if new_project and allow_project_change:
+                    set_clauses.append("project = ?")
+                    params.append(new_project)
+
+                if not set_clauses:
+                    conn.execute("ROLLBACK")
+                    return {"ok": False, "code": "no_fields_to_update", "message": "No updatable fields were provided."}
+
+                now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                set_clauses.append("updated_at = ?")
+                params.append(now)
+                params.append(item_id)
+
+                conn.execute(
+                    "UPDATE memory_items SET {} WHERE id = ?".format(", ".join(set_clauses)),
+                    params
+                )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+        return {"ok": True, "id": item_id, "truncated": truncated}
+
+    def verify_memory_items_fts_integrity(self) -> dict:
+        """Check memory_items_fts consistency via the FTS5 built-in integrity-check.
+
+        Uses the FTS5 built-in mechanism rather than a custom rowid NOT IN
+        scan (O(n^2)). [r4 ops-cost HIGH #13]
+        """
+        if not self._memory_items_fts_available:
+            return {"ok": True, "error": None, "note": "memory_items FTS is not enabled on this installation."}
+        try:
+            self.conn.execute(
+                "INSERT INTO memory_items_fts(memory_items_fts) VALUES('integrity-check')"
+            )
+            return {"ok": True, "error": None}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def _check_memory_items_fts_rebuild_disk_space(self) -> None:
+        """Raise RuntimeError if free disk space is under 2x the DB file size.
+
+        The 2x estimate is conservative: FTS5 rebuild rewrites the index file,
+        which temporarily needs space for both the old and new copies. [r4
+        ops-cost HIGH #13]
+        """
+        db_path = Path(self.config.db_path)
+        if not db_path.exists():
+            return
+        db_size = db_path.stat().st_size
+        available = shutil.disk_usage(db_path.parent).free
+        if available < db_size * 2:
+            raise RuntimeError(
+                "Insufficient disk space for FTS rebuild: need ~{}MB free, have {}MB.".format(
+                    db_size * 2 // (1024 * 1024), available // (1024 * 1024)
+                )
+            )
+
+    def rebuild_memory_items_fts_index(self) -> dict:
+        """Verify memory_items_fts integrity, check disk space, then rebuild if needed.
+
+        Circuit-breaker: if verify still fails post-rebuild (e.g. the
+        application bug causing corruption is still present), this returns
+        an error instead of looping. [r4 ops-cost HIGH: "FTS rebuild loop
+        when application bug causes corruption"]
+        """
+        if not self._memory_items_fts_available:
+            return {"ok": False, "code": "fts_unavailable", "message": "memory_items FTS is not enabled on this installation."}
+        integrity = self.verify_memory_items_fts_integrity()
+        if integrity["ok"]:
+            return {"ok": True, "message": "memory_items FTS index is consistent; no rebuild needed."}
+        try:
+            self._check_memory_items_fts_rebuild_disk_space()
+        except RuntimeError as exc:
+            return {"ok": False, "code": "insufficient_disk", "message": str(exc)}
+        try:
+            self.conn.execute("INSERT INTO memory_items_fts(memory_items_fts) VALUES('rebuild')")
+        except Exception as exc:
+            return {"ok": False, "code": "rebuild_failed", "message": str(exc)}
+        post = self.verify_memory_items_fts_integrity()
+        if not post["ok"]:
+            return {
+                "ok": False, "code": "post_rebuild_inconsistent",
+                "message": "FTS index still inconsistent after rebuild: " + (post["error"] or ""),
+            }
+        return {"ok": True, "message": "memory_items FTS index rebuilt successfully."}
