@@ -1,5 +1,26 @@
 # LoreConvo Changelog
 
+## v0.9.0 (2026-08-01)
+
+### Added: Agent context injection
+
+Two new MCP tools let agents auto-load targeted session context at session
+start instead of relying on ad hoc searches: `configure_agent_context` stores
+a named topic list per `(agent_name, project)`, and `inject_agent_context`
+returns matching session context as markdown (stored config or call-time
+topics), capped at 4000 characters. Responses use a four-state status enum
+(`ok`/`warning`/`partial`/`error`) -- callers must branch on `status`
+explicitly rather than treating anything other than `error` as success. See
+the `using-loreconvo` skill for the caller pattern.
+
+### Added: Structured memory items
+
+A new `memory_items` layer stores decisions, open questions, and artifacts as
+first-class structured records (separate from free-text session summaries),
+with lifecycle transitions (retire/answer/wont-answer), FTS5 search, and
+project scoping. New MCP tools: `save_memory_item`, `query_memory_items`,
+`transition_memory_item`, `update_memory_item`.
+
 ## v0.8.10 (2026-07-31)
 
 ### Changed: Hook output format change -- recalled-content trust boundary
