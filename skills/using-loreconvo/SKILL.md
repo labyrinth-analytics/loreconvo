@@ -72,6 +72,40 @@ action skill handles the switch transparently.
 **Agent tag convention.** Agents save sessions with `tags: ["agent:<name>"]` so their
 sessions are discoverable by role (e.g., `search_sessions("agent:ron-builder")`).
 
+## Agent context injection
+
+Agents can auto-load targeted session context at session start via two MCP tools:
+
+- `configure_agent_context(agent_name, project, topics, max_results_per_topic=3, enabled=True, retire=False)`
+  -- store or update a named topic list for an agent. Replaces all existing topics
+  for that `(agent_name, project)` pair. Set `enabled=False` to disable without
+  deleting, or `retire=True` to soft-retire (any later write with `retire=False`
+  reactivates it).
+- `inject_agent_context(agent_name, project, topics=None, max_results_per_topic=3, semantic=False)`
+  -- returns markdown session context for the given topics. If `topics` is omitted,
+  the stored config is used. If `topics=[]` is passed explicitly, no injection runs
+  (used to check `has_config` without searching).
+
+**Branch on `status` first -- this is not optional.** `inject_agent_context` returns
+one of four states, and `"warning"` is NOT success:
+
+```python
+result = inject_agent_context(agent_name="<your-role>", project="<project>")
+if result["status"] in ("ok", "partial"):
+    if result["context"]:
+        pass  # prepend to briefing
+    if result["status"] == "partial":
+        pass  # log: injection timed out, partial results used
+elif result["status"] == "warning":
+    pass  # injection skipped (source: agent_not_found/config_disabled/config_retired/
+          # empty_topics/call_time_topics) -- expected for unconfigured agents, log and continue
+elif result["status"] == "error":
+    pass  # log result["code"]; do not block session start on injection failure
+```
+
+A caller that only checks `status != "error"` will silently treat a skipped or
+empty injection as success -- always branch on the specific status value.
+
 ## Common gotchas
 
 - **DB lives at `~/.loreconvo/sessions.db`** -- not inside the project directory. If
