@@ -1,11 +1,13 @@
 """Session Bridge MCP Server - FastMCP interface for LLM access."""
 
+import concurrent.futures
 import json
 import signal
 import sys
 import os
 import logging
 import importlib.metadata
+import time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -413,6 +415,382 @@ def get_context_for(
         }
         for r in results
     ]
+
+
+# -- Agent context injection (SH-12766) --
+
+_INJECT_DEFAULT_TIMEOUT = 5.0
+_INJECT_MIN_TIMEOUT = 0.5
+_INJECT_MAX_TIMEOUT = 60.0
+_INJECT_CONTEXT_CHAR_CAP = 4000
+
+# Static, non-sensitive error messages (PART:interfaces: never leak schema
+# names, SQLite error text, or file paths in the message field).
+_AGENT_CONTEXT_ERROR_MESSAGES = {
+    "invalid_agent_name": "agent_name must match ^[a-z][a-z0-9-]{1,63}$.",
+    "invalid_project": "project must match ^[a-z_][a-z0-9_]{0,63}$.",
+    "invalid_topics": "Each topic must be a non-empty string of at most 200 characters.",
+    "too_many_topics": "At most 10 topics are allowed per config.",
+    "duplicate_topics": "Topics must be unique after normalization (strip/lowercase).",
+    "invalid_max_results": "max_results_per_topic must be an integer between 1 and 10.",
+}
+
+
+def _get_inject_timeout() -> float:
+    """Read and validate LORECONVO_AGENT_CONTEXT_TIMEOUT. Clamped to [0.5, 60.0]s.
+
+    Invalid (non-numeric, zero, negative) values fall back to the default.
+    """
+    raw = os.environ.get("LORECONVO_AGENT_CONTEXT_TIMEOUT", str(_INJECT_DEFAULT_TIMEOUT))
+    try:
+        value = float(raw)
+        if value <= 0:
+            logger.warning(
+                "LORECONVO_AGENT_CONTEXT_TIMEOUT=%r is non-positive; using default %.1fs.",
+                raw, _INJECT_DEFAULT_TIMEOUT,
+            )
+            return _INJECT_DEFAULT_TIMEOUT
+    except (ValueError, TypeError):
+        logger.warning(
+            "LORECONVO_AGENT_CONTEXT_TIMEOUT=%r is not a valid number; using default %.1fs.",
+            raw, _INJECT_DEFAULT_TIMEOUT,
+        )
+        return _INJECT_DEFAULT_TIMEOUT
+    clamped = max(_INJECT_MIN_TIMEOUT, min(value, _INJECT_MAX_TIMEOUT))
+    if clamped != value:
+        logger.warning(
+            "LORECONVO_AGENT_CONTEXT_TIMEOUT=%.1f clamped to [%.1f, %.1f]; using %.1fs.",
+            value, _INJECT_MIN_TIMEOUT, _INJECT_MAX_TIMEOUT, clamped,
+        )
+    return clamped
+
+
+def _fan_out_topics_fts5(topics, max_results, global_timeout_s):
+    """Sequential per-topic search for FTS5 (free tier, P95 < 100ms/topic).
+
+    Deadline is checked both before AND after each topic query (H-O3) so a
+    slow first topic cannot let the loop continue past the deadline. A
+    per-topic elapsed-time warning replaces the disposition's dead
+    `remaining` variable, giving operators visibility into pathological
+    slow queries (H-O4/H-O5).
+
+    Returns (results, timed_out, topics_completed).
+    """
+    results = []
+    timed_out = False
+    completed = 0
+    deadline = time.monotonic() + global_timeout_s
+    for topic in topics:
+        if time.monotonic() >= deadline:
+            timed_out = True
+            break
+        topic_started = time.monotonic()
+        try:
+            results.extend(
+                db.get_context_for(topic, max_results, include_external=False, semantic=False)
+            )
+        except Exception as exc:
+            logger.warning(
+                "inject_agent_context: FTS5 query for topic %r failed: %s", topic, exc
+            )
+        elapsed = time.monotonic() - topic_started
+        if elapsed > global_timeout_s * 0.5:
+            logger.warning(
+                "inject_agent_context: topic %r took %.2fs, over half the %.1fs "
+                "global timeout (pathological query).", topic, elapsed, global_timeout_s,
+            )
+        completed += 1
+        if time.monotonic() >= deadline:
+            timed_out = True
+            break
+    return results, timed_out, completed
+
+
+def _fan_out_topics_semantic(topics, max_results, global_timeout_s):
+    """Concurrent per-topic search for semantic mode (Pro, P95 < 700ms/topic).
+
+    ThreadPoolExecutor capped at 4 workers. Residual bound: running threads
+    cannot be preempted (max 4 x P95 700ms = 2.8s), documented in the
+    architecture proposal PART:ops-cost.
+
+    Returns (results, timed_out, topics_completed).
+    """
+    results = []
+    timed_out = False
+    completed = 0
+    deadline = time.monotonic() + global_timeout_s
+    per_topic_s = max(1.0, global_timeout_s / max(len(topics), 1))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(topics), 4)) as ex:
+        futures = {
+            ex.submit(db.get_context_for, t, max_results, False, True): t
+            for t in topics
+        }
+        try:
+            for fut in concurrent.futures.as_completed(futures, timeout=global_timeout_s):
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    break
+                try:
+                    results.extend(fut.result(timeout=per_topic_s))
+                    completed += 1
+                except concurrent.futures.TimeoutError:
+                    timed_out = True
+                    logger.warning(
+                        "inject_agent_context: per-topic semantic timeout "
+                        "(%.1fs) for topic %r", per_topic_s, futures[fut],
+                    )
+                    break
+                except Exception as exc:
+                    logger.warning(
+                        "inject_agent_context: semantic query failed for topic %r: %s",
+                        futures[fut], exc,
+                    )
+                    completed += 1
+        except TimeoutError:
+            timed_out = True
+            logger.warning(
+                "inject_agent_context: global timeout (%.1fs) reached "
+                "before all semantic topics completed.", global_timeout_s,
+            )
+    return results, timed_out, completed
+
+
+def _format_agent_context_markdown(results, char_cap=_INJECT_CONTEXT_CHAR_CAP):
+    """Dedupe SearchResults by session id, format as markdown, cap at char_cap chars.
+
+    session_count reflects sessions INCLUDED after the cap (PART:interfaces),
+    not the total deduped count. Mirrors the [TRUNCATED] pattern in
+    get_memory_digest.
+
+    Returns (markdown, session_count, truncated).
+    """
+    seen = set()
+    deduped = []
+    for r in results:
+        sid = r.session.id
+        if sid in seen:
+            continue
+        seen.add(sid)
+        deduped.append(r)
+    deduped.sort(key=lambda r: r.match_score, reverse=True)
+
+    parts = []
+    included = 0
+    truncated = False
+    running_len = 0
+    for r in deduped:
+        s = r.session
+        lines = [f"### {s.title} ({s.start_date})"]
+        if s.summary:
+            lines.append(s.summary)
+        if s.decisions:
+            lines.append("Decisions: " + "; ".join(s.decisions))
+        if s.open_questions:
+            lines.append("Open questions: " + "; ".join(s.open_questions))
+        block = "\n".join(lines)
+        added_len = len(block) + (2 if parts else 0)  # "\n\n" separator
+        if running_len + added_len > char_cap:
+            truncated = True
+            break
+        parts.append(block)
+        running_len += added_len
+        included += 1
+
+    markdown = "\n\n".join(parts)
+    if truncated:
+        markdown += "\n\n[TRUNCATED -- context exceeded 4000 chars]"
+
+    return markdown, included, truncated
+
+
+@mcp.tool(title="Configure Agent Context Topics")
+def configure_agent_context(
+    agent_name: str,
+    project: str,
+    topics: list,
+    max_results_per_topic: int = 3,
+    enabled: bool = True,
+    retire: bool = False,
+) -> dict:
+    """Store or update a named topic configuration for an agent.
+
+    Args:
+        agent_name: Canonical agent name (^[a-z][a-z0-9-]{1,63}$).
+        project: Project name matching sessions.project (^[a-z_][a-z0-9_]{0,63}$).
+        topics: Non-empty list of topic strings; max 10; each max 200 chars.
+            Replaces all existing topics for this (agent_name, project) pair.
+        max_results_per_topic: Sessions returned per topic search. 1-10.
+        enabled: Set False to disable injection without deleting the config.
+        retire: Set True to soft-retire this config (status='retired').
+            inject_agent_context treats a retired config like enabled=0.
+            Any write with retire=False reactivates a previously retired
+            config (reflected in the response's reactivated_retired_config).
+    """
+    if os.environ.get("LORECONVO_DISABLE_CONTEXT_WRITE"):
+        return {
+            "status": "error", "code": "feature_disabled",
+            "message": "Context configuration is disabled by LORECONVO_DISABLE_CONTEXT_WRITE.",
+        }
+    try:
+        result = db.configure_agent_context(
+            agent_name=agent_name, project=project, topics=topics,
+            max_results_per_topic=max_results_per_topic, enabled=enabled, retire=retire,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        return {
+            "status": "error", "code": code,
+            "message": _AGENT_CONTEXT_ERROR_MESSAGES.get(code, "Invalid input."),
+        }
+    except Exception:
+        logger.warning("configure_agent_context: DB error", exc_info=True)
+        return {"status": "error", "code": "db_error", "message": "Database error occurred."}
+
+    return {
+        "status": "ok",
+        "agent_name": agent_name,
+        "project": project,
+        "topic_count": result["topic_count"],
+        "reactivated_retired_config": result["reactivated_retired_config"],
+    }
+
+
+@mcp.tool(title="Inject Agent Context")
+def inject_agent_context(
+    agent_name: str,
+    project: str,
+    topics: list | None = None,
+    max_results_per_topic: int = 3,
+    semantic: bool = False,
+) -> dict:
+    """Return targeted session context for an agent at session start.
+
+    If topics is provided (non-empty, len<=10), it overrides stored config.
+    If topics is None, stored config is used.
+    If topics=[], has_config reflects stored state; no injection runs.
+
+    Returns status in {"ok", "partial", "warning", "error"}.
+    Branch on status first; treat "warning" as skipped (not success), not
+    as a synonym for "ok" -- a caller that only checks `status != "error"`
+    will silently treat skipped or empty injection as success.
+    """
+    try:
+        SessionDatabase._validate_agent_context_agent_name(agent_name)
+        SessionDatabase._validate_agent_context_project(project)
+    except ValueError as exc:
+        code = str(exc)
+        return {
+            "status": "error", "code": code,
+            "message": _AGENT_CONTEXT_ERROR_MESSAGES.get(code, "Invalid input."),
+        }
+
+    if not isinstance(max_results_per_topic, int) or isinstance(max_results_per_topic, bool) \
+            or not (1 <= max_results_per_topic <= 10):
+        return {
+            "status": "error", "code": "invalid_max_results",
+            "message": _AGENT_CONTEXT_ERROR_MESSAGES["invalid_max_results"],
+        }
+
+    try:
+        config = db.get_agent_context_config(agent_name, project)
+    except Exception:
+        logger.warning("inject_agent_context: DB error reading config", exc_info=True)
+        return {"status": "error", "code": "db_error", "message": "Database error occurred."}
+
+    has_config = config is not None
+
+    # H-I2: topics=[] is an explicit override to "search nothing" -- report
+    # has_config from the stored state, but never run injection.
+    if topics == []:
+        if has_config and config["enabled"] and config["status"] == "active":
+            warning = "topics=[] overrides stored config"
+        elif has_config:
+            warning = "topics=[] provided; stored config is disabled"
+        else:
+            warning = "No topics to search and no stored config found"
+        return {
+            "status": "warning", "context": "", "session_count": 0, "topics_searched": 0,
+            "source": "call_time_topics", "has_config": has_config,
+            "timed_out": False, "warning": warning,
+        }
+
+    if topics:
+        try:
+            resolved_topics = SessionDatabase._normalize_agent_context_topics(topics)
+        except ValueError as exc:
+            code = str(exc)
+            return {
+                "status": "error", "code": code,
+                "message": _AGENT_CONTEXT_ERROR_MESSAGES.get(code, "Invalid input."),
+            }
+        resolved_max_results = max_results_per_topic
+        source = "call_time_topics"
+    else:
+        # topics is None -- fall back to stored config.
+        if not has_config:
+            return {
+                "status": "warning", "context": "", "session_count": 0, "topics_searched": 0,
+                "source": "agent_not_found", "has_config": False,
+                "timed_out": False,
+                "warning": "No stored config found for this agent/project.",
+            }
+        if not config["enabled"] or config["status"] != "active":
+            source = "config_retired" if config["status"] == "retired" else "config_disabled"
+            return {
+                "status": "warning", "context": "", "session_count": 0, "topics_searched": 0,
+                "source": source, "has_config": True,
+                "timed_out": False,
+                "warning": f"Stored config exists but is {source[len('config_'):]}.",
+            }
+        if not config["topics"]:
+            return {
+                "status": "warning", "context": "", "session_count": 0, "topics_searched": 0,
+                "source": "empty_topics", "has_config": True,
+                "timed_out": False, "warning": "Stored config has no topics configured.",
+            }
+        resolved_topics = config["topics"]
+        resolved_max_results = config["max_results_per_topic"]
+        source = "stored_config"
+
+    global_timeout_s = _get_inject_timeout()
+    try:
+        if semantic:
+            raw_results, timed_out, searched = _fan_out_topics_semantic(
+                resolved_topics, resolved_max_results, global_timeout_s
+            )
+        else:
+            raw_results, timed_out, searched = _fan_out_topics_fts5(
+                resolved_topics, resolved_max_results, global_timeout_s
+            )
+    except Exception:
+        logger.warning("inject_agent_context: fan-out failed", exc_info=True)
+        return {"status": "error", "code": "db_error", "message": "Database error occurred."}
+
+    markdown, session_count, capped = _format_agent_context_markdown(raw_results)
+    warning = None
+    if capped:
+        warning = "Context truncated at 4000 chars."
+    if timed_out:
+        warning = (warning + " " if warning else "") + "Injection timed out; partial results used."
+
+    if source == "stored_config":
+        try:
+            db.touch_agent_context_last_used(agent_name, project)
+        except Exception:
+            logger.warning(
+                "inject_agent_context: failed to update last_used_at", exc_info=True
+            )
+
+    return {
+        "status": "partial" if timed_out else "ok",
+        "context": markdown,
+        "session_count": session_count,
+        "topics_searched": searched,
+        "source": source,
+        "timed_out": timed_out,
+        "warning": warning,
+    }
 
 
 @mcp.tool(title="Tag Session")
