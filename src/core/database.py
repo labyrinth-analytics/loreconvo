@@ -241,6 +241,12 @@ _INTERNAL_SOURCES = ("file_memory", "periodic")
 _TAG_RATE_WINDOW = 60.0   # seconds per rate-limit window
 _TAG_RATE_MAX = 20        # max tag_as_anti_pattern calls per window
 
+# Agent context injection (SH-12766)
+MAX_TOPICS_PER_CONFIG = 10
+_AGENT_CONTEXT_TOPIC_MAX_LEN = 200
+_AGENT_NAME_RE = re.compile(r'^[a-z][a-z0-9-]{1,63}$')
+_AGENT_CONTEXT_PROJECT_RE = re.compile(r'^[a-z_][a-z0-9_]{0,63}$')
+
 _STOPWORDS = frozenset({
     "a", "about", "after", "again", "ago", "all", "also", "an", "and",
     "any", "are", "as", "at", "be", "been", "being", "but", "by", "can",
@@ -2601,6 +2607,216 @@ class SessionDatabase:
             (skill_name, cutoff)
         ).fetchall()
         return [self._row_to_session(r) for r in rows]
+
+    # -- Agent context injection (SH-12766) --
+
+    @staticmethod
+    def _validate_agent_context_agent_name(agent_name: str) -> None:
+        if not isinstance(agent_name, str) or not _AGENT_NAME_RE.match(agent_name):
+            raise ValueError("invalid_agent_name")
+
+    @staticmethod
+    def _validate_agent_context_project(project: str) -> None:
+        if not isinstance(project, str) or not _AGENT_CONTEXT_PROJECT_RE.match(project):
+            raise ValueError("invalid_project")
+
+    @staticmethod
+    def _normalize_agent_context_topics(topics: List[str]) -> List[str]:
+        """Strip/lower/dedupe topics per PART:data-model. Raises ValueError with
+        one of the tool's documented error codes (invalid_topics,
+        too_many_topics, duplicate_topics) -- server.py maps these directly
+        to the MCP error response.
+        """
+        if not isinstance(topics, list) or not all(isinstance(t, str) for t in topics):
+            raise ValueError("invalid_topics")
+        if not topics:
+            raise ValueError("invalid_topics")
+        if len(topics) > MAX_TOPICS_PER_CONFIG:
+            raise ValueError("too_many_topics")
+        normalized = []
+        seen = set()
+        for raw in topics:
+            cleaned = "".join(ch for ch in raw if ch == "\t" or ord(ch) >= 0x20)
+            cleaned = cleaned.strip().lower()
+            if not cleaned or len(cleaned) > _AGENT_CONTEXT_TOPIC_MAX_LEN:
+                raise ValueError("invalid_topics")
+            if cleaned in seen:
+                raise ValueError("duplicate_topics")
+            seen.add(cleaned)
+            normalized.append(cleaned)
+        return normalized
+
+    def configure_agent_context(
+        self,
+        agent_name: str,
+        project: str,
+        topics: List[str],
+        max_results_per_topic: int = 3,
+        enabled: bool = True,
+        retire: bool = False,
+    ) -> dict:
+        """Store or update a named topic configuration for an agent. Atomic upsert.
+
+        `retire=True` sets status='retired' (soft-disable path, PART:data-model);
+        any other write sets status='active' and clears retired_at, which is how
+        a previously retired config gets reactivated.
+
+        Returns {"topic_count": int, "reactivated_retired_config": bool}.
+        Raises ValueError(<error code>) on validation failure -- server.py
+        catches this and maps it to the MCP tool's {"status": "error", ...}
+        response; this method never returns an error dict itself.
+        """
+        self._validate_agent_context_agent_name(agent_name)
+        self._validate_agent_context_project(project)
+        if not isinstance(max_results_per_topic, int) or isinstance(max_results_per_topic, bool) \
+                or not (1 <= max_results_per_topic <= 10):
+            raise ValueError("invalid_max_results")
+        normalized_topics = self._normalize_agent_context_topics(topics)
+        status = "retired" if retire else "active"
+        retired_at_expr = "strftime('%Y-%m-%dT%H:%M:%SZ', 'now')" if retire else "NULL"
+
+        with self._write_context() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = conn.execute(
+                    "SELECT status FROM agent_context_configs WHERE agent_name = ? AND project = ?",
+                    (agent_name, project),
+                ).fetchone()
+                reactivated = bool(row and row["status"] == "retired" and not retire)
+
+                conn.execute(
+                    f"""
+                    INSERT INTO agent_context_configs
+                        (agent_name, project, topics_json, max_results_per_topic,
+                         enabled, status, retired_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, {retired_at_expr},
+                            strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+                    ON CONFLICT(agent_name, project) DO UPDATE SET
+                        topics_json = excluded.topics_json,
+                        max_results_per_topic = excluded.max_results_per_topic,
+                        enabled = excluded.enabled,
+                        status = excluded.status,
+                        retired_at = excluded.retired_at,
+                        updated_at = excluded.updated_at
+                    """,
+                    (agent_name, project, json.dumps(normalized_topics),
+                     max_results_per_topic, 1 if enabled else 0, status),
+                )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+        logger.info(
+            "agent_context configured: agent_name=%s project=%s topic_count=%d enabled=%s",
+            agent_name, project, len(normalized_topics), enabled,
+        )
+        return {
+            "topic_count": len(normalized_topics),
+            "reactivated_retired_config": reactivated,
+        }
+
+    def get_agent_context_config(self, agent_name: str, project: str) -> Optional[dict]:
+        """Read the stored config row (any status) for (agent_name, project), or None."""
+        row = self.conn.execute(
+            "SELECT * FROM agent_context_configs WHERE agent_name = ? AND project = ?",
+            (agent_name, project),
+        ).fetchone()
+        if row is None:
+            return None
+        config = dict(row)
+        config["topics"] = json.loads(config.pop("topics_json") or "[]")
+        config["enabled"] = bool(config["enabled"])
+        return config
+
+    def touch_agent_context_last_used(self, agent_name: str, project: str) -> None:
+        """Update last_used_at on a successful inject_agent_context call."""
+        with self._write_context() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(
+                    "UPDATE agent_context_configs SET last_used_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') "
+                    "WHERE agent_name = ? AND project = ?",
+                    (agent_name, project),
+                )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+    def rollback_agent_context_tables(self, backup_dir: Optional[Path] = None) -> str:
+        """Export agent_context_configs to a JSON backup, then DROP the table.
+
+        Admin/recovery operation -- not exposed via MCP. Mirrors the proposal's
+        rollback procedure (PART:migration): retries BEGIN EXCLUSIVE up to 3
+        times with backoff [H-M2], checks table existence before SELECT
+        [H-M3], chmod 600 on the backup file / 700 on the backup dir [H-M4].
+        No PRAGMA user_version bookkeeping -- this feature's migration doesn't
+        use it (see _migrate_add_agent_context_configs docstring); the table
+        is simply recreated idempotently on the next startup.
+        """
+        import time
+
+        ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H%M%SZ')
+
+        if backup_dir is None:
+            backup_dir = Path(self.config.db_path).parent
+        backup_dir = Path(backup_dir)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(str(backup_dir), 0o700)
+
+        backup_path = backup_dir / f"agent_context_backup_{ts}.json"
+        tmp_path = backup_path.with_suffix(".tmp")
+
+        with self._write_context() as conn:
+            for attempt in range(3):
+                try:
+                    conn.execute("BEGIN EXCLUSIVE")
+                    break
+                except sqlite3.OperationalError as exc:
+                    if "database is locked" not in str(exc).lower() or attempt == 2:
+                        raise RuntimeError(
+                            "Could not acquire exclusive lock for rollback after 3 attempts. "
+                            "Ensure all LoreConvo processes are stopped and retry."
+                        ) from exc
+                    time.sleep(0.5 * (attempt + 1))
+
+            try:
+                extant = {
+                    r[0] for r in conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' "
+                        "AND name='agent_context_configs'"
+                    )
+                }
+                configs = (
+                    conn.execute("SELECT * FROM agent_context_configs").fetchall()
+                    if "agent_context_configs" in extant else []
+                )
+                backup = {
+                    "schema_version": 1,
+                    "exported_at": ts,
+                    "configs": [dict(r) for r in configs],
+                }
+                tmp_path.write_text(json.dumps(backup, indent=2))
+                parsed = json.loads(tmp_path.read_text())
+                assert len(parsed["configs"]) == len(configs), \
+                    "Backup verify: config count mismatch"
+                os.replace(str(tmp_path), str(backup_path))
+                os.chmod(str(backup_path), 0o600)
+
+                if "agent_context_configs" in extant:
+                    conn.execute("DROP TABLE IF EXISTS agent_context_configs")
+                conn.execute("COMMIT")
+            except Exception:
+                try:
+                    conn.execute("ROLLBACK")
+                except Exception:
+                    pass
+                if tmp_path.exists():
+                    tmp_path.unlink(missing_ok=True)
+                raise
+
+        return str(backup_path)
 
     # -- Persona operations --
 
