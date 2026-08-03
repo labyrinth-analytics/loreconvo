@@ -18,6 +18,7 @@ from typing import List, Optional
 
 from .config import Config
 from .hybrid_search import SEARCH_HALF_LIFE_DAYS, AUTOLOAD_HALF_LIFE_DAYS
+from .license import LORECONVO_UPGRADE_URL
 from .models import (
     PersonaTag, Project, SearchResult, Session, SessionLink, SkillUsage
 )
@@ -2116,8 +2117,8 @@ class SessionDatabase:
                 raise SessionLimitReachedError(
                     f"Free tier limit reached: {current_count} of "
                     f"{self.config.max_free_sessions} sessions stored. "
-                    "Set your LORECONVO_PRO license key to unlock unlimited sessions, "
-                    "or contact info@labyrinthanalyticsconsulting.com to upgrade."
+                    f"Upgrade at {LORECONVO_UPGRADE_URL} to unlock unlimited "
+                    "sessions, then set your LORECONVO_PRO license key."
                 )
         content_hash = (
             session.content_hash
@@ -3724,7 +3725,8 @@ class SessionDatabase:
                     raise SessionLimitReachedError(
                         f"Free tier limit reached: {current_count} of "
                         f"{self.config.max_free_sessions} sessions stored. "
-                        "Set your LORECONVO_PRO license key to unlock unlimited sessions."
+                        f"Upgrade at {LORECONVO_UPGRADE_URL} to unlock unlimited "
+                        "sessions, then set your LORECONVO_PRO license key."
                     )
 
         content_hash = (
