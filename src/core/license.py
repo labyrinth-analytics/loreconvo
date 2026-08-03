@@ -47,6 +47,10 @@ _VALID_PRODUCTS = {"loreconvo", "lore_suite"}
 # Minimum key prefix that all Labyrinth license keys start with.
 _KEY_PREFIX = "LAB-"
 
+# Stripe Payment Link for LoreConvo Pro ($8/mo). Purchasing here triggers the
+# Stripe webhook, which emails a signed license key to set as LORECONVO_PRO.
+LORECONVO_UPGRADE_URL = "https://buy.stripe.com/9B65kv1VOgk3ekr7VD7N600"
+
 
 class LicenseError(Exception):
     """Raised when a license key is invalid, expired, or wrong product."""
@@ -84,7 +88,7 @@ def validate_license_key(key: str) -> dict:
         raise LicenseError(
             "Invalid license key format. "
             "Keys must start with 'LAB-'. "
-            "Get a license key at labyrinthanalyticsconsulting.com."
+            f"Get a license key by upgrading at {LORECONVO_UPGRADE_URL}."
         )
 
     body = key[len(_KEY_PREFIX):]
@@ -130,7 +134,8 @@ def validate_license_key(key: str) -> dict:
     if payload.get("tier") != "pro":
         raise LicenseError(
             "License key does not grant Pro access. "
-            "Contact support at labyrinthanalyticsconsulting.com."
+            "Contact support at labyrinthanalyticsconsulting.com "
+            f"or upgrade at {LORECONVO_UPGRADE_URL}."
         )
 
     # Check expiry
@@ -143,7 +148,7 @@ def validate_license_key(key: str) -> dict:
         if exp_date < date.today():
             raise LicenseError(
                 f"License key expired on {exp}. "
-                "Renew at labyrinthanalyticsconsulting.com."
+                f"Renew at {LORECONVO_UPGRADE_URL}."
             )
 
     return payload

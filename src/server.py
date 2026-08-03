@@ -23,7 +23,7 @@ from core.database import (
     _pinning_enabled, parse_session_id,
 )
 from core.config import Config, set_tier as _set_tier_config
-from core.license import get_license_status
+from core.license import get_license_status, LORECONVO_UPGRADE_URL
 from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onboard_config_path
 from compat_check import check as _compat_check, emit_startup_warnings as _compat_emit
 
@@ -852,8 +852,8 @@ def get_related_sessions(
         return {
             "error": (
                 "get_related_sessions requires LoreConvo Pro. "
-                "Set your LORECONVO_PRO license key or contact "
-                "info@labyrinthanalyticsconsulting.com to upgrade."
+                f"Upgrade at {LORECONVO_UPGRADE_URL}, then set your "
+                "LORECONVO_PRO license key."
             )
         }
     limit = max(1, min(limit, 50))
@@ -884,7 +884,7 @@ def rebuild_index() -> dict:
         return {
             "error": (
                 "rebuild_index requires LoreConvo Pro. "
-                "Get a license at labyrinthanalyticsconsulting.com."
+                f"Get a license by upgrading at {LORECONVO_UPGRADE_URL}."
             )
         }
     return db.rebuild_lance_index()
@@ -1030,14 +1030,18 @@ def get_tier() -> dict:
     Use this to confirm whether the Pro license key is loaded and valid.
 
     Returns a dict with keys:
-        is_pro  -- bool, True if Pro tier is active
-        mode    -- "licensed" | "dev_bypass" | "free" | "invalid_key"
-        product -- product name from the license payload (if licensed)
-        exp     -- expiry date or "never" (if licensed)
-        email   -- customer email (if licensed and present)
-        error   -- error message (if mode is "invalid_key")
+        is_pro      -- bool, True if Pro tier is active
+        mode        -- "licensed" | "dev_bypass" | "free" | "invalid_key"
+        product     -- product name from the license payload (if licensed)
+        exp         -- expiry date or "never" (if licensed)
+        email       -- customer email (if licensed and present)
+        error       -- error message (if mode is "invalid_key")
+        upgrade_url -- Stripe checkout link (present when not already Pro)
     """
-    return get_license_status()
+    status = get_license_status()
+    if not status.get("is_pro"):
+        status["upgrade_url"] = LORECONVO_UPGRADE_URL
+    return status
 
 
 class VaultSetTierInput(BaseModel):
@@ -1070,13 +1074,13 @@ def vault_set_tier(params: VaultSetTierInput) -> str:
                 return (
                     "Error: Invalid or expired license key in LORECONVO_PRO. "
                     + status.get("error", "")
-                    + " Get a new key at labyrinthanalyticsconsulting.com."
+                    + f" Get a new key by upgrading at {LORECONVO_UPGRADE_URL}."
                 )
             return (
                 "Error: No Pro license key found. "
                 "Set LORECONVO_PRO=<your-license-key> in your environment and "
                 "restart the server, then call vault_set_tier again. "
-                "Get a license key at labyrinthanalyticsconsulting.com."
+                f"Get a license key by upgrading at {LORECONVO_UPGRADE_URL}."
             )
 
     db_dir = Path(db.config.db_path).parent
