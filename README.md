@@ -303,7 +303,7 @@ Check your current tier and usage with `get_tier`. Activate a Pro license with
 - Anthropic managed-agents export
 - LLM-quality session summarization in the background (async)
 
-[Upgrade to Pro](https://www.labyrinthanalyticsconsulting.com/tools)
+[Upgrade to Pro -- $8/month](https://buy.stripe.com/9B65kv1VOgk3ekr7VD7N600)
 
 ## MCP Tools
 
