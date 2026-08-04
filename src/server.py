@@ -258,7 +258,7 @@ def save_session(
         return {
             "status": "limit_reached",
             "error": str(e),
-            "upgrade_url": "https://labyrinthanalyticsconsulting.com/loreconvo",
+            "upgrade_url": LORECONVO_UPGRADE_URL,
         }
 
     # first-use nudge
