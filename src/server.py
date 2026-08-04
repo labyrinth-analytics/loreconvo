@@ -1240,7 +1240,7 @@ def export_for_anthropic(
         return {
             "error": (
                 "Export to Anthropic format requires LoreConvo Pro. "
-                "Get a license at labyrinthanalyticsconsulting.com."
+                f"Get a license by upgrading at {LORECONVO_UPGRADE_URL}."
             )
         }
 
