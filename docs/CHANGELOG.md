@@ -4,6 +4,43 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.9.0 (2026-08-01)
+
+### New: Structured memory items -- decisions, open questions, and artifacts
+
+LoreConvo now tracks structured memory items alongside sessions. A memory item
+is a single named thing you want to carry forward: a decision you made, a
+question still open, or an artifact you produced. Four new tools cover the
+full lifecycle:
+
+- **`save_memory_item`** -- Save an item with a type (`decision`, `question`,
+  or `artifact`), a body, optional tags, and an optional project name.
+- **`query_memory_items`** -- Retrieve items by type, project, status (`active`,
+  `retired`, `answered`, `wont_answer`), or recency.
+- **`transition_memory_item`** -- Move an item to a terminal status: retire a
+  decision that no longer applies, mark a question as answered, or record that
+  a question will not be answered.
+- **`update_memory_item`** -- Correct a title, body, or tag set on any item,
+  or move it to a different project without losing its history.
+
+Structured items appear in `get_memory_digest` output and survive session
+consolidation. They have an explicit `status` field, so you can always tell
+which questions are still open and which decisions are still in force.
+
+### New: Agent context injection
+
+Two new tools let agents configure and auto-load targeted topic context at
+session start without scanning all recent sessions:
+
+- **`configure_agent_context`** -- Store a named topic config for an agent
+  (a set of search topics and context depth). The config persists across
+  sessions so the agent does not need to pass topics on every call.
+- **`inject_agent_context`** -- Return targeted session context for a named
+  agent, using its stored config or call-time topic overrides.
+
+This is intended for automated agent workflows where the same agent starts
+many sessions and always needs context on the same topics.
+
 ## v0.8.10 (2026-07-31)
 
 ### Changed: Hook output format change -- recalled-content trust boundary
