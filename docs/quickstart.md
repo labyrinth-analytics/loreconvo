@@ -114,6 +114,26 @@ Replace `side_hustle` with your own project name. You will see a brief summary o
 
 ---
 
+## Step 7: Track Decisions and Open Questions (Optional)
+
+For ongoing projects, use structured memory items to track specific decisions,
+open questions, and key artifacts independently of session summaries.
+
+Tell Claude:
+
+> "Save a memory item: we decided to use SQLite over Postgres for this project."
+
+Claude will call `save_memory_item` with type `decision`. Later, you can ask:
+
+> "What decisions have we recorded for this project?"
+
+Claude calls `query_memory_items` and returns a filtered list. When a decision
+is no longer in effect, ask Claude to retire it. When a question is answered,
+ask Claude to mark it answered. This gives you a living record of what is still
+true versus what has changed.
+
+---
+
 ## What Happens Next
 
 - **Claude Code:** The SessionStart and SessionEnd hooks run automatically. Context loads at the start of each session and saves at the end. You do not need to do anything.

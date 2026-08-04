@@ -1,6 +1,6 @@
 # LoreConvo MCP Tool Catalog
 
-LoreConvo provides 32 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all 32.
+LoreConvo provides 38 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all 38.
 
 This catalog explains what each tool does, when Claude uses it, and what parameters it accepts.
 
@@ -529,3 +529,9 @@ Pinning can be disabled globally via `LORECONVO_DISABLE_PINNING=1` or
 | `tag_as_anti_pattern` | Mark a session as an anti-pattern for future avoidance |
 | `untag_anti_pattern` | Remove an anti-pattern tag from a session |
 | `pin_session` | Pin or unpin a session to exclude it from automated cleanup |
+| `save_memory_item` | Save a structured memory item: a decision, open question, or artifact |
+| `query_memory_items` | Query structured memory items by type, project, status, and recency |
+| `transition_memory_item` | Move a memory item through its lifecycle (retire, answer, wont-answer) |
+| `update_memory_item` | Correct a memory item's title, body, tags, or metadata, or move it between projects |
+| `configure_agent_context` | Store or update a named topic config so an agent auto-loads targeted context at session start |
+| `inject_agent_context` | Return targeted session context for an agent, using stored or call-time topics |
