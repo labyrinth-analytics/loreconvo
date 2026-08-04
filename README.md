@@ -1,4 +1,4 @@
-# LoreConvo v0.8.10
+# LoreConvo v0.9.0
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -407,6 +407,30 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 ## What's New
 
 <!-- WHATS_NEW:START -->
+
+## v0.9.0 (2026-08-01)
+
+### New: Structured memory items -- save decisions, questions, and artifacts explicitly
+
+LoreConvo now has a dedicated layer for structured memory: decisions you made,
+open questions you are tracking, and artifacts you produced. Four new tools
+let you save and query these items independently of sessions:
+
+- `save_memory_item` -- Save a single item as a decision, open question, or artifact, optionally tied to a project.
+- `query_memory_items` -- Search structured items by type, project, status, and recency.
+- `transition_memory_item` -- Move an item through its lifecycle: retire a decision, answer a question, or mark it as wont-answer.
+- `update_memory_item` -- Correct a title, body, or tag on any existing memory item, or move it to a different project.
+
+Structured items appear in `get_memory_digest` output and survive session consolidation.
+Unlike session summaries, they have an explicit lifecycle and status field, so you can
+track which questions are still open and which decisions are now retired.
+
+### New: Agent context injection -- auto-load targeted context at session start
+
+Two new tools let agents configure and retrieve targeted topic context:
+
+- `configure_agent_context` -- Store or update a named topic config so the right sessions load automatically at session start.
+- `inject_agent_context` -- Return targeted session context for a named agent, using stored or call-time topics.
 
 ## v0.8.10 (2026-07-31)
 
