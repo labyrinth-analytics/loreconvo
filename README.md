@@ -408,57 +408,42 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.9.0 (2026-08-01)
+## v0.9.0 (2026-08-04)
 
-### New: Structured memory items -- save decisions, questions, and artifacts explicitly
+### New: Structured memory items -- decisions, open questions, and artifacts
 
-LoreConvo now has a dedicated layer for structured memory: decisions you made,
-open questions you are tracking, and artifacts you produced. Four new tools
-let you save and query these items independently of sessions:
+LoreConvo now tracks structured memory items alongside sessions. A memory item
+is a single named thing you want to carry forward: a decision you made, a
+question still open, or an artifact you produced. Four new tools cover the
+full lifecycle:
 
-- `save_memory_item` -- Save a single item as a decision, open question, or artifact, optionally tied to a project.
-- `query_memory_items` -- Search structured items by type, project, status, and recency.
-- `transition_memory_item` -- Move an item through its lifecycle: retire a decision, answer a question, or mark it as wont-answer.
-- `update_memory_item` -- Correct a title, body, or tag on any existing memory item, or move it to a different project.
+- **`save_memory_item`** -- Save an item with a type (`decision`, `question`,
+  or `artifact`), a body, optional tags, and an optional project name.
+- **`query_memory_items`** -- Retrieve items by type, project, status (`active`,
+  `retired`, `answered`, `wont_answer`), or recency.
+- **`transition_memory_item`** -- Move an item to a terminal status: retire a
+  decision that no longer applies, mark a question as answered, or record that
+  a question will not be answered.
+- **`update_memory_item`** -- Correct a title, body, or tag set on any item,
+  or move it to a different project without losing its history.
 
-Structured items appear in `get_memory_digest` output and survive session consolidation.
-Unlike session summaries, they have an explicit lifecycle and status field, so you can
-track which questions are still open and which decisions are now retired.
+Structured items appear in `get_memory_digest` output and survive session
+consolidation. They have an explicit `status` field, so you can always tell
+which questions are still open and which decisions are still in force.
 
-### New: Agent context injection -- auto-load targeted context at session start
+### New: Agent context injection
 
-Two new tools let agents configure and retrieve targeted topic context:
+Two new tools let agents configure and auto-load targeted topic context at
+session start without scanning all recent sessions:
 
-- `configure_agent_context` -- Store or update a named topic config so the right sessions load automatically at session start.
-- `inject_agent_context` -- Return targeted session context for a named agent, using stored or call-time topics.
+- **`configure_agent_context`** -- Store a named topic config for an agent
+  (a set of search topics and context depth). The config persists across
+  sessions so the agent does not need to pass topics on every call.
+- **`inject_agent_context`** -- Return targeted session context for a named
+  agent, using its stored config or call-time topic overrides.
 
-## v0.8.10 (2026-07-31)
-
-### Changed: Hook output format change -- recalled-content trust boundary
-
-The auto-load SessionStart hook now wraps recalled session/digest content in
-an explicit untrusted-data delimiter (`<system-reminder id="...">...</system-reminder>`)
-before injecting it into Claude Code's context, with a per-session nonce, a
-provenance line per session ("heuristic capture", "LLM summarized (Pro)",
-etc.), and the removal of the prior free-floating instruction-like sentence
-at the end of the block.
-
-This is a framing/boundary-integrity fix (SH-13436), not a claim to solve
-prompt injection. The injected-context text format has never been a
-documented, stable contract for this hook; any external tooling parsing it
-structurally should expect this and future format changes.
-
-### Fixed: Auto-save length limits now match documented values
-
-Session auto-save was still capping saved summaries and decisions at limits
-left over from an earlier version of the hook (50,000 and 5,000 characters)
-rather than the smaller values actually intended for this release (8,000 and
-500). A separate bug in the truncation marker could also let a saved field
-run slightly past its limit instead of stopping at it.
-
-Starting in v0.8.10, saved summaries are capped at 8,000 characters and
-decisions at 500, and the `[TRUNCATED: ...]` marker is reserved inside that
-limit so a truncated field never exceeds it.
+This is intended for automated agent workflows where the same agent starts
+many sessions and always needs context on the same topics.
 
 <!-- WHATS_NEW:END -->
 
