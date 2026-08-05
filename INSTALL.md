@@ -514,7 +514,7 @@ The Pro tier loads the BGE-small-en-v1.5 embedding model (~130 MB) from HuggingF
 on first use. This is a one-time download. After the download, inference runs entirely
 locally -- no session data is transmitted to HuggingFace.
 
-However, the `huggingface-hub` library (a dependency of `sentence-transformers`) may
+However, the `huggingface-hub` library (a dependency of `fastembed`) may
 make occasional metadata checks to the HuggingFace API after the initial download --
 for example, to verify model card updates. No session content is included in these
 requests, but they are outbound network calls.
