@@ -4,7 +4,7 @@ What changed in each release, written for users (not developers).
 
 ---
 
-## v0.9.0 (2026-08-01)
+## v0.9.0 (2026-08-04)
 
 ### New: Structured memory items -- decisions, open questions, and artifacts
 
