@@ -575,5 +575,34 @@ def pin(session_id, unpin):
     click.echo(action + ": " + sid)
 
 
+@cli.group()
+def license():
+    """Manage LoreConvo Pro license."""
+    pass
+
+
+@license.command(name="clear")
+@click.option("--suite", is_flag=True, default=False,
+              help="Also clear suite-wide Pro from sibling product")
+def license_clear(suite):
+    """Clear the LoreConvo Pro license (and optionally the sibling product's suite key).
+
+    Re-run with --suite to clear suite-wide Pro from both products.
+    """
+    from core import license_store
+
+    try:
+        warnings = license_store.clear_key("loreconvo", suite_too=suite)
+    except Exception as e:
+        click.echo(f"error: {e}", err=True)
+        sys.exit(1)
+
+    if not warnings:
+        click.echo("Cleared.")
+    else:
+        for warning in warnings:
+            click.echo(warning)
+
+
 if __name__ == "__main__":
     cli()
