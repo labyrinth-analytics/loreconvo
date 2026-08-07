@@ -85,6 +85,17 @@ def _check_egg_info_conflict() -> None:
             )
 
 
+_db = None
+
+
+def _get_db() -> SessionDatabase:
+    """Lazy initialization of the database to defer startup overhead until first tool call."""
+    global _db
+    if _db is None:
+        _db = SessionDatabase(Config())
+    return _db
+
+
 mcp = FastMCP(
     "loreconvo",
     instructions=(
@@ -101,8 +112,6 @@ mcp = FastMCP(
         "Agents tag sessions with agent:<name> -- not the surface field."
     )
 )
-
-db = SessionDatabase(Config())
 
 
 def _compress_summary(raw_summary: str) -> str:
@@ -218,7 +227,7 @@ def save_session(
     # Merge artifacts with any existing auto-saved record when session_id is known
     merged_artifacts = artifacts or []
     if session_id is not None and not artifacts:
-        existing = db.get_session(session_id)
+        existing = _get_db().get_session(session_id)
         if existing and existing.artifacts:
             merged_artifacts = existing.artifacts
 
@@ -243,15 +252,15 @@ def save_session(
         session.end_date = end_date
 
     try:
-        saved_id = db.save_session(session)
+        saved_id = _get_db().save_session(session)
         # Mark summary_source when LLM compression was applied via MCP save_session.
         if summary_source == "claude_api" and saved_id:
             try:
-                db.conn.execute(
+                _get_db().conn.execute(
                     "UPDATE sessions SET summary_source=? WHERE id=?",
                     (summary_source, saved_id),
                 )
-                db.conn.commit()
+                _get_db().conn.commit()
             except Exception:
                 pass
     except SessionLimitReachedError as e:
@@ -262,8 +271,8 @@ def save_session(
         }
 
     # first-use nudge
-    config_exists = _onboard_config_path(db).exists()
-    is_first_session = db.session_count() == 1 and not config_exists
+    config_exists = _onboard_config_path(_get_db()).exists()
+    is_first_session = _get_db().session_count() == 1 and not config_exists
 
     result = {"session_id": saved_id, "status": "saved", "title": title}
     if is_first_session:
@@ -292,7 +301,7 @@ def get_recent_sessions(
         project: Filter to sessions in this project
         skill: Filter to sessions that used this skill
     """
-    sessions = db.get_recent_sessions(limit, days_back, project, skill)
+    sessions = _get_db().get_recent_sessions(limit, days_back, project, skill)
     return [
         {
             "id": s.id,
@@ -315,7 +324,7 @@ def get_session(session_id: str) -> dict:
     Args:
         session_id: The UUID of the session to retrieve
     """
-    session = db.get_session(session_id)
+    session = _get_db().get_session(session_id)
     if not session:
         return {"error": f"Session {session_id} not found"}
     return {
@@ -367,7 +376,7 @@ def search_sessions(
         include_expired: If True, include sessions whose expires_at is in the past.
             Default False (expired sessions are hidden from search).
     """
-    results = db.search_sessions(query, persona, tags, skills, project, limit, include_external=include_external, semantic=semantic, include_expired=include_expired)
+    results = _get_db().search_sessions(query, persona, tags, skills, project, limit, include_external=include_external, semantic=semantic, include_expired=include_expired)
     return [
         {
             "id": r.session.id,
@@ -403,7 +412,7 @@ def get_context_for(
         semantic: If True, use LanceDB hybrid search (Pro only). Falls back to FTS5
             if index not yet built.
     """
-    results = db.get_context_for(topic, max_results, include_external=include_external, semantic=semantic)
+    results = _get_db().get_context_for(topic, max_results, include_external=include_external, semantic=semantic)
     return [
         {
             "session_title": r.session.title,
@@ -487,7 +496,7 @@ def _fan_out_topics_fts5(topics, max_results, global_timeout_s):
         topic_started = time.monotonic()
         try:
             results.extend(
-                db.get_context_for(topic, max_results, include_external=False, semantic=False)
+                _get_db().get_context_for(topic, max_results, include_external=False, semantic=False)
             )
         except Exception as exc:
             logger.warning(
@@ -523,7 +532,7 @@ def _fan_out_topics_semantic(topics, max_results, global_timeout_s):
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(topics), 4)) as ex:
         futures = {
-            ex.submit(db.get_context_for, t, max_results, False, True): t
+            ex.submit(_get_db().get_context_for, t, max_results, False, True): t
             for t in topics
         }
         try:
@@ -633,7 +642,7 @@ def configure_agent_context(
             "message": "Context configuration is disabled by LORECONVO_DISABLE_CONTEXT_WRITE.",
         }
     try:
-        result = db.configure_agent_context(
+        result = _get_db().configure_agent_context(
             agent_name=agent_name, project=project, topics=topics,
             max_results_per_topic=max_results_per_topic, enabled=enabled, retire=retire,
         )
@@ -693,7 +702,7 @@ def inject_agent_context(
         }
 
     try:
-        config = db.get_agent_context_config(agent_name, project)
+        config = _get_db().get_agent_context_config(agent_name, project)
     except Exception:
         logger.warning("inject_agent_context: DB error reading config", exc_info=True)
         return {"status": "error", "code": "db_error", "message": "Database error occurred."}
@@ -776,7 +785,7 @@ def inject_agent_context(
 
     if source == "stored_config":
         try:
-            db.touch_agent_context_last_used(agent_name, project)
+            _get_db().touch_agent_context_last_used(agent_name, project)
         except Exception:
             logger.warning(
                 "inject_agent_context: failed to update last_used_at", exc_info=True
@@ -808,7 +817,7 @@ def tag_session(
         persona_name: Persona identifier (e.g., 'ron-bot', 'ron-bot:sql', 'tax-prep')
         relevance_note: Optional note about why this session is relevant to the persona
     """
-    db.tag_session(session_id, persona_name, relevance_note)
+    _get_db().tag_session(session_id, persona_name, relevance_note)
     return {"status": "tagged", "session_id": session_id, "persona": persona_name}
 
 
@@ -825,7 +834,7 @@ def link_sessions(
         to_id: Target session ID
         link_type: Relationship type - 'continues', 'related', or 'supersedes'
     """
-    db.link_sessions(from_id, to_id, link_type)
+    _get_db().link_sessions(from_id, to_id, link_type)
     return {"status": "linked", "from": from_id, "to": to_id, "type": link_type}
 
 
@@ -857,7 +866,7 @@ def get_related_sessions(
             )
         }
     limit = max(1, min(limit, 50))
-    result = db.get_related_sessions(session_id, limit, min_shared_terms)
+    result = _get_db().get_related_sessions(session_id, limit, min_shared_terms)
     # v2 envelope: result is {"version": 2, "sessions": [...]}
     sessions = result.get("sessions", [])
     return {
@@ -887,7 +896,7 @@ def rebuild_index() -> dict:
                 f"Get a license by upgrading at {LORECONVO_UPGRADE_URL}."
             )
         }
-    return db.rebuild_lance_index()
+    return _get_db().rebuild_lance_index()
 
 
 @mcp.tool(title="Get Project")
@@ -897,7 +906,7 @@ def get_project(project_name: str) -> dict:
     Args:
         project_name: The project identifier
     """
-    result = db.get_project(project_name)
+    result = _get_db().get_project(project_name)
     if not result:
         return {"error": f"Project '{project_name}' not found"}
     return result
@@ -906,7 +915,7 @@ def get_project(project_name: str) -> dict:
 @mcp.tool(title="List Projects")
 def list_projects() -> list[dict]:
     """List all defined projects with session counts."""
-    return db.list_projects()
+    return _get_db().list_projects()
 
 
 @mcp.tool(title="Create Project")
@@ -931,7 +940,7 @@ def create_project(
         instructions: Optional project-wide instructions or constraints
         session_id: Optional session ID for audit trail (typically provided by MCP context)
     """
-    db.create_project(name, description, expected_skills, default_persona, instructions, session_id=session_id)
+    _get_db().create_project(name, description, expected_skills, default_persona, instructions, session_id=session_id)
     return {"status": "created", "project": name}
 
 
@@ -968,7 +977,7 @@ def loreconvo_onboard(
     """
     if tag_style not in ("simple", "detailed"):
         return {"error": "tag_style must be 'simple' or 'detailed'"}
-    return _run_onboard(db, name=name, projects=projects, agents=agents, tag_style=tag_style)
+    return _run_onboard(_get_db(), name=name, projects=projects, agents=agents, tag_style=tag_style)
 
 
 @mcp.tool(title="Get Skill History")
@@ -984,7 +993,7 @@ def get_skill_history(
         skill_name: The skill to look up (e.g., 'rental-property-accounting')
         days_back: How far back to search (default 90 days)
     """
-    sessions = db.get_skill_history(skill_name, days_back)
+    sessions = _get_db().get_skill_history(skill_name, days_back)
     return [
         {
             "id": s.id,
@@ -1020,7 +1029,7 @@ def vault_suggest(
         days_back: How far back to look (default 14 days)
         limit: Max suggestions to return (default 5)
     """
-    return db.get_suggestions(project, persona, days_back, limit)
+    return _get_db().get_suggestions(project, persona, days_back, limit)
 
 
 @mcp.tool(title="Get License Tier")
@@ -1083,7 +1092,7 @@ def vault_set_tier(params: VaultSetTierInput) -> str:
                 f"Get a license key by upgrading at {LORECONVO_UPGRADE_URL}."
             )
 
-    db_dir = Path(db.config.db_path).parent
+    db_dir = Path(_get_db().config.db_path).parent
     try:
         _set_tier_config(db_dir, params.tier)
     except ValueError as exc:
@@ -1093,7 +1102,7 @@ def vault_set_tier(params: VaultSetTierInput) -> str:
         return "[OK] Tier set to 'pro'. All limits removed. Enjoy unlimited sessions."
     return (
         f"[OK] Tier set to 'free'. Free tier active. "
-        f"Limit: {db.config.max_free_sessions} sessions."
+        f"Limit: {_get_db().config.max_free_sessions} sessions."
     )
 
 
@@ -1150,7 +1159,7 @@ def export_sessions(
         limit: Max sessions to export (default 1000).
         format: 'json' (array wrapped in metadata) or 'jsonl' (one session per line).
     """
-    sessions = db.get_sessions_for_export(
+    sessions = _get_db().get_sessions_for_export(
         project=project, tags=tags, days_back=days_back, limit=limit
     )
 
@@ -1244,7 +1253,7 @@ def export_for_anthropic(
             )
         }
 
-    sessions = db.get_sessions_for_shared_export(
+    sessions = _get_db().get_sessions_for_shared_export(
         project=project,
         session_id_filter=session_ids,
         export_all=(session_ids is None and project is None),
@@ -1390,7 +1399,7 @@ def import_sessions(
             continue
 
         if dry_run:
-            if db.session_exists(session.id):
+            if _get_db().session_exists(session.id):
                 if on_conflict == "replace":
                     replaced += 1
                 else:
@@ -1400,7 +1409,7 @@ def import_sessions(
             continue
 
         try:
-            result = db.import_session(session, replace=(on_conflict == "replace"))
+            result = _get_db().import_session(session, replace=(on_conflict == "replace"))
         except SessionLimitReachedError:
             limit_hit = True
             break
@@ -1457,7 +1466,7 @@ def inspect_sessions(
         show_stats: If True, include aggregate counts (total, by_surface, by_project).
     """
     if session_id:
-        session = db.get_session(session_id)
+        session = _get_db().get_session(session_id)
         if not session:
             return {"error": f"Session {session_id} not found"}
         return {
@@ -1475,7 +1484,7 @@ def inspect_sessions(
             "keep_forever": 1 if session.keep_forever else 0,
         }
 
-    sessions = db.inspect_sessions(
+    sessions = _get_db().inspect_sessions(
         search=search, tag=tag, surface=surface, since=since, limit=limit
     )
 
@@ -1495,7 +1504,7 @@ def inspect_sessions(
     }
 
     if show_stats:
-        result["stats"] = db.get_inspect_stats()
+        result["stats"] = _get_db().get_inspect_stats()
 
     return result
 
@@ -1508,7 +1517,7 @@ def get_stats() -> dict:
     Provides visibility into your memory usage -- who saved what, how much is stored,
     and what's been captured most recently.
     """
-    return db.get_usage_stats()
+    return _get_db().get_usage_stats()
 
 
 @mcp.tool(title="Consolidate Memories")
@@ -1537,15 +1546,15 @@ def consolidate_memories(
     """
     from core.consolidation import HeuristicConsolidator
     import pathlib
-    lore_dir = str(pathlib.Path(db.config.db_path).parent)
+    lore_dir = str(pathlib.Path(_get_db().config.db_path).parent)
     consolidator = HeuristicConsolidator(lore_dir=lore_dir)
     result = consolidator.consolidate(
         project=project,
         surface=surface,
-        db=db,
+        db=_get_db(),
         max_sessions=max_sessions,
         mode="heuristic",  # LLM mode deferred to v0.6.1
-        is_pro=db.config.is_pro,
+        is_pro=_get_db().config.is_pro,
         trigger="on-demand",
     )
     return result
@@ -1573,8 +1582,8 @@ def get_memory_digest(
                     Default 2000. If truncated, appends [TRUNCATED] marker.
     """
     if disable is not None:
-        db.update_digest_disabled(project, surface, disabled=disable)
-    digest = db.get_memory_digest(project, surface)
+        _get_db().update_digest_disabled(project, surface, disabled=disable)
+    digest = _get_db().get_memory_digest(project, surface)
     if digest is None:
         return {
             "status": "no_digest",
@@ -1623,7 +1632,7 @@ def set_session_expiry(
         session_id: ID of the session to update
         expires_at: ISO 8601 date string (e.g. '2027-01-01T00:00:00Z'), or None to clear
     """
-    result = db.set_session_expiry(session_id, expires_at)
+    result = _get_db().set_session_expiry(session_id, expires_at)
     if not result.get("ok"):
         return {
             "status": result.get("code", "error"),
@@ -1655,9 +1664,9 @@ def get_dream_log(
         limit: Maximum number of entries to return (default 10, newest first)
     """
     import pathlib
-    lore_dir = pathlib.Path(db.config.db_path).parent
+    lore_dir = pathlib.Path(_get_db().config.db_path).parent
     log_path = str(lore_dir / "consolidation.log")
-    entries = db.get_consolidation_log_entries(
+    entries = _get_db().get_consolidation_log_entries(
         project=project,
         surface=surface,
         limit=limit,
@@ -1665,7 +1674,7 @@ def get_dream_log(
     )
     digest = None
     if project:
-        raw = db.get_memory_digest(project, surface)
+        raw = _get_db().get_memory_digest(project, surface)
         if raw:
             inject_env = os.environ.get("LORECONVO_DREAM_INJECT", "true").lower()
             inject_active = inject_env != "false" and not bool(raw.get("disabled", 0))
@@ -1756,7 +1765,7 @@ def get_docs_for_session(session_id: str, limit: int = 5) -> dict:
             "links": [],
         }
 
-    is_pro = db.config.is_pro
+    is_pro = _get_db().config.is_pro
     return ld_storage.get_cross_product_links(
         source_product="loreconvo",
         source_id=session_id,
@@ -1798,7 +1807,7 @@ def session_link_doc(session_id: str, doc_id: str, vault_id: str) -> dict:
         return {"ok": False, "reason": "Cross-product linking unavailable"}
 
     ld_storage = VaultStorage(ld_db.parent)
-    is_pro = db.config.is_pro
+    is_pro = _get_db().config.is_pro
     return ld_storage.link_session_to_doc(
         session_id=session_id,
         doc_id=doc_id,
@@ -1867,11 +1876,11 @@ def get_anti_patterns(
             params.append(project_clean)
         sql += " ORDER BY s.start_date DESC LIMIT ?"
         params.append(limit)
-        rows = db.conn.execute(sql, params).fetchall()
-        sessions_list = [db._row_to_session(r) for r in rows]
+        rows = _get_db().conn.execute(sql, params).fetchall()
+        sessions_list = [_get_db()._row_to_session(r) for r in rows]
     else:
         fetch_limit = min(limit * 4, 400)
-        fts_results = db.search_sessions(
+        fts_results = _get_db().search_sessions(
             query=topic_clean,
             project=project_clean,
             limit=fetch_limit,
@@ -1882,7 +1891,7 @@ def get_anti_patterns(
             candidate_ids = [r.session.id for r in fts_results]
             placeholders = ",".join("?" * len(candidate_ids))
             anti_ids = set(
-                row[0] for row in db.conn.execute(
+                row[0] for row in _get_db().conn.execute(
                     f"SELECT session_id FROM anti_pattern_sessions "
                     f"WHERE session_id IN ({placeholders})",
                     candidate_ids
@@ -1921,7 +1930,7 @@ def tag_as_anti_pattern(session_id: str,
         reason: Human-readable reason for the tag. Stored in audit log.
     """
     try:
-        result = db.mark_anti_pattern(session_id, source=source, reason=reason)
+        result = _get_db().mark_anti_pattern(session_id, source=source, reason=reason)
         return {"status": result, "session_id": session_id}
     except (ValueError, LookupError) as exc:
         return {"status": "error", "error": str(exc)}
@@ -1944,7 +1953,7 @@ def untag_anti_pattern(session_id: str,
         reason: Human-readable reason for the removal. Stored in audit log.
     """
     try:
-        result = db.remove_anti_pattern(session_id, source=source, reason=reason)
+        result = _get_db().remove_anti_pattern(session_id, source=source, reason=reason)
         return {"status": result, "session_id": session_id}
     except ValueError as exc:
         return {"status": "error", "error": str(exc)}
@@ -1987,7 +1996,7 @@ def pin_session(session_id: str, keep_forever: object = True) -> dict:
         return {"ok": False, "code": "invalid_param",
                 "message": "keep_forever must be a boolean."}
 
-    if not _pinning_enabled(db):
+    if not _pinning_enabled(_get_db()):
         return {"ok": False, "code": "feature_disabled",
                 "message": "Session pinning is disabled by configuration."}
 
@@ -1995,7 +2004,7 @@ def pin_session(session_id: str, keep_forever: object = True) -> dict:
     if err:
         return err
     try:
-        found = db.set_keep_forever(sid, keep_forever)
+        found = _get_db().set_keep_forever(sid, keep_forever)
     except Exception as exc:
         logging.getLogger("loreconvo").error(
             "pin_session DB error for session %s: %s", sid, exc, exc_info=True
@@ -2044,7 +2053,7 @@ def save_memory_item(
         external_id: Caller-supplied dedup key, unique per (project, external_id).
         artifact_type: For item_type='artifact', the artifact's type (e.g. 'file', 'url').
     """
-    return db.save_memory_item(
+    return _get_db().save_memory_item(
         item_type=item_type, title=title, body=body, session_id=session_id,
         project=project, tags=tags, metadata=metadata, external_id=external_id,
         artifact_type=artifact_type,
@@ -2071,7 +2080,7 @@ def query_memory_items(
         days: Only items created in the last N days.
         limit: Max rows to return (default 50, max 200).
     """
-    return db.query_memory_items(
+    return _get_db().query_memory_items(
         item_type=item_type, project=project, status=status,
         artifact_type=artifact_type, days=days, limit=limit,
     )
@@ -2097,7 +2106,7 @@ def transition_memory_item(
         closing_session_id: Session performing the transition, if any. Must
             reference an existing session.
     """
-    return db.transition_memory_item(
+    return _get_db().transition_memory_item(
         item_id=item_id, transition=transition, reason=reason,
         closing_session_id=closing_session_id,
     )
@@ -2129,7 +2138,7 @@ def update_memory_item(
         new_project: Destination project, if moving.
         allow_project_change: Must be True to actually move projects.
     """
-    return db.update_memory_item(
+    return _get_db().update_memory_item(
         item_id=item_id, title=title, body=body, tags=tags, metadata=metadata,
         new_project=new_project, allow_project_change=allow_project_change,
     )
@@ -2146,7 +2155,7 @@ def main():
     if args.dry_run_validate:
         from core.database import _validate_anti_pattern_schema
         try:
-            _validate_anti_pattern_schema(db.conn)
+            _validate_anti_pattern_schema(_get_db().conn)
             print("Schema validation: OK", file=sys.stderr)
             sys.exit(0)
         except RuntimeError as exc:
@@ -2161,7 +2170,7 @@ def main():
     # re-spawn a stdio server that exits) keep a working connection (SH-13610).
     idle_watchdog.install(
         mcp, env_var="LORECONVO_IDLE_TIMEOUT",
-        release_func=db.release_idle_connection,
+        release_func=_get_db().release_idle_connection,
         backstop_env_var="LORECONVO_IDLE_BACKSTOP_TIMEOUT",
     )
     mcp.run(transport="stdio")
