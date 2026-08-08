@@ -22,6 +22,7 @@ from core.database import (
     _MAX_SESSIONS_PER_FILE, _IMPORT_FIELD_CAPS,
     _pinning_enabled, parse_session_id,
 )
+from core import graph
 from core.config import Config, set_tier as _set_tier_config
 from core.license import get_license_status, LORECONVO_UPGRADE_URL
 from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onboard_config_path
@@ -874,6 +875,94 @@ def get_related_sessions(
         "session_id": session_id,
         "related_count": len(sessions),
         "related": sessions,
+    }
+
+
+@mcp.tool(title="Graph Session Map")
+def graph_session_map(
+    session_id: str | None = None,
+    project: str | None = None,
+    depth: int = 1,
+    max_nodes: int = 60,
+) -> dict:
+    """Render a Mermaid knowledge-graph neighborhood around a session or project.
+
+    Exactly one of session_id/project selects the seed. Traversal is a
+    bounded, read-only BFS over session_links (undirected) plus each
+    admitted session's attribute leaves (project/skill/persona/tag). Pro
+    tier adds derived (co-occurrence/embedding) and doc (LoreDocs
+    cross-link) edges, seed-only. Every emitted label is restricted to a
+    fixed character allowlist so no title/tag/skill text can alter the
+    diagram's structure.
+
+    Args:
+        session_id: UUID of the seed session. Exactly one of session_id/project required.
+        project: name of the seed project. Exactly one of session_id/project required.
+        depth: number of BFS expansion hops over link edges, clamped [0, 3]
+        max_nodes: node budget (sessions + attribute leaves), clamped [1, 200]
+
+    Returns a dict with version, seed, seed_found, mermaid, nodes, edges,
+    truncated, nodes_emitted, nodes_available, edges_emitted,
+    nodes_dropped_by_kind, edges_dropped_by_kind, frontier_session_ids,
+    edge_kinds_included, edge_kinds_omitted -- or {"error": {...}} on a
+    validation failure or an unavailable database.
+    """
+    if bool(session_id) == bool(project):
+        return {"error": {
+            "code": "SEED_XOR", "field": None,
+            "message": "Exactly one of session_id or project is required.",
+        }}
+    try:
+        depth = int(depth)
+    except (TypeError, ValueError):
+        return {"error": {
+            "code": "INVALID_PARAM", "field": "depth",
+            "message": "depth must be an integer.",
+        }}
+    try:
+        max_nodes = int(max_nodes)
+    except (TypeError, ValueError):
+        return {"error": {
+            "code": "INVALID_PARAM", "field": "max_nodes",
+            "message": "max_nodes must be an integer.",
+        }}
+
+    neighborhood = _get_db().get_graph_neighborhood(
+        seed_session_id=session_id, seed_project=project, depth=depth, max_nodes=max_nodes,
+    )
+    if "error" in neighborhood:
+        return {"error": {
+            "code": "GRAPH_DB_UNAVAILABLE", "field": None,
+            "message": neighborhood["message"],
+        }}
+
+    for node in neighborhood["nodes"]:
+        node["label"] = graph.sanitize_label(node.pop("raw_label"))
+    mermaid = graph.build_mermaid(neighborhood)
+
+    nodes_dropped_by_kind = neighborhood["nodes_dropped_by_kind"]
+    edges_dropped_by_kind = neighborhood["edges_dropped_by_kind"]
+    nodes_available = len(neighborhood["nodes"]) + sum(nodes_dropped_by_kind.values())
+
+    return {
+        "version": 1,
+        "seed": {
+            "kind": "session" if session_id else "project",
+            "value": session_id or project,
+        },
+        "seed_found": neighborhood["seed_found"],
+        "mermaid": mermaid,
+        "nodes": neighborhood["nodes"],
+        "edges": neighborhood["edges"],
+        "truncated": bool(nodes_dropped_by_kind) or bool(edges_dropped_by_kind),
+        "nodes_emitted": len(neighborhood["nodes"]),
+        "nodes_available": nodes_available,
+        "edges_emitted": len(neighborhood["edges"]),
+        "nodes_dropped_by_kind": nodes_dropped_by_kind,
+        "edges_dropped_by_kind": edges_dropped_by_kind,
+        "frontier_session_ids": neighborhood["frontier_session_ids"],
+        "edge_kinds_included": neighborhood["edge_kinds_included"],
+        "edge_kinds_omitted": neighborhood["edge_kinds_omitted"],
     }
 
 
