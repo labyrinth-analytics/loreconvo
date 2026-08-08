@@ -56,6 +56,8 @@ bridge = [
 [project.scripts]
 loreconvo = "loreconvo.server:main"
 loreconvo-compat-check = "loreconvo.compat_check:main"
+loreconvo-capture = "loreconvo.hooks.scripts.post_turn_capture:main"
+loreconvo-capture-worker = "loreconvo.hooks.scripts.capture_worker:main"
 
 [project.urls]
 Homepage = "https://github.com/labyrinth-analytics/loreconvo"
