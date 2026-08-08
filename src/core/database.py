@@ -2077,6 +2077,425 @@ class SessionDatabase:
         )
         return {"version": 2, "sessions": sessions}
 
+    # -- Knowledge-graph traversal (SH-100263, graph_session_map) --
+
+    GRAPH_MAX_DEPTH = 3
+    GRAPH_MIN_NODES = 1
+    GRAPH_MAX_NODES = 200
+    GRAPH_DEFAULT_MAX_NODES = 60
+
+    def get_graph_neighborhood(
+        self,
+        seed_session_id: Optional[str] = None,
+        seed_project: Optional[str] = None,
+        depth: int = 1,
+        max_nodes: int = GRAPH_DEFAULT_MAX_NODES,
+    ) -> dict:
+        """Bounded, read-only BFS neighborhood for the graph_session_map MCP tool.
+
+        Every SELECT here runs on its own short-lived `mode=ro` SQLite
+        connection, opened after re-touching `self.conn` (which reopens the
+        write connection if the idle watchdog released it -- the WAL
+        precondition a read-only connection depends on). A write attempted
+        anywhere in this path raises `sqlite3.OperationalError` because the
+        connection is read-only at the driver level, not by convention.
+
+        Returns either `{"error": "GRAPH_DB_UNAVAILABLE", "message": str}` or
+        the full neighborhood dict: `seed_found`, `nodes`, `edges`,
+        `nodes_dropped_by_kind`, `edges_dropped_by_kind`,
+        `frontier_session_ids`, `edge_kinds_included`, `edge_kinds_omitted`.
+        Node dicts carry `raw_label` (unsanitized domain text) rather than a
+        sanitized `label` -- sanitization is `core.graph.sanitize_label`'s
+        job, and this module does not import `core.graph` (server.py is the
+        one static import site for that module).
+
+        See the architecture proposal for the full design and invariant list:
+        docs/agent-reports/architecture/proposals/loreconvo_kg_mermaid_graph_tool_20260804.md
+        """
+        depth = max(0, min(int(depth), self.GRAPH_MAX_DEPTH))
+        max_nodes = max(self.GRAPH_MIN_NODES, min(int(max_nodes), self.GRAPH_MAX_NODES))
+        max_edges = 5 * max_nodes
+
+        # Re-establish the WAL precondition: reopens _conn if the idle
+        # watchdog released it. This does not itself perform any traversal
+        # read -- it is the precondition the mode=ro open below depends on.
+        self.conn
+        ro_conn, error = self._open_graph_ro_connection()
+        if ro_conn is None:
+            return {"error": "GRAPH_DB_UNAVAILABLE", "message": error}
+        try:
+            return self._graph_traverse(
+                ro_conn, seed_session_id, seed_project, depth, max_nodes, max_edges
+            )
+        finally:
+            ro_conn.close()
+
+    def _open_graph_ro_connection(self):
+        """Open a fresh mode=ro connection, retrying once if the idle watchdog raced us.
+
+        Returns (connection, None) on success or (None, error_message) if the
+        open still fails after one retry.
+        """
+        try:
+            conn = sqlite3.connect(f"file:{self.config.db_path}?mode=ro", uri=True)
+        except sqlite3.OperationalError:
+            self.conn  # watchdog raced us between the reopen above and here; retry once
+            try:
+                conn = sqlite3.connect(f"file:{self.config.db_path}?mode=ro", uri=True)
+            except sqlite3.OperationalError as exc2:
+                return None, str(exc2)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout=10000")
+        return conn, None
+
+    def _graph_traverse(
+        self, conn, seed_session_id, seed_project, depth, max_nodes, max_edges
+    ) -> dict:
+        if bool(seed_session_id) == bool(seed_project):
+            raise ValueError("exactly one of seed_session_id or seed_project is required")
+
+        seed_kind = "session" if seed_session_id else "project"
+        seed_value = seed_session_id if seed_session_id else seed_project
+
+        nodes: List[dict] = []
+        node_id_by_key: dict = {}
+        nodes_dropped_by_kind: dict = {}
+        budget_remaining = max_nodes
+
+        def admit(kind, ref, raw_label, **extra):
+            nonlocal budget_remaining
+            key = (kind, ref)
+            existing = node_id_by_key.get(key)
+            if existing is not None:
+                return existing
+            if budget_remaining <= 0:
+                nodes_dropped_by_kind[kind] = nodes_dropped_by_kind.get(kind, 0) + 1
+                return None
+            node_id = f"n{len(nodes)}"
+            node = {"id": node_id, "kind": kind, "ref": ref, "raw_label": raw_label}
+            node.update(extra)
+            nodes.append(node)
+            node_id_by_key[key] = node_id
+            budget_remaining -= 1
+            return node_id
+
+        # -- Seed resolution --
+        if seed_kind == "session":
+            row = conn.execute("SELECT 1 FROM sessions WHERE id = ?", (seed_value,)).fetchone()
+            seed_found = row is not None
+            hop0_ids = [seed_value] if seed_found else []
+        else:
+            row = conn.execute(
+                "SELECT 1 FROM sessions WHERE project = ? LIMIT 1", (seed_value,)
+            ).fetchone()
+            seed_found = row is not None
+            if seed_found:
+                rows = conn.execute(
+                    "SELECT id FROM sessions WHERE project = ? "
+                    "ORDER BY COALESCE(start_date, '') DESC, id ASC",
+                    (seed_value,)
+                ).fetchall()
+                hop0_ids = [r["id"] for r in rows]
+            else:
+                hop0_ids = []
+
+        if not seed_found:
+            return {
+                "seed_found": False,
+                "nodes": [],
+                "edges": [],
+                "nodes_dropped_by_kind": {},
+                "edges_dropped_by_kind": {},
+                "frontier_session_ids": [],
+                "edge_kinds_included": [],
+                "edge_kinds_omitted": [],
+            }
+
+        session_info: dict = {}  # session_id -> {"title", "project", "tags_raw"}
+
+        def fetch_session_rows(ids):
+            ids = [i for i in ids if i not in session_info]
+            if not ids:
+                return
+            placeholders = ",".join("?" for _ in ids)
+            rows = conn.execute(
+                f"SELECT id, title, project, tags FROM sessions WHERE id IN ({placeholders})",
+                tuple(ids)
+            ).fetchall()
+            for r in rows:
+                session_info[r["id"]] = {
+                    "title": r["title"], "project": r["project"], "tags_raw": r["tags"]
+                }
+
+        def session_meta(sid):
+            return session_info.get(sid, {"title": "", "project": None, "tags_raw": None})
+
+        # -- Phase 1: seed node(s) --
+        if seed_kind == "project":
+            admit("project", seed_value, seed_value)
+
+        fetch_session_rows(hop0_ids)
+        hop_of: dict = {}
+        visited = set(hop0_ids)
+        admitted_session_order: List[str] = []  # first-admission order, for phase 4
+        session_order_seen: set = set()
+
+        def record_session_order(sid, node_id):
+            if node_id is not None and sid not in session_order_seen:
+                session_order_seen.add(sid)
+                admitted_session_order.append(sid)
+
+        frontier_admitted: List[str] = []
+        for sid in hop0_ids:
+            info = session_meta(sid)
+            node_id = admit("session", sid, info["title"], hop=0, is_frontier=False)
+            hop_of[sid] = 0
+            record_session_order(sid, node_id)
+            if node_id is not None:
+                frontier_admitted.append(sid)
+
+        # -- Phase 2: BFS expansion over `link` edges, one batched query per hop --
+        link_edge_candidates: List[tuple] = []
+        seen_link_edges: set = set()
+        current_hop = 0
+        while frontier_admitted:
+            frontier_set = set(frontier_admitted)
+            placeholders = ",".join("?" for _ in frontier_admitted)
+            rows = conn.execute(
+                f"""SELECT from_session_id, to_session_id, link_type FROM session_links
+                    WHERE from_session_id IN ({placeholders})
+                       OR to_session_id IN ({placeholders})""",
+                tuple(frontier_admitted) * 2
+            ).fetchall()
+
+            candidates: List[str] = []
+            seen_candidates: set = set()
+            for r in rows:
+                f, t, lt = r["from_session_id"], r["to_session_id"], r["link_type"]
+                key = (f, t)
+                if key not in seen_link_edges:
+                    seen_link_edges.add(key)
+                    link_edge_candidates.append((f, t, lt))
+                for end in (f, t):
+                    if end not in frontier_set and end not in visited and end not in seen_candidates:
+                        candidates.append(end)
+                        seen_candidates.add(end)
+
+            if current_hop >= depth or not candidates:
+                break
+
+            placeholders2 = ",".join("?" for _ in candidates)
+            crows = conn.execute(
+                f"SELECT id FROM sessions WHERE id IN ({placeholders2}) "
+                "ORDER BY COALESCE(start_date, '') DESC, id ASC",
+                tuple(candidates)
+            ).fetchall()
+            ordered_candidates = [r["id"] for r in crows]
+
+            fetch_session_rows(ordered_candidates)
+            next_frontier: List[str] = []
+            for sid in ordered_candidates:
+                visited.add(sid)
+                info = session_meta(sid)
+                node_id = admit("session", sid, info["title"], hop=current_hop + 1, is_frontier=False)
+                hop_of[sid] = current_hop + 1
+                record_session_order(sid, node_id)
+                if node_id is not None:
+                    next_frontier.append(sid)
+
+            frontier_admitted = next_frontier
+            current_hop += 1
+
+        for node in nodes:
+            if node["kind"] == "session" and node.get("hop") is not None:
+                node["is_frontier"] = (node["hop"] == depth)
+
+        frontier_session_ids = [
+            sid for sid, h in hop_of.items()
+            if h == depth and ("session", sid) in node_id_by_key
+        ]
+
+        # -- Phase 3: seed-only Pro-derived nodes (derived session nodes, then doc leaves) --
+        # Applies only to a session seed: `get_related_sessions` and the LoreDocs
+        # cross-link query both take a single session id, and "at most one call
+        # regardless of max_nodes" would not hold for a project seed with many
+        # hop-0 sessions. A project seed therefore carries no derived/doc kinds.
+        edge_kinds_included = ["link", "project", "skill", "persona", "tag"]
+        edge_kinds_omitted: List[dict] = []
+        derived_edge_candidates: List[tuple] = []
+        doc_edge_candidates: List[tuple] = []
+
+        if seed_kind == "session":
+            if not self.config.is_pro:
+                edge_kinds_omitted.append({"kind": "derived", "reason": "pro_required"})
+                edge_kinds_omitted.append({"kind": "doc", "reason": "pro_required"})
+            else:
+                edge_kinds_included.append("derived")
+                try:
+                    related = self.get_related_sessions(seed_value, limit=50, min_shared_terms=1)
+                except Exception:
+                    related = {"sessions": []}
+                for r in related.get("sessions", []):
+                    rel_sid = r.get("session_id")
+                    if not rel_sid:
+                        continue
+                    admit("session", rel_sid, r.get("title", ""), hop=None, is_frontier=False)
+                    record_session_order(rel_sid, node_id_by_key.get(("session", rel_sid)))
+                    derived_edge_candidates.append((seed_value, rel_sid))
+
+                doc_links = self._graph_cross_product_links(seed_value)
+                if doc_links is None:
+                    edge_kinds_omitted.append({"kind": "doc", "reason": "cross_product_unavailable"})
+                else:
+                    edge_kinds_included.append("doc")
+                    for link in doc_links:
+                        target_id = link.get("target_id")
+                        if not target_id:
+                            continue
+                        admit("doc", target_id, target_id)
+                        doc_edge_candidates.append((seed_value, target_id))
+
+        # -- Phase 4: attribute leaves, grouped by owning session in admission order --
+        attr_edge_candidates: List[tuple] = []  # (kind, from_node_id, to_node_id, extra)
+
+        if admitted_session_order:
+            placeholders = ",".join("?" for _ in admitted_session_order)
+            skill_rows = conn.execute(
+                f"""SELECT session_id, skill_name, invocation_count FROM session_skills
+                    WHERE session_id IN ({placeholders}) ORDER BY session_id, skill_name ASC""",
+                tuple(admitted_session_order)
+            ).fetchall()
+            persona_rows = conn.execute(
+                f"""SELECT session_id, persona_name FROM persona_sessions
+                    WHERE session_id IN ({placeholders}) ORDER BY session_id, persona_name ASC""",
+                tuple(admitted_session_order)
+            ).fetchall()
+        else:
+            skill_rows, persona_rows = [], []
+
+        skills_by_session: dict = {}
+        for r in skill_rows:
+            skills_by_session.setdefault(r["session_id"], []).append(
+                (r["skill_name"], r["invocation_count"])
+            )
+        personas_by_session: dict = {}
+        for r in persona_rows:
+            personas_by_session.setdefault(r["session_id"], []).append(r["persona_name"])
+
+        for sid in admitted_session_order:
+            session_node_id = node_id_by_key[("session", sid)]
+            info = session_meta(sid)
+
+            proj_val = info.get("project")
+            if proj_val:
+                attr_node_id = admit("project", proj_val, proj_val)
+                attr_edge_candidates.append(("project", session_node_id, attr_node_id, {}))
+
+            for skill_name, invocation_count in skills_by_session.get(sid, []):
+                attr_node_id = admit("skill", skill_name, skill_name)
+                attr_edge_candidates.append(
+                    ("skill", session_node_id, attr_node_id, {"weight": invocation_count})
+                )
+
+            for persona_name in personas_by_session.get(sid, []):
+                attr_node_id = admit("persona", persona_name, persona_name)
+                attr_edge_candidates.append(("persona", session_node_id, attr_node_id, {}))
+
+            tags = self._parse_json_field(info.get("tags_raw"), default="[]")
+            clean_tags = sorted({str(t) for t in tags if isinstance(t, str) and t})
+            for tag in clean_tags:
+                attr_node_id = admit("tag", tag, tag)
+                attr_edge_candidates.append(("tag", session_node_id, attr_node_id, {}))
+
+        # -- Edge budget: link first, then derived, then doc, then attribute kinds --
+        edges: List[dict] = []
+        edges_dropped_by_kind: dict = {}
+        edge_budget_remaining = max_edges
+
+        def try_add_edge(kind, from_id, to_id, **extra):
+            nonlocal edge_budget_remaining
+            if from_id is None or to_id is None:
+                return  # an endpoint was dropped for node budget -- not an edge-budget event
+            if edge_budget_remaining <= 0:
+                edges_dropped_by_kind[kind] = edges_dropped_by_kind.get(kind, 0) + 1
+                return
+            edge = {"from": from_id, "to": to_id, "kind": kind}
+            edge.update(extra)
+            edges.append(edge)
+            edge_budget_remaining -= 1
+
+        for f, t, lt in link_edge_candidates:
+            try_add_edge(
+                "link",
+                node_id_by_key.get(("session", f)),
+                node_id_by_key.get(("session", t)),
+                link_type=lt,
+            )
+
+        for f_sid, rel_sid in derived_edge_candidates:
+            try_add_edge(
+                "derived",
+                node_id_by_key.get(("session", f_sid)),
+                node_id_by_key.get(("session", rel_sid)),
+            )
+
+        for f_sid, doc_id in doc_edge_candidates:
+            try_add_edge(
+                "doc",
+                node_id_by_key.get(("session", f_sid)),
+                node_id_by_key.get(("doc", doc_id)),
+            )
+
+        for kind, from_id, to_id, extra in attr_edge_candidates:
+            try_add_edge(kind, from_id, to_id, **extra)
+
+        return {
+            "seed_found": True,
+            "nodes": nodes,
+            "edges": edges,
+            "nodes_dropped_by_kind": nodes_dropped_by_kind,
+            "edges_dropped_by_kind": edges_dropped_by_kind,
+            "frontier_session_ids": frontier_session_ids,
+            "edge_kinds_included": edge_kinds_included,
+            "edge_kinds_omitted": edge_kinds_omitted,
+        }
+
+    def _graph_cross_product_links(self, session_id: str):
+        """Return LoreDocs cross-product links for a graph seed, or None if unavailable.
+
+        Mirrors the degradation `get_docs_for_session` already implements at
+        server.py -- any failure (LoreDocs absent, DiscoveryError, schema too
+        old) is reported as unavailable rather than raised.
+        """
+        try:
+            from loredocs.storage import (
+                CROSS_LINK_SCHEMA_VERSION, REQUIRED_CROSS_LINK_SCHEMA_VERSION,
+                _CROSS_LINK_EMBEDDING_MODEL, VaultStorage,
+                discover_product_db, DiscoveryError,
+            )
+        except ImportError:
+            return None
+        if CROSS_LINK_SCHEMA_VERSION < REQUIRED_CROSS_LINK_SCHEMA_VERSION:
+            return None
+        try:
+            ld_db = discover_product_db("loredocs")
+        except DiscoveryError:
+            return None
+        if ld_db is None:
+            return None
+        try:
+            ld_storage = VaultStorage(ld_db.parent)
+            result = ld_storage.get_cross_product_links(
+                source_product="loreconvo",
+                source_id=session_id,
+                current_embedding_model=_CROSS_LINK_EMBEDDING_MODEL,
+                limit=50,
+                is_pro=True,
+            )
+        except Exception:
+            return None
+        return result.get("links", [])
+
     def close(self):
         with self._write_lock:
             self._closed = True
