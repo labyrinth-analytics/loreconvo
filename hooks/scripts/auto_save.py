@@ -1,7 +1,7 @@
 """LoreConvo SessionEnd auto-save hook.
 
 Receives session metadata via stdin JSON from Claude Code's SessionEnd hook.
-Parses the transcript JSONL to extract a summary, then saves directly to SQLite.
+Parses the transcript JSONL to extract a summary, then saves via storage_core.
 
 Designed to run within the 3-5 second timeout window.
 """
@@ -9,10 +9,25 @@ Designed to run within the 3-5 second timeout window.
 import json
 import os
 import sys
-import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
+
+# Bootstrap: resolve storage_core for non-package callers.
+from _bootstrap import resolve_storage_core, BootstrapError
+
+try:
+    _storage = resolve_storage_core(Path(__file__))
+except BootstrapError as exc:
+    # Write breadcrumb before exiting so the MCP server can surface it.
+    from _bootstrap import _write_breadcrumb
+    _write_breadcrumb("auto_save", str(exc), [])
+    sys.stderr.write(f"LoreConvo auto-save bootstrap error: {exc}\n")
+    sys.exit(1)
+
+_open_conn = _storage._open_conn
+ensure_schema = _storage.ensure_schema
+upsert_session = _storage.upsert_session
 
 
 _MAX_DECISION_LENGTH = 500
@@ -204,105 +219,73 @@ def parse_transcript(transcript_path):
 
 
 def ensure_tables(conn):
-    """Create tables if they don't exist (matches core/database.py schema)."""
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS sessions (
-            id TEXT PRIMARY KEY NOT NULL,
-            title TEXT NOT NULL,
-            surface TEXT NOT NULL,
-            project TEXT,
-            summary TEXT,
-            decisions TEXT DEFAULT '[]',
-            artifacts TEXT DEFAULT '[]',
-            open_questions TEXT DEFAULT '[]',
-            tags TEXT DEFAULT '[]',
-            start_date TEXT,
-            end_date TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS session_skills (
-            session_id TEXT NOT NULL,
-            skill_name TEXT NOT NULL,
-            FOREIGN KEY (session_id) REFERENCES sessions(id),
-            UNIQUE(session_id, skill_name)
-        );
-        CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts USING fts5(
-            title, summary, decisions, content=sessions, content_rowid=rowid
-        );
-    """)
-    try:
-        conn.execute("ALTER TABLE sessions ADD COLUMN source TEXT DEFAULT 'session'")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass  # column already exists
+    """Backward-compatible wrapper -- delegates to ensure_schema.
+
+    Deprecated: use ensure_schema(conn) directly. Kept for existing
+    test compatibility during the consolidation transition.
+    """
+    ensure_schema(conn)
 
 
 def save_to_db(db_path, session_id, parsed, project=None, source="session"):
-    """Save parsed session data directly to SQLite.
+    """Save parsed session data via storage_core.
 
     source: 'session' for final SessionEnd saves, 'periodic' for mid-session snapshots.
     Periodic saves use the same session_id so the final SessionEnd save overwrites them.
     """
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
-    conn = sqlite3.connect(db_path)
+    conn = _open_conn(db_path, busy_timeout_ms=2000)
     try:
-        ensure_tables(conn)
+        ensure_schema(conn)
 
         # Use Claude's session_id as our primary key so dedup actually works.
-        # Previous bug: generated a random UUID for id but checked WHERE id = session_id,
-        # so the duplicate guard never matched anything.
         session_uuid = session_id
 
         # Check if session already exists (e.g., resumed session or duplicate hook fire)
         cursor = conn.execute("SELECT id FROM sessions WHERE id = ?", (session_uuid,))
-        if cursor.fetchone():
+        exists = cursor.fetchone() is not None
+
+        now = datetime.now().isoformat()
+        tags_json = json.dumps(auto_save_tags())
+        decisions_json = json.dumps(parsed["decisions"])
+        artifacts_json = json.dumps(parsed["artifacts"])
+        open_questions_json = json.dumps(parsed.get("open_questions", []))
+
+        if exists:
             # Already saved -- update instead of duplicate.
-            # Also update source so a final 'session' save overwrites a 'periodic' one.
-            now = datetime.now().isoformat()
             conn.execute(
                 """UPDATE sessions SET summary = ?, decisions = ?, artifacts = ?,
-                   open_questions = ?, tags = ?, end_date = ?, updated_at = ?,
-                   project = ?, source = ?
+                   open_questions = ?, tags = ?, end_date = ?, project = ?, source = ?
                    WHERE id = ?""",
                 (
                     parsed["summary"],
-                    json.dumps(parsed["decisions"]),
-                    json.dumps(parsed["artifacts"]),
-                    json.dumps(parsed.get("open_questions", [])),
-                    json.dumps(auto_save_tags()),
-                    now,
+                    decisions_json,
+                    artifacts_json,
+                    open_questions_json,
+                    tags_json,
                     now,
                     project,
                     source,
                     session_uuid,
                 ),
             )
-            conn.commit()
-            return True  # Updated existing record
-
-        now = datetime.now().isoformat()
-
-        conn.execute(
-            """INSERT INTO sessions (id, title, surface, project, summary, decisions, artifacts,
-               open_questions, tags, start_date, end_date, source)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                session_uuid,
-                parsed["title"],
-                "code",
-                project,
-                parsed["summary"],
-                json.dumps(parsed["decisions"]),
-                json.dumps(parsed["artifacts"]),
-                json.dumps(parsed["open_questions"]),
-                json.dumps(auto_save_tags()),
-                now,
-                now,
-                source,
-            ),
-        )
+        else:
+            upsert_session(
+                conn,
+                session_id=session_uuid,
+                title=parsed["title"],
+                surface="code",
+                project=project,
+                start_date=now,
+                end_date=now,
+                summary=parsed["summary"],
+                decisions=decisions_json,
+                artifacts=artifacts_json,
+                open_questions=open_questions_json,
+                tags=tags_json,
+                source=source,
+            )
 
         # Update FTS index
         try:
@@ -312,7 +295,7 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
                    FROM sessions WHERE id = ?""",
                 (session_uuid,),
             )
-        except sqlite3.OperationalError:
+        except Exception:
             pass  # FTS table might not exist in older DBs
 
         # Save skill/tool usage
@@ -322,10 +305,9 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
                     "INSERT INTO session_skills (session_id, skill_name) VALUES (?, ?)",
                     (session_uuid, tool),
                 )
-            except sqlite3.IntegrityError:
+            except Exception:
                 pass
 
-        conn.commit()
         return True
     except Exception as e:
         sys.stderr.write(f"LoreConvo auto-save DB error: {e}\n")

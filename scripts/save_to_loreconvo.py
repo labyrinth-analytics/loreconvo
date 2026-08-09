@@ -32,6 +32,30 @@ import sqlite3
 import sys
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
+
+# Bootstrap: resolve storage_core for non-package callers.
+# save_to_loreconvo.py lives in ron_skills/loreconvo/scripts/;
+# _bootstrap.py lives in ron_skills/loreconvo/hooks/scripts/.
+# Load _bootstrap by explicit file location -- no sys.path mutation.
+import importlib.util
+_BOOTSTRAP_PATH = (
+    Path(__file__).resolve().parent.parent / "hooks" / "scripts" / "_bootstrap.py"
+)
+_bootstrap_spec = importlib.util.spec_from_file_location(
+    "_loreconvo_bootstrap", str(_BOOTSTRAP_PATH)
+)
+_bootstrap = importlib.util.module_from_spec(_bootstrap_spec)
+_bootstrap_spec.loader.exec_module(_bootstrap)
+
+try:
+    _storage = _bootstrap.resolve_storage_core(Path(__file__))
+except _bootstrap.BootstrapError as exc:
+    print(f"ERROR: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+_open_conn = _storage._open_conn
+ensure_schema = _storage.ensure_schema
 
 
 # -- DB discovery --
@@ -63,8 +87,7 @@ def _connect(db_path=None):
     if not path:
         print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
         sys.exit(1)
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
+    conn = _open_conn(path, busy_timeout_ms=2000)
     return conn, path
 
 

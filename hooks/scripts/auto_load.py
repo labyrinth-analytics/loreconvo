@@ -23,10 +23,22 @@ Total formatted context is capped at _MAX_CONTEXT_TOKENS to avoid bloat.
 import json
 import os
 import sys
-import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+# Bootstrap: resolve storage_core for non-package callers.
+from _bootstrap import resolve_storage_core, BootstrapError
+
+try:
+    _storage = resolve_storage_core(Path(__file__))
+except BootstrapError as exc:
+    from _bootstrap import _write_breadcrumb
+    _write_breadcrumb("auto_load", str(exc), [])
+    sys.stderr.write(f"LoreConvo auto-load bootstrap error: {exc}\n")
+    sys.exit(1)
+
+_open_conn = _storage._open_conn
 
 # Robust sibling import (SH-13436 r5): resolve this script's own directory
 # explicitly rather than relying on sys.path[0], which is invocation-path
@@ -125,8 +137,7 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
     if not os.path.exists(db_path):
         return []
 
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    conn = _open_conn(db_path, busy_timeout_ms=2000)
     try:
         cutoff = (datetime.now() - timedelta(days=days_back)).isoformat()
 
@@ -200,15 +211,14 @@ def index_memory_md(db_path, project_dir):
         project_name = Path(project_dir).name
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-        conn = sqlite3.connect(db_path)
+        conn = _open_conn(db_path, busy_timeout_ms=2000)
         try:
             # Ensure source column exists (migration may not have run yet)
             try:
                 conn.execute(
                     "ALTER TABLE sessions ADD COLUMN source TEXT DEFAULT 'session'"
                 )
-                conn.commit()
-            except sqlite3.OperationalError:
+            except Exception:
                 pass  # column already exists
 
             conn.execute(
@@ -246,7 +256,6 @@ def index_memory_md(db_path, project_dir):
                     "file_memory",
                 ),
             )
-            conn.commit()
         finally:
             conn.close()
 
@@ -307,7 +316,7 @@ def format_context(sessions, cwd, db_path=None, session_nonce=None):
         # Query and include project instructions if available
         if db_path and os.path.exists(db_path):
             try:
-                conn = sqlite3.connect(db_path)
+                conn = _open_conn(db_path, busy_timeout_ms=2000)
                 row = conn.execute(
                     "SELECT instructions FROM projects WHERE name = ?",
                     (project_name,)
@@ -318,7 +327,7 @@ def format_context(sessions, cwd, db_path=None, session_nonce=None):
                     lines.append(f"<!-- LoreConvo project instructions (user-authored, project: {project_name}) -->")
                     lines.append(row[0])
                     lines.append("<!-- end project instructions -->")
-            except (sqlite3.OperationalError, sqlite3.DatabaseError):
+            except Exception:
                 pass  # Ignore DB errors; instructions are optional
     else:
         lines.append("Recent sessions (no project filter):")
@@ -422,7 +431,7 @@ def format_context(sessions, cwd, db_path=None, session_nonce=None):
     return "\n".join(lines)
 
 
-def query_digest_for_injection(db_path: str, project: str, surface: str) -> "str | None":
+def query_digest_for_injection(db_path: str, project: str, surface: str):
     """Return the digest_markdown for injection if eligible, or None.
 
     Eligibility rules:
@@ -438,8 +447,7 @@ def query_digest_for_injection(db_path: str, project: str, surface: str) -> "str
         return None
 
     try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
+        conn = _open_conn(db_path, busy_timeout_ms=2000)
         try:
             # Check if memory_digests table exists (may not on older installs)
             tables = {row[0] for row in conn.execute(
