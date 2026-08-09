@@ -85,7 +85,7 @@ Replace `/path/to/loreconvo` with wherever you saved the source folder.
 
 After making code changes, use `/reload-plugins` to refresh without restarting.
 
-Once loaded, Claude has access to all 38 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
+Once loaded, Claude has access to all 39 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
 
 ### Cowork (Desktop App)
 
@@ -307,7 +307,7 @@ Check your current tier and usage with `get_tier`. Activate a Pro license with
 
 ## MCP Tools
 
-LoreConvo provides 38 MCP tools that Claude calls automatically during sessions.
+LoreConvo provides 39 MCP tools that Claude calls automatically during sessions.
 The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs/mcp_tool_catalog.md) for the complete reference.
 
 | Tool | What it does |
@@ -350,6 +350,7 @@ The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs
 | `update_memory_item` | Correct a memory item's title, body, tags, or metadata, or move it between projects |
 | `configure_agent_context` | Store or update a named topic config so an agent auto-loads targeted context at session start |
 | `inject_agent_context` | Return targeted session context for an agent, using stored or call-time topics |
+| `graph_session_map` | Export a Mermaid knowledge graph of sessions and their links |
 
 ## Requirements
 
