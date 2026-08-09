@@ -168,13 +168,17 @@ def resolve_storage_core(origin):
     """
     # Path 1 -- installed package, preferred.
     broken_pkg = None
-    if importlib.util.find_spec("loreconvo.core") is not None:
-        try:
-            from loreconvo.core import storage_core
-            _clear_breadcrumb()
-            return storage_core
-        except Exception as exc:
-            broken_pkg = exc  # remembered, NOT fatal -- see path 2
+    try:
+        if importlib.util.find_spec("loreconvo.core") is not None:
+            try:
+                from loreconvo.core import storage_core
+                _clear_breadcrumb()
+                return storage_core
+            except Exception as exc:
+                broken_pkg = exc  # remembered, NOT fatal -- see path 2
+    except Exception as exc:
+        # find_spec itself can raise on broken namespace packages
+        broken_pkg = exc
 
     # Path 2 -- bounded upward search from this file, no sys.path mutation.
     probed = []
