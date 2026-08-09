@@ -1,5 +1,70 @@
 # LoreConvo Changelog
 
+## v0.10.0 (2026-08-09)
+
+### Added: Knowledge-graph Mermaid export (`graph_session_map`)
+
+A new MCP tool renders the session graph -- sessions plus the `link_sessions`
+relationships between them -- as a Mermaid diagram that can be pasted into any
+Markdown renderer that supports Mermaid. Scope is controlled by project, a
+root session ID, and a neighborhood depth. This brings the user-facing tool
+count to 39.
+
+### Added: Post-turn capture hook (opt-in)
+
+A two-stage PostToolUse capture path. Stage 1 (`post_turn_capture.py`) is a
+fast enqueue that writes a work item to `~/.loreconvo/capture_queue/` every N
+tool calls; Stage 2 (`capture_worker.py`) drains the queue out of band and
+summarizes. This keeps per-turn hook latency off the critical path.
+
+Off by default. Enable with `LORECONVO_POST_TURN_CAPTURE=1`. Tunable with
+`LORECONVO_TURN_CAPTURE_INTERVAL` (default 10 tool calls) and
+`LORECONVO_TURN_CAPTURE_MAX_CALLS_PER_DAY`. Queue items older than 7 days are
+discarded.
+
+### Added: `loreconvo license clear` CLI command
+
+Clears the stored Pro license key. Pass `--suite` to also clear the
+suite-wide key held by the sibling product. Warnings raised by the underlying
+`license_store.clear_key()` are now surfaced in CLI output instead of being
+discarded.
+
+### Changed: Database initialization deferred to first tool call
+
+The MCP server previously constructed `SessionDatabase` at module import. It
+now initializes lazily on first use, which removes database setup from server
+startup. Note for anyone patching internals in tests: the module-level `db`
+global is gone, replaced by `_db` behind a `_get_db()` accessor.
+
+### Changed: Hook database write paths consolidated
+
+`auto_save.py`, `periodic_save.py`, and `pre_compact_save.py` now route all
+writes through a shared `core/storage_core.py` rather than each opening and
+configuring their own connection. Connection setup (WAL mode, busy timeout,
+row factory) has a single definition, and a guard test enforces that the
+schema DDL is not duplicated across modules. No behavior change intended.
+
+### Fixed: Spurious "install is degraded" warning on source installs
+
+The hook bootstrap resolves `storage_core` from the installed `loreconvo`
+package when one is present, and otherwise falls back to a bounded upward
+search for a local `src/core/storage_core.py`. It misclassified "no package
+installed" as "package installed but broken", because
+`importlib.util.find_spec("loreconvo.core")` raises `ModuleNotFoundError` when
+the parent package is absent rather than returning `None`, and a catch-all
+`except Exception` recorded that as a broken-package error.
+
+The effect was that every hook run on a source install (`install.sh`, no
+`pip install loreconvo`) printed `WARNING: loreconvo package is installed but
+broken (No module named 'loreconvo') ... The install is degraded; reinstall
+loreconvo`. Saves succeeded normally throughout -- the warning was false, but
+it advised a pointless reinstall. Only a genuinely broken package (parent
+importable, `core.storage_core` failing) now triggers degraded mode.
+
+### Security: cryptography 49.0.0 -> 50.0.0
+
+Picks up the fix for CVE-2026-69247.
+
 ## v0.9.0 (2026-08-04)
 
 ### Added: Agent context injection
