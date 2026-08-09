@@ -176,6 +176,14 @@ def resolve_storage_core(origin):
                 return storage_core
             except Exception as exc:
                 broken_pkg = exc  # remembered, NOT fatal -- see path 2
+    except ModuleNotFoundError as exc:
+        # find_spec("loreconvo.core") imports the parent package first and
+        # raises if it is absent -- it does not return None. A missing
+        # 'loreconvo' therefore means "not installed", which is the normal
+        # source-checkout layout, NOT a broken install. Only a missing
+        # submodule (parent present, core absent) is genuinely broken.
+        if exc.name != "loreconvo":
+            broken_pkg = exc
     except Exception as exc:
         # find_spec itself can raise on broken namespace packages
         broken_pkg = exc
