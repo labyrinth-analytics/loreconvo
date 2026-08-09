@@ -26,6 +26,13 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Import _open_conn from storage_core. Try relative import first (package
+# context), fall back to absolute import (monorepo-root test context).
+try:
+    from .core.storage_core import _open_conn
+except ImportError:
+    from core.storage_core import _open_conn
+
 # Module-level constants.
 MAX_SUMMARY_RETRIES = 5
 DAILY_CAP_DEFAULT = 100
@@ -99,8 +106,7 @@ def _validate_session_id(val: str) -> str:
 def _db_supports_wal(db_path: str) -> bool:
     """Return True if the DB supports WAL mode (False on NFS/read-only FS)."""
     try:
-        conn = sqlite3.connect(db_path, timeout=5.0)
-        conn.execute("PRAGMA journal_mode=WAL")
+        conn = _open_conn(db_path, busy_timeout_ms=5000)
         mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
         conn.close()
         return mode == "wal"
@@ -181,8 +187,9 @@ def _claim_cap_slot(conn: sqlite3.Connection) -> bool:
 
 
 def _open_db(db_path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path, timeout=10.0)
-    row = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+    """Open the database via _open_conn and verify WAL mode."""
+    conn = _open_conn(db_path, busy_timeout_ms=10000)
+    row = conn.execute("PRAGMA journal_mode").fetchone()
     actual_mode = row[0] if row else "unknown"
     if actual_mode != "wal":
         conn.close()
@@ -190,8 +197,6 @@ def _open_db(db_path: str) -> sqlite3.Connection:
             f"Database at '{db_path}' is in '{actual_mode}' journal mode, expected WAL. "
             "Another process may be using a conflicting journal mode."
         )
-    conn.execute("PRAGMA busy_timeout=10000")
-    conn.row_factory = sqlite3.Row
     return conn
 
 

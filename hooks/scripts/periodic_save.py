@@ -139,11 +139,18 @@ def _requeue_pending_summaries(db_path):
     user can upgrade explicitly via save_session(summarize=True)).
     Fire-and-forget -- periodic_save returns immediately.
     """
-    import sqlite3
     import subprocess
+    from _bootstrap import resolve_storage_core, BootstrapError
+
+    try:
+        _storage = resolve_storage_core(Path(__file__))
+    except BootstrapError:
+        return
+
+    _open_conn = _storage._open_conn
     MAX_REQUEUE = 3  # max sessions to requeue per periodic sweep
     try:
-        conn = sqlite3.connect(db_path, timeout=5.0)
+        conn = _open_conn(db_path, busy_timeout_ms=2000)
         rows = conn.execute(
             """SELECT id FROM sessions
                WHERE summary_source IN ('summary_pending', 'heuristic')

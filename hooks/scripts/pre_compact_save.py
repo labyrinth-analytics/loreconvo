@@ -10,16 +10,28 @@ Fires on both manual (/compact) and auto (context limit) compaction triggers.
 import json
 import os
 import sys
-import sqlite3
-import uuid
 from datetime import datetime
 from pathlib import Path
 
-# Reuse transcript parsing and DB save logic from auto_save.py
-# Both scripts live in the same directory -- import by manipulating sys.path.
+# Bootstrap: resolve storage_core for non-package callers.
+from _bootstrap import resolve_storage_core, BootstrapError
+
+try:
+    _storage = resolve_storage_core(Path(__file__))
+except BootstrapError as exc:
+    from _bootstrap import _write_breadcrumb
+    _write_breadcrumb("pre_compact_save", str(exc), [])
+    sys.stderr.write(f"LoreConvo pre-compact bootstrap error: {exc}\n")
+    sys.exit(1)
+
+_open_conn = _storage._open_conn
+ensure_schema = _storage.ensure_schema
+upsert_session = _storage.upsert_session
+
+# Reuse transcript parsing from auto_save.py
 _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
-from auto_save import parse_transcript, ensure_tables
+from auto_save import parse_transcript
 
 
 def get_db_path():
@@ -43,56 +55,51 @@ def save_pre_compact(db_path, session_id, parsed, trigger, project=None):
     tags = ["pre-compact", trigger]
 
     # Stamp the owning agent when this save fires inside a scheduled-agent run.
-    # run_agent_code.sh exports LORECONVO_AGENT; interactive sessions leave it
-    # unset, which correctly yields no agent tag.
     agent = os.environ.get("LORECONVO_AGENT", "").strip()
     if agent:
         tags.append(f"agent:{agent}")
 
-    conn = sqlite3.connect(db_path)
+    conn = _open_conn(db_path, busy_timeout_ms=2000)
     try:
-        ensure_tables(conn)
+        ensure_schema(conn)
 
         cursor = conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
         now = datetime.now().isoformat()
+        tags_json = json.dumps(tags)
+        decisions_json = json.dumps(parsed["decisions"])
+        artifacts_json = json.dumps(parsed["artifacts"])
 
         if cursor.fetchone():
             conn.execute(
                 """UPDATE sessions SET summary = ?, decisions = ?, artifacts = ?,
-                   tags = ?, end_date = ?, updated_at = ?,
+                   tags = ?, end_date = ?,
                    project = COALESCE(project, ?)
                    WHERE id = ?""",
                 (
                     parsed["summary"],
-                    json.dumps(parsed["decisions"]),
-                    json.dumps(parsed["artifacts"]),
-                    json.dumps(tags),
-                    now,
+                    decisions_json,
+                    artifacts_json,
+                    tags_json,
                     now,
                     project,
                     session_id,
                 ),
             )
-            conn.commit()
             return True
 
-        conn.execute(
-            """INSERT INTO sessions (id, title, surface, project, summary, decisions, artifacts,
-               open_questions, tags, start_date, end_date)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                session_id,
-                parsed["title"],
-                "code",
-                project,
-                parsed["summary"],
-                json.dumps(parsed["decisions"]),
-                json.dumps(parsed["artifacts"]),
-                json.dumps([]),
-                json.dumps(tags),
-                now,
-                now,
-            ),
+        upsert_session(
+            conn,
+            session_id=session_id,
+            title=parsed["title"],
+            surface="code",
+            project=project,
+            start_date=now,
+            end_date=now,
+            summary=parsed["summary"],
+            decisions=decisions_json,
+            artifacts=artifacts_json,
+            open_questions=json.dumps([]),
+            tags=tags_json,
         )
 
         try:
@@ -102,7 +109,7 @@ def save_pre_compact(db_path, session_id, parsed, trigger, project=None):
                    FROM sessions WHERE id = ?""",
                 (session_id,),
             )
-        except sqlite3.OperationalError:
+        except Exception:
             pass
 
         for tool in parsed.get("tools_used", []):
@@ -111,10 +118,9 @@ def save_pre_compact(db_path, session_id, parsed, trigger, project=None):
                     "INSERT INTO session_skills (session_id, skill_name) VALUES (?, ?)",
                     (session_id, tool),
                 )
-            except sqlite3.IntegrityError:
+            except Exception:
                 pass
 
-        conn.commit()
         return True
     except Exception as e:
         sys.stderr.write(f"LoreConvo pre-compact save DB error: {e}\n")
