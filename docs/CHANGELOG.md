@@ -4,6 +4,21 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.10.1 (2026-08-09)
+
+### Fixed: The v0.10.0 notes gave the wrong command
+
+The v0.10.0 release notes and README told you to run `loreconvo license clear`.
+That does not clear anything -- `loreconvo` is the MCP server, so the command
+just starts a server and waits. The command you want is:
+
+```
+python -m loreconvo.cli license clear
+```
+
+Sorry for the confusion. Nothing changed in the software; only the
+documentation was wrong.
+
 ## v0.10.0 (2026-08-09)
 
 ### New: See your session history as a diagram
@@ -30,15 +45,21 @@ You can change how often it snapshots with `LORECONVO_TURN_CAPTURE_INTERVAL`
 and put a ceiling on daily processing with
 `LORECONVO_TURN_CAPTURE_MAX_CALLS_PER_DAY`.
 
-### New: Clear your Pro license from the command line
+### New: Clear your Pro license from the bundled fallback CLI
 
 ```
-loreconvo license clear
+python -m loreconvo.cli license clear
 ```
 
 Removes the stored Pro license key from this machine. If you have suite-wide
 Pro shared with LoreDocs, add `--suite` to clear it from both. The command now
 tells you when something could not be cleared rather than failing quietly.
+
+This is part of the bundled fallback CLI, which is there for when the MCP
+server is not available. Invoke it with `python -m loreconvo.cli` -- the
+`loreconvo` command itself starts the MCP server, not the CLI. (The separate
+`loreconvo-cli` package is a different product and does not include this
+command.)
 
 ### Improved: Faster server startup
 
