@@ -102,7 +102,8 @@ When the user needs to continue in Chat (which cannot run MCP tools):
 2. Format the result as a markdown summary with a "Context for Claude" preamble
 3. The user pastes this into Chat to prime the new conversation
 
-CLI equivalent: `loreconvo export --last --format markdown`
+CLI equivalent: `python -m loreconvo.cli export --last --format markdown`
+(the `loreconvo` command itself starts the MCP server, not the CLI)
 
 ## Reference Files
 
