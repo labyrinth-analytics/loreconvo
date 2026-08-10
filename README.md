@@ -1,4 +1,4 @@
-# LoreConvo v0.10.0
+# LoreConvo v0.10.1
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -409,62 +409,20 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.0 (2026-08-09)
+## v0.10.1 (2026-08-09)
 
-### New: See your session history as a diagram
+### Fixed: The v0.10.0 notes gave the wrong command
 
-The new **`graph_session_map`** tool draws a picture of how your sessions
-connect. If you have been linking sessions together (with `link_sessions`),
-this renders the whole web as a Mermaid diagram you can paste into any
-Markdown editor, wiki, or docs site that supports Mermaid.
-
-You can scope the diagram to a single project, start it from one session and
-walk outward a set number of hops, or export everything. Useful when you want
-to see the shape of a long-running project rather than read through it session
-by session.
-
-### New: Capture context as you work, not just at the end
-
-LoreConvo can now take snapshots partway through a session instead of waiting
-for the session to end. It queues a snapshot every 10 tool calls and processes
-it in the background, so it does not slow down what you are doing. If a session
-ends unexpectedly, the work up to the last snapshot is still saved.
-
-This is **off by default**. To turn it on, set `LORECONVO_POST_TURN_CAPTURE=1`.
-You can change how often it snapshots with `LORECONVO_TURN_CAPTURE_INTERVAL`
-and put a ceiling on daily processing with
-`LORECONVO_TURN_CAPTURE_MAX_CALLS_PER_DAY`.
-
-### New: Clear your Pro license from the command line
+The v0.10.0 release notes and README told you to run `loreconvo license clear`.
+That does not clear anything -- `loreconvo` is the MCP server, so the command
+just starts a server and waits. The command you want is:
 
 ```
-loreconvo license clear
+python -m loreconvo.cli license clear
 ```
 
-Removes the stored Pro license key from this machine. If you have suite-wide
-Pro shared with LoreDocs, add `--suite` to clear it from both. The command now
-tells you when something could not be cleared rather than failing quietly.
-
-### Improved: Faster server startup
-
-LoreConvo no longer opens the database when the server starts -- it waits until
-the first tool call that actually needs it. Sessions that load the plugin but
-never touch memory no longer pay for database setup.
-
-### Fixed: False "your install is degraded" warning
-
-If you installed LoreConvo from source with `install.sh` rather than
-`pip install loreconvo`, every session hook printed a warning saying your
-package was installed but broken, and told you to reinstall. Nothing was
-actually wrong -- your sessions were being saved correctly the whole time, and
-no reinstall was needed. LoreConvo now recognizes a source install as a normal
-setup and stays quiet. The warning still appears when an installed package is
-genuinely broken, which is what it was meant for.
-
-### Fixed: Security update
-
-Updated the `cryptography` dependency from 49.0.0 to 50.0.0 to pick up a fix
-for CVE-2026-69247.
+Sorry for the confusion. Nothing changed in the software; only the
+documentation was wrong.
 
 <!-- WHATS_NEW:END -->
 
