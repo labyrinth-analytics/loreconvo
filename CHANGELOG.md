@@ -1,5 +1,43 @@
 # LoreConvo Changelog
 
+## v0.10.2 (2026-08-09)
+
+### Fixed: Commands named in errors and docs that could not run
+
+The `loreconvo` console script is the MCP server entry point
+(`loreconvo.server:main`). Several places named `loreconvo <command>` as if it
+were the CLI, so following them started a stdio server that waits on stdin
+instead of running the command. The bundled fallback CLI has no console script
+of its own; it is invoked `python -m loreconvo.cli <command>`.
+
+Corrected in four places:
+
+- `anthropic_bridge.py` -- the `ToolError` raised when memory deletion is
+  attempted through the Anthropic memory-tool bridge told the caller to run
+  `loreconvo inspect --delete <id>`. This is the only one reachable at
+  runtime rather than in documentation.
+- `cli.py` -- `export --help` described importing the bundle via
+  `loreconvo merge`.
+- `INSTALL.md` -- the Team memory (Pro) bullet, same command.
+- `skills/loreconvo/SKILL.md` -- the Chat-export section gave
+  `loreconvo export --last --format markdown`. This file ships in the
+  marketplace bundle, so the wrong form was also being read by Claude.
+
+Flags and command names were correct throughout; only the invocation prefix
+was wrong. A `cli-invocation` rule in `scripts/check_doc_sync.py` now derives
+the real command set from the Click/Typer app and fails the build on any
+shipped file naming a form that cannot work.
+
+### Fixed: `graph_session_map` missing from the MCP tool catalog
+
+The tool shipped in v0.10.0 but never reached
+`docs/mcp_tool_catalog.md`, and the catalog's stated tool count still read 38.
+Both corrected (39). The catalog had a drift test that could never run -- it
+pointed at the monorepo `docs/` rather than the product's, and its body opened
+with an unconditional skip -- so nothing caught the omission. The test now
+delegates to `check_doc_sync.py`, which fails when any user-facing tool is
+absent from the catalog or the stated count is stale.
+
 ## v0.10.1 (2026-08-09)
 
 ### Fixed: Documentation error in the v0.10.0 release notes
