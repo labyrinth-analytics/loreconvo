@@ -1,6 +1,6 @@
 # LoreConvo MCP Tool Catalog
 
-LoreConvo provides 38 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all 38.
+LoreConvo provides 39 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all 39.
 
 This catalog explains what each tool does, when Claude uses it, and what parameters it accepts.
 
@@ -514,6 +514,7 @@ Pinning can be disabled globally via `LORECONVO_DISABLE_PINNING=1` or
 | `export_sessions` | Export sessions to JSON or JSONL for backup or migration |
 | `import_sessions` | Import sessions from a LoreConvo export file |
 | `get_related_sessions` | Find sessions related to a given session (Free: keyword co-occurrence; Pro: adds embedding-based auto-links) |
+| `graph_session_map` | Export a Mermaid knowledge graph of sessions and their links (scope by project, root session, and neighborhood depth) |
 | `consolidate_memories` | Merge related sessions into persistent memory entries (Recall) |
 | `get_memory_digest` | Inject a condensed memory digest into the current session (Recall) |
 | `get_dream_log` | View the consolidation activity log |

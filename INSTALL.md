@@ -591,7 +591,7 @@ searchable session context.
 LoreConvo's unique advantages over `MEMORY.md` alone:
 - **Cross-surface:** your session history follows you from Claude Code to Cowork to Chat
 - **Searchable history:** full-text search across all your sessions, not just today's snapshot
-- **Team memory (Pro):** share session history with teammates -- export sessions to JSON, teammates import with `loreconvo merge` (no server required)
+- **Team memory (Pro):** share session history with teammates -- export sessions to JSON, teammates import with `python -m loreconvo.cli merge` (no server required)
 - **Session linking:** explicitly connect related sessions and decisions for audit trails
 
 To run both:
