@@ -137,8 +137,8 @@ def export(session_id, last, fmt, project, session_ids, export_all, out_path, da
     """Export a session for pasting into Chat or other tools.
 
     With --format shared, exports a JSON bundle for teammates to import via
-    'loreconvo merge'. With --format anthropic-v1, exports to Anthropic
-    managed-agents memory format. Both require LoreConvo Pro.
+    'python -m loreconvo.cli merge'. With --format anthropic-v1, exports to
+    Anthropic managed-agents memory format. Both require LoreConvo Pro.
     """
     if fmt == "anthropic-v1":
         if not db.config.is_pro:
@@ -320,7 +320,7 @@ def export(session_id, last, fmt, project, session_ids, export_all, out_path, da
 def merge(file):
     """Import sessions from a shared export file. LoreConvo Pro required.
 
-    FILE is a JSON file produced by 'loreconvo export --format shared'.
+    FILE is a JSON file produced by 'python -m loreconvo.cli export --format shared'.
     Duplicate sessions (by UUID or content hash) are skipped automatically.
     """
     # SEC-00067: Pro gate at command entry

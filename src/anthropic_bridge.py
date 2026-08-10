@@ -218,7 +218,7 @@ class LoreConvoMemoryBackend(BetaAbstractMemoryTool):
     def delete(self, command: BetaMemoryTool20250818DeleteCommand) -> str:
         raise ToolError(
             "Memory deletion is not supported in LoreConvoMemoryBackend v1. "
-            "To remove a memory manually, run: loreconvo inspect --delete <id>"
+            "To remove a memory manually, run: python -m loreconvo.cli inspect --delete <id>"
         )
 
     def rename(self, command: BetaMemoryTool20250818RenameCommand) -> str:
