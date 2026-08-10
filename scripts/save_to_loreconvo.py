@@ -58,6 +58,118 @@ _open_conn = _storage._open_conn
 ensure_schema = _storage.ensure_schema
 
 
+# -- Tier enforcement (SH-100324: parity with MCP server's save_session) --
+
+FREE_SESSION_LIMIT = 50
+
+
+def _is_pro_licensed():
+    """Check whether LoreConvo Pro is active.
+
+    Mirrors the Config.is_pro check that the MCP server's save_session
+    performs. Tries the full license module first (installed package
+    or source-tree fallback). If neither is importable, does a
+    lightweight env-var check for dev bypass mode.
+    """
+    # Path 1: installed package
+    try:
+        from loreconvo.core.license import is_pro_licensed
+        return is_pro_licensed()
+    except ImportError:
+        pass
+
+    # Path 2: source-tree fallback via importlib
+    try:
+        import importlib.util
+        product_root = Path(__file__).resolve().parent.parent
+        license_path = product_root / "src" / "core" / "license.py"
+        if license_path.is_file():
+            # Add the core directory to sys.path so license.py's
+            # fallback `import license_store` can resolve.
+            core_dir = license_path.parent
+            if str(core_dir) not in sys.path:
+                sys.path.insert(0, str(core_dir))
+            spec = importlib.util.spec_from_file_location(
+                "_loreconvo_license", str(license_path)
+            )
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod.is_pro_licensed()
+    except Exception:
+        pass
+
+    # Path 3: lightweight dev-bypass check (no import needed).
+    # This covers the case where neither the package nor the source
+    # tree is fully importable (e.g., missing transitive deps).
+    dev_mode = os.environ.get("LAB_DEV_MODE", "").strip() == "1"
+    env_value = os.environ.get("LORECONVO_PRO", "").strip()
+    if dev_mode and env_value and not env_value.startswith("LAB-"):
+        return True
+
+    # Path 4: check durable license store directly
+    try:
+        import importlib.util
+        product_root = Path(__file__).resolve().parent.parent
+        store_path = product_root / "src" / "core" / "license_store.py"
+        if store_path.is_file():
+            core_dir = store_path.parent
+            if str(core_dir) not in sys.path:
+                sys.path.insert(0, str(core_dir))
+            spec = importlib.util.spec_from_file_location(
+                "_loreconvo_license_store", str(store_path)
+            )
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            key = mod.read_key("loreconvo")
+            if key:
+                # Re-try full validation via license module
+                try:
+                    from loreconvo.core.license import validate_license_key
+                    validate_license_key(key)
+                    return True
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return False
+
+
+def _check_session_tier_limit(conn):
+    """Check LoreConvo Free-tier session limit before saving.
+
+    Returns True if the operation is allowed, False if rejected.
+    Mirrors the check in database.py:save_session().
+    """
+    if _is_pro_licensed():
+        return True
+
+    # The source column may not exist in older schemas; fall back to
+    # counting all sessions if the column is missing.
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) as c FROM sessions "
+            "WHERE source IS NULL OR source != 'file_memory'"
+        ).fetchone()
+    except sqlite3.OperationalError:
+        row = conn.execute(
+            "SELECT COUNT(*) as c FROM sessions"
+        ).fetchone()
+    current_count = row[0] if row else 0
+
+    if current_count >= FREE_SESSION_LIMIT:
+        print(
+            f"Error: Free tier limit reached: {current_count} of "
+            f"{FREE_SESSION_LIMIT} sessions stored. "
+            "Upgrade at https://buy.stripe.com/9B65kv1VOgk3ekr7VD7N600 "
+            "to unlock unlimited sessions, then set your LORECONVO_PRO "
+            "license key."
+        )
+        return False
+
+    return True
+
+
 # -- DB discovery --
 
 def _find_loreconvo_db():
@@ -162,6 +274,13 @@ def save_session(args):
         session_id = provided_id
     else:
         session_id = str(uuid.uuid4())
+
+    # SH-100324: Enforce Free-tier session limit before INSERT
+    # (parity with MCP server's save_session path). Skipped for
+    # upserts of existing sessions (the UPDATE path above).
+    if not _check_session_tier_limit(conn):
+        conn.close()
+        return None
 
     conn.execute(
         """INSERT INTO sessions
