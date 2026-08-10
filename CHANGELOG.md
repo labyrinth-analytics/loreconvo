@@ -1,5 +1,15 @@
 # LoreConvo Changelog
 
+## v0.10.1 (2026-08-09)
+
+### Fixed: Documentation error in the v0.10.0 release notes
+
+The v0.10.0 notes and README gave the new license command as
+`loreconvo license clear`. That does not work: the `loreconvo` console script
+is the MCP server entry point, so the command starts a stdio server instead.
+The correct invocation is `python -m loreconvo.cli license clear`. Corrected
+in both the changelog and the README; no code changed.
+
 ## v0.10.0 (2026-08-09)
 
 ### Added: Knowledge-graph Mermaid export (`graph_session_map`)
@@ -22,12 +32,19 @@ Off by default. Enable with `LORECONVO_POST_TURN_CAPTURE=1`. Tunable with
 `LORECONVO_TURN_CAPTURE_MAX_CALLS_PER_DAY`. Queue items older than 7 days are
 discarded.
 
-### Added: `loreconvo license clear` CLI command
+### Added: `license clear` command on the bundled fallback CLI
 
-Clears the stored Pro license key. Pass `--suite` to also clear the
-suite-wide key held by the sibling product. Warnings raised by the underlying
-`license_store.clear_key()` are now surfaced in CLI output instead of being
-discarded.
+`python -m loreconvo.cli license clear` clears the stored Pro license key.
+Pass `--suite` to also clear the suite-wide key held by the sibling product.
+Warnings raised by the underlying `license_store.clear_key()` are now surfaced
+in CLI output instead of being discarded.
+
+Note the invocation: the `loreconvo` console script is the MCP server entry
+point (`loreconvo.server:main`), so `loreconvo license clear` starts a stdio
+server rather than running this command. The bundled CLI at `src/cli.py` is a
+fallback surface for when MCP is unavailable and has no console script of its
+own. The separate `loreconvo-cli` package is a different product (PROD-00910)
+and does not carry this command.
 
 ### Changed: Database initialization deferred to first tool call
 
