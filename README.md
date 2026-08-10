@@ -1,4 +1,4 @@
-# LoreConvo v0.10.1
+# LoreConvo v0.10.2
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -409,20 +409,38 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.1 (2026-08-09)
+## v0.10.2 (2026-08-09)
 
-### Fixed: The v0.10.0 notes gave the wrong command
+### Fixed: Commands that did not work when you followed them
 
-The v0.10.0 release notes and README told you to run `loreconvo license clear`.
-That does not clear anything -- `loreconvo` is the MCP server, so the command
-just starts a server and waits. The command you want is:
+A handful of places told you to run `loreconvo <something>` -- in an error
+message, in `--help`, in INSTALL.md, and in the bundled skill. None of those
+work. `loreconvo` starts the MCP server, so following any of them left you
+with a server sitting there waiting instead of the command you wanted.
+
+The commands themselves are fine. Only the way they were written down was
+wrong. Run the bundled CLI like this:
 
 ```
-python -m loreconvo.cli license clear
+python -m loreconvo.cli export --last --format markdown
+python -m loreconvo.cli merge <file>
+python -m loreconvo.cli inspect --delete <id>
 ```
 
-Sorry for the confusion. Nothing changed in the software; only the
-documentation was wrong.
+The one you were most likely to hit is the deletion message: if you tried to
+delete a memory through the Anthropic memory-tool integration, the error told
+you to run a command that did nothing useful.
+
+(If you have installed the separate `loreconvo-cli` package, that one *is* a
+real command and works as `loreconvo-cli <command>`. It is a different tool
+with a smaller command set.)
+
+### Fixed: A tool was missing from the tool catalog
+
+`graph_session_map`, added in v0.10.0, never made it into the MCP tool
+catalog, and the catalog still said LoreConvo had 38 tools. It has 39. Both
+fixed. The check that was supposed to catch this had been looking in the wrong
+place, so it never ran; it does now.
 
 <!-- WHATS_NEW:END -->
 
