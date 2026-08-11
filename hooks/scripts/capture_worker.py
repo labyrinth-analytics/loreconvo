@@ -75,6 +75,8 @@ def call_haiku(excerpt):
 
 def read_queue_entries(queue_file):
     entries = []
+    processed_set = set()
+
     try:
         with open(queue_file, 'r', encoding='ascii') as f:
             for line in f:
@@ -83,8 +85,17 @@ def read_queue_entries(queue_file):
                     continue
                 try:
                     entry = json.loads(line)
-                    if entry.get('type') == 'queued':
-                        entries.append(entry)
+                    if entry.get('type') == 'processed':
+                        orig_ts = entry.get('orig_ts')
+                        session_id = entry.get('session_id')
+                        if orig_ts is not None and session_id is not None:
+                            processed_set.add((orig_ts, session_id))
+                    elif entry.get('type') == 'queued':
+                        ts = entry.get('ts')
+                        session_id = entry.get('session_id')
+                        if ts is not None and session_id is not None:
+                            if (ts, session_id) not in processed_set:
+                                entries.append(entry)
                 except json.JSONDecodeError:
                     pass
     except Exception:
