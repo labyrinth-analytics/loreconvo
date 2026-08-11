@@ -301,6 +301,55 @@ class LanceIndex:
             _log.error("Lance search failed: %s", exc)
             return []
 
+    def get_vectors_by_session_ids(self, session_ids, project=None,
+                                   surface=None):
+        """Fetch vectors for a list of session IDs from the Lance index.
+
+        Returns {session_id: vector_list} for sessions that exist and
+        match the optional project/surface scope filter. Returns {} if
+        the index is unavailable, the table does not exist, or no
+        matching rows are found. Never raises.
+
+        The project/surface filter is enforced by the Lance query, so an
+        out-of-scope session ID returns no vector -- the caller's
+        "no vector, never collapsed" rule makes it unreachable for
+        comparison (SH-12694 r3 security binding).
+        """
+        table = self._open_table()
+        if table is None:
+            return {}
+
+        try:
+            # Build filter clause. session_ids are UUIDs validated at
+            # index time, so they are safe for the DataFusion filter.
+            # However, we constrain to the UUID regex here as well to
+            # guard against any non-UUID input.
+            safe_ids = [sid for sid in session_ids if sid and _UUID_RE.match(sid)]
+            if not safe_ids:
+                return {}
+
+            # Build the WHERE clause: (session_id IN ('a','b',...))
+            # AND project = '...' AND surface = '...'
+            quoted = ",".join(f"'{sid}'" for sid in safe_ids)
+            clauses = [f"session_id IN ({quoted})"]
+            if project is not None:
+                safe_proj = project.replace("'", "''")
+                clauses.append(f"project = '{safe_proj}'")
+            if surface is not None:
+                safe_surf = surface.replace("'", "''")
+                clauses.append(f"surface = '{safe_surf}'")
+            where_clause = " AND ".join(clauses)
+
+            results = table.search().where(where_clause).to_list()
+            return {
+                r["session_id"]: r["vector"]
+                for r in results
+                if "vector" in r and "session_id" in r
+            }
+        except Exception as exc:
+            _log.error("get_vectors_by_session_ids failed: %s", exc)
+            return {}
+
     def rebuild(self, sessions: list) -> int:
         """Rebuild the Lance index from a list of session dicts.
 

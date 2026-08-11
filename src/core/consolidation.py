@@ -19,6 +19,8 @@ Advisory notes from Socrates (non-blocking, documented):
 import difflib
 import fcntl
 import json
+import logging
+import math
 import os
 import re
 import sys
@@ -34,6 +36,54 @@ _DEDUP_RATIO = 0.85        # difflib ratio threshold for near-duplicate detectio
 _MAX_DECISIONS = 10
 _MAX_OPEN_QUESTIONS = 5
 _DIGEST_MAX_CHARS = 700    # soft cap for digest_markdown
+
+# -- Semantic dedup pass (SH-12694 r4) --
+
+# Mode -> cosine similarity threshold. None means the pass does not run.
+DEDUP_MODES = {
+    "off":          None,   # no dedup pass runs at all -- SHIPPED DEFAULT (r4)
+    "conservative": 0.97,   # near-verbatim restatements only
+    "balanced":     0.95,   # the mode a caller opts in to
+}
+DEDUP_DEFAULT = "off"       # r4: opt-in. Flipping this is a gated release decision.
+
+_dedup_log = logging.getLogger("loreconvo.consolidation.dedup")
+
+
+def _resolve_dedup(dedup_arg):
+    """Resolve the dedup mode per the r4 contract.
+
+    1. If dedup_arg is not None, it wins (explicit argument overrides env).
+    2. If dedup_arg is None, read LORECONVO_CONSOLIDATION_DEDUP; default "off".
+    3. Matching is exact and case-sensitive against the three lowercase literals.
+    4. Unrecognised values resolve to "off" with a logged warning.
+    """
+    if dedup_arg is not None:
+        raw = dedup_arg
+    else:
+        raw = os.environ.get("LORECONVO_CONSOLIDATION_DEDUP")
+    if raw is None:
+        return DEDUP_DEFAULT
+    if raw in DEDUP_MODES:
+        return raw
+    _dedup_log.warning(
+        "Unrecognised dedup value %r; resolving to 'off'. "
+        "Valid: off, conservative, balanced (case-sensitive).",
+        raw,
+    )
+    return "off"
+
+
+def _cosine(a, b):
+    """Cosine similarity over two equal-length float sequences. Stdlib only."""
+    dot = na = nb = 0.0
+    for x, y in zip(a, b):
+        dot += x * y
+        na += x * x
+        nb += y * y
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+    return dot / (math.sqrt(na) * math.sqrt(nb))
 
 # Signal line prefixes (case-insensitive)
 _DECISION_PREFIXES = (
@@ -77,6 +127,7 @@ class HeuristicConsolidator:
         mode: str = "heuristic",
         is_pro: bool = False,
         trigger: str = "on-demand",
+        dedup: str | None = None,
     ) -> dict:
         """Run heuristic consolidation for (project, surface).
 
@@ -113,6 +164,20 @@ class HeuristicConsolidator:
             )
             if not sessions:
                 return {"status": "no_sessions", "message": "no sessions found for this project/surface"}
+
+            # -- Semantic dedup pass (SH-12694 r4) --
+            resolved_dedup = _resolve_dedup(dedup)
+            threshold = DEDUP_MODES[resolved_dedup]
+            collapsed_list = []
+            if threshold is not None:
+                lance = self._get_lance_index()
+                if lance is not None:
+                    sessions, collapsed_list = self._collapse_near_duplicates(
+                        sessions, lance, threshold, project, surface,
+                    )
+            sessions_considered = len(sessions) + len(collapsed_list)
+            sessions_collapsed = len(collapsed_list)
+            sessions_consolidated = len(sessions)
 
             # Truncate summaries before extraction
             for s in sessions:
@@ -172,10 +237,97 @@ class HeuristicConsolidator:
                 "decisions_found": len(decisions),
                 "open_questions_found": len(open_questions),
                 "digest_markdown": digest_md,
+                "sessions_considered": sessions_considered,
+                "sessions_collapsed": sessions_collapsed,
+                "sessions_consolidated": sessions_consolidated,
+                "dedup": resolved_dedup,
+                "collapsed": collapsed_list,
             }
 
         finally:
             self._release_lock(lock_file)
+
+    # -- Semantic dedup pass (SH-12694 r4) --
+
+    def _get_lance_index(self):
+        """Return a LanceIndex instance for the lore dir, or None on failure.
+
+        The LanceIndex wraps the LanceDB sessions table. If LanceDB is
+        unavailable or the index does not exist, returns None so the
+        dedup pass degrades gracefully (candidates pass through).
+        """
+        try:
+            from core.hybrid_search import LanceIndex
+            lance_dir = self.lore_dir / "sessions.lance"
+            return LanceIndex(lance_dir)
+        except Exception:
+            return None
+
+    def _collapse_near_duplicates(self, candidates, lance, threshold,
+                                  project, surface):
+        """Return (kept, collapsed) where collapsed is a list of dicts
+        describing each removed candidate. Pure over its inputs apart
+        from one LanceDB read.
+
+        Input order is irrelevant: the pass sorts internally.
+        project/surface are the scope the candidates were selected under;
+        the LanceDB read filters on them, so a vector outside the scope
+        is never retrievable here.
+        """
+        if threshold is None or len(candidates) < 2:
+            return candidates, []
+
+        # Newest-first, total order. sessions.id is the PRIMARY KEY, so
+        # this never falls through to insertion order the way ORDER BY
+        # start_date DESC alone does.
+        candidates = sorted(
+            candidates,
+            key=lambda c: (c.get("start_date") or "", c["id"]),
+            reverse=True,
+        )
+
+        ids = [c["id"] for c in candidates]
+        # ONE filtered query, scoped. The Lance sessions table carries
+        # project and surface (hybrid_search.py:172-183), so the scope
+        # filter is enforced by the query rather than by a convention the
+        # caller has to honour.
+        try:
+            vectors = lance.get_vectors_by_session_ids(
+                ids, project=project, surface=surface
+            )
+        except Exception:
+            vectors = {}
+        if not vectors:
+            return candidates, []
+
+        kept, kept_vecs, collapsed = [], [], []
+        for c in candidates:
+            v = vectors.get(c["id"])
+            if v is None:
+                kept.append(c)
+                kept_vecs.append(None)
+                continue
+            best_i, best_sim = -1, 0.0
+            for i, kv in enumerate(kept_vecs):
+                if kv is None:
+                    continue
+                s = _cosine(v, kv)
+                if s > best_sim:
+                    best_i, best_sim = i, s
+            if best_sim > threshold:
+                collapsed.append({
+                    "session_id": c["id"],
+                    "similar_to": kept[best_i]["id"],
+                    "similarity": round(best_sim, 4),
+                })
+                _dedup_log.debug(
+                    "collapsed %s -> %s (similarity=%.4f)",
+                    c["id"], kept[best_i]["id"], best_sim,
+                )
+            else:
+                kept.append(c)
+                kept_vecs.append(v)
+        return kept, collapsed
 
     # -- Signal extraction --
 
