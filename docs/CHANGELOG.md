@@ -4,6 +4,64 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.10.3 (2026-08-11)
+
+### New: Merge sessions that say the same thing
+
+If you work on one thing across several sessions, the same decision tends to
+get restated in each of them, and your project digest repeats it back to you
+several times. When you build a digest you can now ask LoreConvo to merge
+those near-duplicates first, so each point shows up once.
+
+Just ask for it in conversation:
+
+> "Rebuild the digest for my project, and merge the sessions that say the
+> same thing."
+
+There are two levels. `conservative` merges only sessions that are nearly
+word-for-word repeats. `balanced` also merges ones that make the same point in
+different words. If you want it on for every run, set
+`LORECONVO_CONSOLIDATION_DEDUP=conservative` (or `balanced`) in your
+environment.
+
+This is off unless you ask for it, so nothing changes about your existing
+digests until you turn it on. Merging is never silent: the result tells you
+exactly which sessions were folded together and which one each was folded
+into. Nothing is deleted -- your sessions are untouched, only the digest is
+shorter.
+
+### Fixed: A failed save could show up as an error in your session
+
+LoreConvo saves your session automatically when it ends, and again before a
+long conversation gets compacted. If that save failed -- most often because it
+was downloading the package for the first time, or PyPI was briefly
+unreachable -- the failure surfaced as an error in Claude Code, in a session
+that was otherwise perfectly fine.
+
+Now a failed save is just a lost save. It gets written to the LoreConvo hook
+log and your session carries on normally. A memory tool should never be the
+reason your session breaks.
+
+### Fixed: Automatic capture summarized the same work twice
+
+If you turned on post-turn capture (`LORECONVO_POST_TURN_CAPTURE=1`), the
+background worker was not keeping track of what it had already done. Every
+time it ran, it re-summarized everything still sitting in the queue. That
+produced duplicate captures and burned through your daily capture allowance
+faster than it should have. It now skips anything it has already handled.
+
+### Fixed: The fallback save script ignored the Free tier limit
+
+**Worth knowing if you are on the Free tier.** When the MCP server is not
+available, LoreConvo falls back to a save script. That script was not checking
+the 50-session Free limit, so saving through it let you go past 50 sessions
+when saving the normal way would have stopped you.
+
+The script now applies the same limit everywhere. If you had gone over 50 this
+way, your sessions are all still there and nothing has been removed -- but new
+saves will now tell you the limit is reached until you upgrade. Updating a
+session you already saved is unaffected, since that does not add to the count.
+
 ## v0.10.2 (2026-08-09)
 
 ### Fixed: Commands that did not work when you followed them
