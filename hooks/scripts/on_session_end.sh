@@ -35,9 +35,12 @@ echo "[$(date)] session_id: $SESSION_ID" >> "$LOG" 2>/dev/null
 echo "$INPUT" | PYTHONPATH="$PLUGIN_ROOT/src" $RUN_PYTHON "$PLUGIN_ROOT/hooks/scripts/auto_save.py" >> "$LOG" 2>&1
 EXIT_CODE=$?
 
-# OPP-011: Propagate Python exit code so callers can detect failures
+# SH-13440: Log failure but exit 0 unconditionally.
+# Hooks must never break a customer session. The uvx invocation is
+# network-capable (first-run package download, PyPI reachability, etc.),
+# and a hook failure must not surface as a session error to the user.
 if [ "$EXIT_CODE" -ne 0 ]; then
     echo "[$(date)] status: failed (exit $EXIT_CODE)" >> "$LOG"
 fi
 
-exit $EXIT_CODE
+exit 0
