@@ -1,5 +1,63 @@
 # LoreConvo Changelog
 
+## v0.10.3 (2026-08-11)
+
+### Added: Opt-in semantic dedup pass in `consolidate_memories`
+
+Consolidation can now collapse near-duplicate sessions before extracting
+signals, so a project where the same decision was restated across several
+sessions no longer produces a digest that repeats it. The pass compares the
+LanceDB embeddings already held for the candidate sessions and drops a session
+when its cosine similarity to a newer kept session exceeds the mode threshold.
+
+The `dedup` argument accepts three values:
+
+- `off` -- the pass does not run and consolidation behaves exactly as before.
+  This is the default.
+- `conservative` -- collapses near-verbatim restatements (cosine > 0.97).
+- `balanced` -- collapses paraphrases (cosine > 0.95).
+
+It can also be set with the `LORECONVO_CONSOLIDATION_DEDUP` environment
+variable; an explicit argument always wins over the env var. Matching is
+case-sensitive against those three lowercase literals, and an unrecognised
+value resolves to `off` with a logged warning rather than failing the call.
+
+The result dict gains `sessions_considered`, `sessions_collapsed`,
+`sessions_consolidated`, `dedup`, and `collapsed` -- the last being a list of
+`{session_id, similar_to, similarity}` records, so every collapse is
+attributable rather than silent. A session with no vector in the index is
+never collapsed, and the LanceDB read is scoped by project and surface, so a
+session outside the consolidation scope cannot be compared against. If
+LanceDB is unavailable the pass degrades to a pass-through.
+
+### Fixed: A failing hook could surface as a session error
+
+`on_session_end.sh` and `on_pre_compact.sh` propagated the Python exit code to
+the caller. Both hooks invoke LoreConvo through `uvx`, which is
+network-capable -- a first-run package download or an unreachable PyPI made
+the hook fail, and that failure reached the user as an error in a session that
+was otherwise fine. Both now log the failure to the hook log and exit 0
+unconditionally. A hook that cannot save is a lost save, not a broken session.
+
+### Fixed: Post-turn capture worker reprocessed entries it had already handled
+
+`capture_worker.py` read the capture queue looking only for `queued` entries
+and ignored the `processed` markers written beside them, so every drain
+re-summarized everything still in the queue file -- burning API calls against
+the daily ceiling and producing duplicate captures. The worker now reads the
+`processed` markers first and skips any `queued` entry whose timestamp and
+session ID have already been handled.
+
+### Fixed: Fallback save script bypassed the Free-tier session limit
+
+`scripts/save_to_loreconvo.py` -- the script path used when the MCP server is
+unavailable -- inserted new sessions without checking the 50-session Free
+limit that the MCP server's `save_session` enforces. Saving through the
+fallback therefore had no cap. The script now performs the same check before
+inserting a new session, and reports the limit with the upgrade link when it
+is reached. Updates to existing sessions are unaffected, since they do not add
+to the count.
+
 ## v0.10.2 (2026-08-09)
 
 ### Fixed: Commands named in errors and docs that could not run
