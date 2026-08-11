@@ -1615,6 +1615,7 @@ def consolidate_memories(
     surface: str | None = None,
     max_sessions: int = 50,
     mode: str = "heuristic",
+    dedup: str | None = None,
 ) -> dict:
     """Run memory consolidation for a project to build a structured digest.
 
@@ -1632,6 +1633,13 @@ def consolidate_memories(
         surface: Surface to consolidate ('code', 'cowork', 'chat', etc.) or None for all
         max_sessions: Maximum number of recent sessions to analyze (default 50)
         mode: 'heuristic' (free, default). 'llm' requires Pro (v0.6.1).
+        dedup: Semantic dedup pass mode: 'off' (default), 'conservative', or
+            'balanced'. When 'off' (or unset, or unrecognised), the pass does
+            not run and consolidation behaves exactly as before. 'conservative'
+            collapses near-verbatim restatements (cosine > 0.97); 'balanced'
+            collapses paraphrases (cosine > 0.95). Can also be set via the
+            LORECONVO_CONSOLIDATION_DEDUP environment variable; an explicit
+            argument always overrides the env var.
     """
     from core.consolidation import HeuristicConsolidator
     import pathlib
@@ -1645,6 +1653,7 @@ def consolidate_memories(
         mode="heuristic",  # LLM mode deferred to v0.6.1
         is_pro=_get_db().config.is_pro,
         trigger="on-demand",
+        dedup=dedup,
     )
     return result
 
