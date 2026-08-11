@@ -35,8 +35,12 @@ echo "[$(date)] pre-compact ($TRIGGER): $SESSION_ID" >> "$LOG" 2>/dev/null
 echo "$INPUT" | PYTHONPATH="$PLUGIN_ROOT/src" $RUN_PYTHON "$PLUGIN_ROOT/hooks/scripts/pre_compact_save.py" >> "$LOG" 2>&1
 EXIT_CODE=$?
 
+# SH-13440: Log failure but exit 0 unconditionally.
+# Hooks must never break a customer session. The uvx invocation is
+# network-capable (first-run package download, PyPI reachability, etc.),
+# and a hook failure must not surface as a session error to the user.
 if [ "$EXIT_CODE" -ne 0 ]; then
     echo "[$(date)] pre-compact save failed (exit $EXIT_CODE)" >> "$LOG"
 fi
 
-exit $EXIT_CODE
+exit 0
