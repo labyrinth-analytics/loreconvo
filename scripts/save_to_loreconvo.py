@@ -56,6 +56,7 @@ except _bootstrap.BootstrapError as exc:
 
 _open_conn = _storage._open_conn
 ensure_schema = _storage.ensure_schema
+sanitize_fts_query = _storage.sanitize_fts_query
 
 
 # -- Tier enforcement (SH-100324: parity with MCP server's save_session) --
@@ -399,8 +400,14 @@ def read_session_by_id(args):
 
 # -- Search sessions --
 
-def search_sessions(args):
-    """Search sessions by keyword in title/summary."""
+def search_rows(args):
+    """Search sessions by keyword in title/summary. Returns rows.
+
+    Raw input is never passed to MATCH: FTS5 reads bare hyphens and colons
+    as query syntax, so "SH-100406" raises "no such column: 100406". The
+    sanitizer (shared with the MCP/CLI search path via storage_core) quotes
+    each token, which is what makes ticket refs searchable at all.
+    """
     conn, db_path = _connect(args.db_path)
 
     try:
@@ -413,21 +420,41 @@ def search_sessions(args):
                JOIN sessions s ON s.rowid = f.rowid
                WHERE sessions_fts MATCH ?
                ORDER BY s.created_at DESC LIMIT ?""",
-            (args.search, args.limit)
+            (sanitize_fts_query(args.search), args.limit)
         ).fetchall()
     except sqlite3.OperationalError:
-        # FTS parse failed (e.g. hyphenated term) -- fall back to LIKE
-        pattern = f"%{args.search}%"
+        # Sanitized input should always parse. If MATCH still fails (corrupt
+        # or missing FTS index), degrade to a per-term AND over LIKE.
+        #
+        # NOT a substring match on the raw query: "SH-100406 substack" never
+        # appears verbatim in any summary, so matching the whole string
+        # returned zero rows and read as "never saved". Adding a term must
+        # narrow results, never erase them.
+        terms = [t for t in (args.search or "").split() if t]
+        if not terms:
+            conn.close()
+            return []
+        where = " AND ".join(["(title LIKE ? OR summary LIKE ?)"] * len(terms))
+        params = []
+        for term in terms:
+            params.extend([f"%{term}%", f"%{term}%"])
+        params.append(args.limit)
         rows = conn.execute(
-            """SELECT id, surface, title,
-                      substr(summary, 1, 300) as summary_preview,
-                      datetime(created_at) as created
-               FROM sessions
-               WHERE title LIKE ? OR summary LIKE ?
-               ORDER BY created_at DESC LIMIT ?""",
-            (pattern, pattern, args.limit)
+            f"""SELECT id, surface, title,
+                       substr(summary, 1, 300) as summary_preview,
+                       datetime(created_at) as created
+                FROM sessions
+                WHERE {where}
+                ORDER BY created_at DESC LIMIT ?""",
+            params
         ).fetchall()
     conn.close()
+    return rows
+
+
+def search_sessions(args):
+    """Search sessions and print the results."""
+    rows = search_rows(args)
 
     if not rows:
         print(f"No sessions matching '{args.search}'.")
