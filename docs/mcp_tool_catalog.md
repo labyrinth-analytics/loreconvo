@@ -336,11 +336,42 @@ When you need a compact summary of everything that has happened in a project, th
 | `project` | text | yes | -- | Project name matching the `--project` tag used when saving sessions |
 | `surface` | text | no | none | Surface to consolidate: `code`, `cowork`, or `chat`. Omit to include all surfaces. |
 | `max_sessions` | integer | no | 50 | Maximum number of recent sessions to analyze |
-| `mode` | text | no | `heuristic` | Consolidation strategy. Only `heuristic` is available in v0.6.0. |
+| `mode` | text | no | `heuristic` | Consolidation strategy. Only `heuristic` is available; any other value is ignored. |
+| `dedup` | text | no | `off` | Collapse near-duplicate sessions before extracting signals: `off`, `conservative`, or `balanced`. See below. |
+
+**Collapsing near-duplicate sessions:**
+
+If the same decision was restated across several sessions, the digest repeats
+it. Setting `dedup` collapses those near-duplicates first, so each point
+appears once. Three values are accepted, and matching is case-sensitive:
+
+- `off` -- no collapsing. Consolidation behaves exactly as it always has.
+  This is the default, and an unrecognised value falls back to it.
+- `conservative` -- collapses near-verbatim restatements only.
+- `balanced` -- also collapses paraphrases of the same point.
+
+You can set a default for every run with the `LORECONVO_CONSOLIDATION_DEDUP`
+environment variable. Passing `dedup` on the call always overrides it.
+
+Collapsing compares the semantic index LoreConvo already builds for your
+sessions. If that index is not available, nothing is collapsed and the run
+proceeds normally. When two sessions are near-duplicates the newer one is
+kept, and only sessions inside the project and surface you are consolidating
+are ever compared against each other.
+
+**Returns:** The usual status flag and `digest_markdown`, plus
+`sessions_considered`, `sessions_collapsed`, `sessions_consolidated`, the
+resolved `dedup` mode, and `collapsed` -- a list of
+`{session_id, similar_to, similarity}` entries naming every session that was
+folded away and what it was folded into. Nothing is dropped silently. With
+`dedup` off, `sessions_collapsed` is 0 and `collapsed` is empty.
 
 **Example conversation:**
 > You: "Build a fresh memory digest for the side_hustle project."
 > Claude: *calls consolidate_memories with project="side_hustle"*
+
+> You: "Rebuild the side_hustle digest, and merge the sessions that say the same thing."
+> Claude: *calls consolidate_memories with project="side_hustle", dedup="balanced"*
 
 **Free tier note:** Free users can run this tool up to 3 times per day. Pro users have unlimited runs.
 
