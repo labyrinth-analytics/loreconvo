@@ -1604,9 +1604,13 @@ def get_stats() -> dict:
     storage metrics (DB size, estimated tokens stored); and the 5 most recent sessions.
 
     Provides visibility into your memory usage -- who saved what, how much is stored,
-    and what's been captured most recently.
+    and what's been captured most recently. Includes hook_saves_failing status.
     """
-    return _get_db().get_usage_stats()
+    result = _get_db().get_usage_stats()
+    data_dir = Path(_get_db().config.db_path).parent
+    breadcrumb_path = data_dir / "hook_failure.json"
+    result["hook_saves_failing"] = breadcrumb_path.exists()
+    return result
 
 
 @mcp.tool(title="Consolidate Memories")
@@ -1925,13 +1929,17 @@ def get_server_info() -> dict:
 
     Returns dict with: product_name, product_version, mcp_installed, mcp_tested,
     mcp_accepted, status (ok|mismatch|undetermined|disabled|internal_error), note,
-    error_detail (set only on internal_error).
+    error_detail (set only on internal_error), hook_saves_failing.
     """
     # Defensive copy: check() returns its module-level cache object directly, so
     # handing it out unwrapped lets any caller mutation corrupt the cache for
     # every later call. Restored after SH-13429's second pass dropped it.
     result = _compat_check()
-    return dict(result)
+    result_copy = dict(result)
+    data_dir = Path(_get_db().config.db_path).parent
+    breadcrumb_path = data_dir / "hook_failure.json"
+    result_copy["hook_saves_failing"] = breadcrumb_path.exists()
+    return result_copy
 
 
 # -- Anti-pattern storage tools (v0.8.0) --
