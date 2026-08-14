@@ -1527,6 +1527,7 @@ def import_sessions(
             "Free tier limit reached. Some sessions were not imported. "
             "Upgrade to Pro for unlimited sessions."
         )
+        summary["upgrade_url"] = LORECONVO_UPGRADE_URL
     return summary
 
 
