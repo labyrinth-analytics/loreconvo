@@ -19,11 +19,11 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from loreconvo.src.core.timeutil import utc_now_iso
-
 _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
-from auto_save import get_db_path, parse_transcript, save_to_db
+# auto_save resolves utc_now_iso through _bootstrap; reuse it rather than
+# bootstrapping a second copy (this module already reuses its helpers).
+from auto_save import get_db_path, parse_transcript, save_to_db, utc_now_iso
 
 
 STATE_FILE = os.path.expanduser("~/.loreconvo/periodic_state.json")
