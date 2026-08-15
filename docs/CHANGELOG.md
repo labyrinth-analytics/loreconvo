@@ -4,6 +4,21 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## Unreleased
+
+### Fixed: Cross-product linking now works on every install, not just dev machines
+
+When you installed both LoreConvo and LoreDocs from the marketplace, linking
+a session to a document always returned "unavailable." The two plugins run in
+isolated environments, and LoreConvo was trying to import LoreDocs as a
+Python package -- something that works on a dev machine with both pip-installed
+but never on a real install. LoreConvo now reads the LoreDocs database
+directly (the same approach LoreDocs already uses in the other direction),
+so the linking tools work on every machine. The three failure conditions are
+now distinguishable in the tool responses: "LoreDocs not installed,"
+"installed but unreachable," and "schema too old," instead of all returning
+the same opaque message.
+
 ## v0.10.4 (2026-08-14)
 
 ### Fixed: Session times are now consistent across your whole history
