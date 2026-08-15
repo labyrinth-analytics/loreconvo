@@ -19,6 +19,8 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from loreconvo.src.core.timeutil import utc_now_iso
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
 from auto_save import get_db_path, parse_transcript, save_to_db
@@ -86,7 +88,7 @@ def main():
         if not transcript_path:
             sys.exit(0)
 
-        now = datetime.now().isoformat()
+        now = utc_now_iso()
 
         state = _load_state()
         state = _purge_old_state(state)
