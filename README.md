@@ -2,7 +2,7 @@
 
 Your memory follows your identity, not your tool — with your consent.
 
-LoreConvo is the only AI memory that carries your context across Claude Code, Codex, Cursor, and Hermes Agent. One install, one memory, everywhere you code.
+LoreConvo is the only AI memory that carries your context across Claude Code, Cowork, Codex, Cursor, and Hermes Agent. One install, one memory, everywhere you code.
 
 > Install directly from Claude Code's plugin marketplace, or via PyPI: `uvx loreconvo`
 
@@ -10,7 +10,7 @@ LoreConvo is the only AI memory that carries your context across Claude Code, Co
 
 ### Works wherever you work
 
-LoreConvo works across Claude Code, Cursor, Codex, and Hermes -- the same memory
+LoreConvo works across Claude Code, Cowork, Cursor, Codex, and Hermes -- the same memory
 layer, no matter which client you reach for. When you switch mid-project, your
 context travels with you automatically.
 
@@ -130,6 +130,7 @@ Claude Code  (~/.claude/settings.json via `claude mcp add`)
 Cursor       (.cursor/mcp.json) <--MCP-----+
 Codex        (~/.codex/config.toml) <--MCP-+
 Hermes Agent (~/.hermes/config.yaml) <-MCP-+
+Cowork       (MCP-native execution env) <--+
   All surfaces: save_session / get_recent_sessions / search_sessions
 
 Claude Chat (web)
@@ -277,7 +278,7 @@ Check your current tier and usage with `get_tier`. Activate a Pro license with
 ## Features
 
 - **Automatic session capture**: Sessions save at session end and load at session start via Claude Code hooks -- no manual `save_session` call required
-- **Cross-client memory**: Your context follows you across Claude Code, Cursor, Codex, and Hermes -- not locked to one IDE or machine
+- **Cross-client memory**: Your context follows you across Claude Code, Cowork, Cursor, Codex, and Hermes -- not locked to one IDE or machine
 - **Structured sessions**: Captures decisions, artifacts, open questions -- not just raw text; optional reasoning_notes field stores agent reasoning chains
 - **Project organization**: Group sessions by project with expected skill sets
 - **Skill tracking**: Record which skills were used for smart filtering
