@@ -13,6 +13,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from loreconvo.src.core.timeutil import utc_now_iso
+
 # Bootstrap: resolve storage_core for non-package callers.
 from _bootstrap import resolve_storage_core, BootstrapError
 
@@ -64,7 +66,7 @@ def save_pre_compact(db_path, session_id, parsed, trigger, project=None):
         ensure_schema(conn)
 
         cursor = conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
-        now = datetime.now().isoformat()
+        now = utc_now_iso()
         tags_json = json.dumps(tags)
         decisions_json = json.dumps(parsed["decisions"])
         artifacts_json = json.dumps(parsed["artifacts"])

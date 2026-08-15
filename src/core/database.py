@@ -495,6 +495,7 @@ class SessionDatabase:
         self._ensure_keep_forever_schema()
         self._migrate_add_agent_context_configs()
         self._migrate_add_memory_items_table()
+        self._migrate_normalize_start_date_utc()
         # Migration: clean up any rows with NULL id (bug where raw SQL
         # inserts bypassed the Session dataclass UUID generation).
         null_rows = self.conn.execute(
@@ -668,6 +669,54 @@ class SessionDatabase:
             )
             return
         self._memory_items_fts_available = True
+
+    def _migrate_normalize_start_date_utc(self):
+        """Normalize legacy naive-local start_date to UTC+Z format (SH-100303 r4).
+
+        One-time backfill: converts sessions.start_date values lacking timezone
+        designators using the machine's current local offset. Idempotent.
+        """
+        try:
+            unnormalized_count = self.conn.execute("""
+                SELECT COUNT(*) FROM sessions
+                WHERE start_date NOT LIKE '%Z'
+                  AND start_date NOT GLOB '*[+-][0-9][0-9]:[0-9][0-9]'
+            """).fetchone()[0]
+
+            if unnormalized_count == 0:
+                return
+
+            local_tz = datetime.now().astimezone().tzinfo
+            offset_str = local_tz.strftime('%z')
+            offset_formatted = f"{offset_str[:-2]}:{offset_str[-2:]}"
+
+            self.conn.execute("""
+                UPDATE sessions
+                SET start_date = strftime('%Y-%m-%dT%H:%M:%SZ', start_date || ? || ' UTC')
+                WHERE start_date NOT LIKE '%Z'
+                  AND start_date NOT GLOB '*[+-][0-9][0-9]:[0-9][0-9]'
+            """, (offset_formatted,))
+
+            self.conn.execute("""
+                UPDATE sessions
+                SET end_date = strftime('%Y-%m-%dT%H:%M:%SZ', end_date || ? || ' UTC')
+                WHERE end_date IS NOT NULL
+                  AND end_date NOT LIKE '%Z'
+                  AND end_date NOT GLOB '*[+-][0-9][0-9]:[0-9][0-9]'
+            """, (offset_formatted,))
+
+            self.conn.execute("""
+                UPDATE sessions
+                SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', updated_at || ? || ' UTC')
+                WHERE updated_at IS NOT NULL
+                  AND updated_at NOT LIKE '%Z'
+                  AND updated_at NOT GLOB '*[+-][0-9][0-9]:[0-9][0-9]'
+            """, (offset_formatted,))
+
+            self.conn.commit()
+
+        except Exception as e:
+            logger.error(f"Migration _migrate_normalize_start_date_utc failed: {e}")
 
     def _migrate_fts_v2(self):
         """Migrate FTS5 index to v2: add tags and open_questions columns.
