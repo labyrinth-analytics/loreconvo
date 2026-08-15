@@ -13,6 +13,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from loreconvo.src.core.timeutil import utc_now_iso
+
 # Bootstrap: resolve storage_core for non-package callers.
 from _bootstrap import resolve_storage_core, BootstrapError
 
@@ -246,7 +248,7 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
         cursor = conn.execute("SELECT id FROM sessions WHERE id = ?", (session_uuid,))
         exists = cursor.fetchone() is not None
 
-        now = datetime.now().isoformat()
+        now = utc_now_iso()
         tags_json = json.dumps(auto_save_tags())
         decisions_json = json.dumps(parsed["decisions"])
         artifacts_json = json.dumps(parsed["artifacts"])
