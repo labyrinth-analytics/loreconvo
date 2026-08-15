@@ -38,6 +38,10 @@ _REL_CANDIDATES = (
     Path("src") / "core" / "storage_core.py",
     Path("core") / "storage_core.py",
 )
+_TIMEUTIL_REL_CANDIDATES = (
+    Path("src") / "core" / "timeutil.py",
+    Path("core") / "timeutil.py",
+)
 
 _DEGRADED_WARNED = False
 _BREADCRUMB_DELETED_THIS_PROCESS = False
@@ -122,17 +126,15 @@ def _warn_once_degraded(local_path, broken_pkg_exc):
     )
 
 
-def _load_by_path(path):
+def _load_by_path(path, mod_name="_loreconvo_storage_core"):
     """Load a Python module by explicit file location.
 
     No sys.path mutation -- uses spec_from_file_location under a
     private module name so a stale copy on sys.path cannot shadow it.
     """
-    spec = importlib.util.spec_from_file_location(
-        "_loreconvo_storage_core", str(path)
-    )
+    spec = importlib.util.spec_from_file_location(mod_name, str(path))
     mod = importlib.util.module_from_spec(spec)
-    sys.modules.setdefault("_loreconvo_storage_core", mod)
+    sys.modules.setdefault(mod_name, mod)
     spec.loader.exec_module(mod)
     return mod
 
@@ -205,3 +207,67 @@ def resolve_storage_core(origin):
     # Both paths failed -- raise with full diagnostics.
     msg = _unsupported_layout_message(probed, broken_pkg)
     raise BootstrapError(msg)
+
+
+def resolve_timeutil(origin):
+    """Resolve the timeutil module for a non-package caller.
+
+    Same two-path algorithm as resolve_storage_core(). Hooks cannot
+    import loreconvo.core.timeutil directly: under the source-checkout
+    layout the package is not installed at all, and a module-level
+    package import would also run BEFORE the storage_core bootstrap,
+    killing the process before it can write a failure breadcrumb.
+
+    Args:
+        origin: Path(__file__) of the calling script.
+
+    Returns:
+        The timeutil module object.
+
+    Raises:
+        BootstrapError: if timeutil cannot be resolved.
+    """
+    # Path 1 -- installed package, preferred.
+    broken_pkg = None
+    try:
+        if importlib.util.find_spec("loreconvo.core") is not None:
+            try:
+                from loreconvo.core import timeutil
+                return timeutil
+            except Exception as exc:
+                broken_pkg = exc  # remembered, NOT fatal -- see path 2
+    except ModuleNotFoundError as exc:
+        # See resolve_storage_core: a missing 'loreconvo' is the normal
+        # source-checkout layout, not a broken install.
+        if exc.name != "loreconvo":
+            broken_pkg = exc
+    except Exception as exc:
+        broken_pkg = exc
+
+    # Path 2 -- bounded upward search from this file, no sys.path mutation.
+    probed = []
+    base = origin.resolve().parent
+    for level in range(_MAX_UPWARD_LEVELS + 1):
+        root = base.parents[level - 1] if level else base
+        for rel in _TIMEUTIL_REL_CANDIDATES:
+            cand = root / rel
+            probed.append(str(cand))
+            if cand.is_file():
+                if broken_pkg is not None:
+                    _warn_once_degraded(cand, broken_pkg)
+                return _load_by_path(cand, "_loreconvo_timeutil")
+
+    # Both paths failed -- raise with full diagnostics.
+    parts = ["Cannot resolve loreconvo timeutil."]
+    parts.append(f"Probed paths ({len(probed)}):")
+    for p in probed:
+        parts.append(f"  {p}")
+    if broken_pkg is not None:
+        parts.append(
+            f"loreconvo package was found but is broken: {broken_pkg}"
+        )
+    parts.append(
+        "Remedy: pip install loreconvo, or run hooks from the "
+        "distributed bundle where hooks/ and src/ are siblings."
+    )
+    raise BootstrapError("\n".join(parts))

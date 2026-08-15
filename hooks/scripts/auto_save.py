@@ -13,13 +13,12 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from loreconvo.src.core.timeutil import utc_now_iso
-
-# Bootstrap: resolve storage_core for non-package callers.
-from _bootstrap import resolve_storage_core, BootstrapError
+# Bootstrap: resolve storage_core and timeutil for non-package callers.
+from _bootstrap import resolve_storage_core, resolve_timeutil, BootstrapError
 
 try:
     _storage = resolve_storage_core(Path(__file__))
+    utc_now_iso = resolve_timeutil(Path(__file__)).utc_now_iso
 except BootstrapError as exc:
     # Write breadcrumb before exiting so the MCP server can surface it.
     from _bootstrap import _write_breadcrumb
