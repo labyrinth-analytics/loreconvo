@@ -38,6 +38,21 @@ from .storage_core import (
     sanitize_fts_query,
 )
 
+from .loredocs_bridge import (
+    CROSS_LINK_CAP,
+    CROSS_LINK_EMBEDDING_DIM,
+    CROSS_LINK_EMBEDDING_MODEL,
+    CROSS_LINK_DEBOUNCE_SECS,
+    CROSS_LINK_L2_THRESHOLD,
+    LoreDocsAccessError,
+    LoreDocsSchemaError,
+    discover_loredocs_db,
+    get_cross_product_links,
+    get_lancedb_path,
+    write_cross_product_link,
+)
+from .loredocs_bridge import _connect_readwrite, _verify_schema
+
 logger = logging.getLogger(__name__)
 
 # DDL constants for keep_forever schema components.
@@ -2320,35 +2335,42 @@ class SessionDatabase:
         """Return LoreDocs cross-product links for a graph seed, or None if unavailable.
 
         Mirrors the degradation `get_docs_for_session` already implements at
-        server.py -- any failure (LoreDocs absent, DiscoveryError, schema too
-        old) is reported as unavailable rather than raised.
+        server.py -- any failure (LoreDocs absent, unreachable, schema too
+        old) is reported as unavailable rather than raised. Distinguishable
+        reasons go to the log (SH-100670 Part B).
         """
+        log = logging.getLogger(__name__)
         try:
-            from loredocs.storage import (
-                CROSS_LINK_SCHEMA_VERSION, REQUIRED_CROSS_LINK_SCHEMA_VERSION,
-                _CROSS_LINK_EMBEDDING_MODEL, VaultStorage,
-                discover_product_db, DiscoveryError,
+            ld_db = discover_loredocs_db()
+        except LoreDocsAccessError as exc:
+            log.warning(
+                "graph cross-product links: LoreDocs installed but unreachable (%s)",
+                exc,
             )
-        except ImportError:
-            return None
-        if CROSS_LINK_SCHEMA_VERSION < REQUIRED_CROSS_LINK_SCHEMA_VERSION:
-            return None
-        try:
-            ld_db = discover_product_db("loredocs")
-        except DiscoveryError:
             return None
         if ld_db is None:
+            log.debug("graph cross-product links: LoreDocs not installed")
             return None
         try:
-            ld_storage = VaultStorage(ld_db.parent)
-            result = ld_storage.get_cross_product_links(
+            result = get_cross_product_links(
+                ld_db,
                 source_product="loreconvo",
                 source_id=session_id,
-                current_embedding_model=_CROSS_LINK_EMBEDDING_MODEL,
+                current_embedding_model=CROSS_LINK_EMBEDDING_MODEL,
                 limit=50,
                 is_pro=True,
             )
-        except Exception:
+        except LoreDocsSchemaError as exc:
+            log.warning(
+                "graph cross-product links: LoreDocs schema too old (%s)",
+                exc,
+            )
+            return None
+        except Exception as exc:
+            log.warning(
+                "graph cross-product links: unavailable (%s)",
+                type(exc).__name__,
+            )
             return None
         return result.get("links", [])
 
@@ -2504,7 +2526,7 @@ class SessionDatabase:
         if row and row["last_cross_linked_at"]:
             try:
                 last = datetime.fromisoformat(row["last_cross_linked_at"].replace("Z", "+00:00"))
-                if (datetime.now(timezone.utc) - last).total_seconds() < 600:
+                if (datetime.now(timezone.utc) - last).total_seconds() < CROSS_LINK_DEBOUNCE_SECS:
                     return 0
             except Exception:
                 pass
@@ -2517,27 +2539,26 @@ class SessionDatabase:
             return 0
 
         # Discover LoreDocs and its Lance index
+        # (SH-100670: direct sqlite3 access -- the loredocs package is not
+        # importable from LoreConvo's isolated uvx environment.)
         try:
-            from loredocs.semantic_search import get_lance_db_path
-            from loredocs.storage import (
-                VaultStorage, CROSS_LINK_SCHEMA_VERSION,
-                REQUIRED_CROSS_LINK_SCHEMA_VERSION,
-                _CROSS_LINK_EMBEDDING_MODEL, _CROSS_LINK_EMBEDDING_DIM,
-                _CROSS_LINK_CAP, _CROSS_LINK_L2_THRESHOLD,
-                discover_product_db, DiscoveryError,
+            ld_db = discover_loredocs_db()
+        except LoreDocsAccessError as exc:
+            log.warning(
+                "cross_link_session: LoreDocs installed but unreachable (%s)",
+                exc,
             )
-        except ImportError:
-            return 0  # LoreDocs not installed
-
-        try:
-            ld_db = discover_product_db("loredocs")
-        except DiscoveryError:
             return 0
         if ld_db is None:
+            log.debug("cross_link_session: LoreDocs not installed")
             return 0
 
-        lance_path = get_lance_db_path()
+        lance_path = get_lancedb_path(ld_db)
         if lance_path is None:
+            log.debug(
+                "cross_link_session: LoreDocs installed but Pro index not "
+                "built (docs.lance missing) -- skipping auto cross-link"
+            )
             return 0
 
         query_text = session_text[:2000] if session_text else ""
@@ -2551,7 +2572,7 @@ class SessionDatabase:
             # Same BGE-small model as before, ONNX-quantized. Vectors differ
             # slightly from the old torch fp32 output, which is why the 0.8.7
             # CHANGELOG recommends a one-time rebuild_index.
-            model = _TE(_CROSS_LINK_EMBEDDING_MODEL)
+            model = _TE(CROSS_LINK_EMBEDDING_MODEL)
             q_vec = next(iter(model.embed([query_text]))).tolist()
 
             ld_lance_db = _lancedb.connect(str(lance_path))
@@ -2567,27 +2588,19 @@ class SessionDatabase:
                 dist = r.get("_distance", 999.0)
                 if not did:
                     continue
-                if dist > _CROSS_LINK_L2_THRESHOLD:
+                if dist > CROSS_LINK_L2_THRESHOLD:
                     continue
                 if did not in best or dist < best[did]:
                     best[did] = dist
 
-            # Write cross-product links via LoreDocs storage API
-            ld_storage = VaultStorage(ld_db.parent)
-
-            # Verify schema version
-            check = ld_storage.get_cross_product_links(
-                "loreconvo", session_id, _CROSS_LINK_EMBEDDING_MODEL,
-                limit=1, is_pro=True,
-            )
-            if check.get("schema_version", 0) < REQUIRED_CROSS_LINK_SCHEMA_VERSION:
-                log.debug("cross_link_session: LoreDocs schema version too old")
-                return 0
-
+            # Write cross-product links directly into the LoreDocs DB
+            # (SH-100670 bridge; mirrors VaultStorage._write_cross_product_link
+            # and the LoreDocs->LoreConvo write precedent).
             written = 0
-            with ld_storage._db() as conn:
-                for did, dist in sorted(best.items(), key=lambda x: x[1])[:_CROSS_LINK_CAP]:
-                    if written >= _CROSS_LINK_CAP:
+            with _connect_readwrite(ld_db) as conn:
+                _verify_schema(conn)
+                for did, dist in sorted(best.items(), key=lambda x: x[1])[:CROSS_LINK_CAP]:
+                    if written >= CROSS_LINK_CAP:
                         break
                     # Check vault opt-out
                     vault_row = conn.execute(
@@ -2599,15 +2612,15 @@ class SessionDatabase:
                     if not vault_row or vault_row[0]:
                         continue
                     cosine = max(0.0, 1.0 - dist)
-                    ld_storage._write_cross_product_link(
+                    write_cross_product_link(
                         conn,
                         source_product="loreconvo",
                         source_id=session_id,
                         target_product="loredocs",
                         target_id=did,
                         similarity_score=round(cosine, 4),
-                        embedding_model=_CROSS_LINK_EMBEDDING_MODEL,
-                        embedding_dim=_CROSS_LINK_EMBEDDING_DIM,
+                        embedding_model=CROSS_LINK_EMBEDDING_MODEL,
+                        embedding_dim=CROSS_LINK_EMBEDDING_DIM,
                         link_type="auto",
                         tier_required="pro",
                     )
@@ -2620,6 +2633,9 @@ class SessionDatabase:
             self.conn.commit()
             log.debug("cross_link_session: wrote %d links for session %s", written, session_id)
             return written
+        except LoreDocsSchemaError as exc:
+            log.warning("cross_link_session: LoreDocs schema too old (%s)", exc)
+            return 0
         except Exception as exc:
             log.warning("cross_link_session: unavailable (%s)", type(exc).__name__)
             return 0
