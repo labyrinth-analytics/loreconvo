@@ -686,32 +686,45 @@ class SessionDatabase:
             if unnormalized_count == 0:
                 return
 
-            local_tz = datetime.now().astimezone().tzinfo
-            offset_str = local_tz.strftime('%z')
+            offset_str = datetime.now().astimezone().strftime('%z')
             offset_formatted = f"{offset_str[:-2]}:{offset_str[-2:]}"
 
+            # Appending the offset makes the value offset-aware, which SQLite
+            # converts to UTC on its own. A trailing ' UTC' does NOT work here:
+            # 'utc' is a modifier argument, and concatenating it into the time
+            # string makes the whole string unparseable, so strftime returns
+            # NULL for every row (SH-100511).
+            #
+            # Rows that still do not parse (malformed or date-only values) are
+            # skipped by the IS NOT NULL guard rather than written as NULL --
+            # without it one bad row aborts the entire migration on the
+            # sessions.start_date NOT NULL constraint, and would blank out an
+            # otherwise valid end_date/updated_at.
             self.conn.execute("""
                 UPDATE sessions
-                SET start_date = strftime('%Y-%m-%dT%H:%M:%SZ', start_date || ? || ' UTC')
+                SET start_date = strftime('%Y-%m-%dT%H:%M:%SZ', start_date || ?)
                 WHERE start_date NOT LIKE '%Z'
                   AND start_date NOT GLOB '*[+-][0-9][0-9]:[0-9][0-9]'
-            """, (offset_formatted,))
+                  AND strftime('%Y-%m-%dT%H:%M:%SZ', start_date || ?) IS NOT NULL
+            """, (offset_formatted, offset_formatted))
 
             self.conn.execute("""
                 UPDATE sessions
-                SET end_date = strftime('%Y-%m-%dT%H:%M:%SZ', end_date || ? || ' UTC')
+                SET end_date = strftime('%Y-%m-%dT%H:%M:%SZ', end_date || ?)
                 WHERE end_date IS NOT NULL
                   AND end_date NOT LIKE '%Z'
                   AND end_date NOT GLOB '*[+-][0-9][0-9]:[0-9][0-9]'
-            """, (offset_formatted,))
+                  AND strftime('%Y-%m-%dT%H:%M:%SZ', end_date || ?) IS NOT NULL
+            """, (offset_formatted, offset_formatted))
 
             self.conn.execute("""
                 UPDATE sessions
-                SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', updated_at || ? || ' UTC')
+                SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', updated_at || ?)
                 WHERE updated_at IS NOT NULL
                   AND updated_at NOT LIKE '%Z'
                   AND updated_at NOT GLOB '*[+-][0-9][0-9]:[0-9][0-9]'
-            """, (offset_formatted,))
+                  AND strftime('%Y-%m-%dT%H:%M:%SZ', updated_at || ?) IS NOT NULL
+            """, (offset_formatted, offset_formatted))
 
             self.conn.commit()
 
