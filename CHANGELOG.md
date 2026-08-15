@@ -1,5 +1,72 @@
 # LoreConvo Changelog
 
+## v0.10.4 (2026-08-14)
+
+### Added: `core/timeutil.utc_now_iso()` as the single timestamp source
+
+All session writers (`hooks/scripts/auto_save.py`, `periodic_save.py`,
+`pre_compact_save.py`) previously stamped rows with
+`datetime.now().isoformat()`, which is naive local time. They now share
+`utc_now_iso()`, which returns UTC with a `Z` suffix.
+`test_start_date_normalization.test_writer_modules_no_naive_datetime` is the
+guardrail against the naive form returning.
+
+Hooks resolve the module through `_bootstrap.resolve_timeutil()` rather than
+importing `loreconvo.core.timeutil` directly. Hooks run standalone under the
+hook runner and cannot assume the package is installed, and a module-level
+package import would also execute before the `resolve_storage_core()`
+try/except, killing the process before it could write the
+`hook_failure.json` breadcrumb. `resolve_timeutil()` mirrors the existing
+two-path algorithm: installed package first, then a bounded upward search for
+`src/core/timeutil.py` with no `sys.path` mutation.
+
+### Added: `SessionDatabase._migrate_normalize_start_date_utc()`
+
+One-time idempotent backfill converting `sessions.start_date`, `end_date` and
+`updated_at` values that carry no timezone designator, using the machine's
+current local offset. Appending the offset makes the value offset-aware and
+SQLite converts it to UTC on its own.
+
+Values that do not parse (malformed strings, date-only values) are excluded by
+an `IS NOT NULL` guard on the converted expression rather than written back.
+Without the guard, `strftime` returns `NULL` for those rows, which trips the
+`NOT NULL` constraint on `sessions.start_date` and aborts the migration for
+every valid row, and would blank an otherwise good `end_date`/`updated_at`.
+The migration runs under `_init_schema()` and re-attempts harmlessly while any
+unconvertible row remains.
+
+`test_start_date_normalization` exercises the shipped method directly instead
+of restating its SQL, and asserts the converted instant against a stdlib
+`datetime` oracle rather than against a second copy of the migration.
+
+### Added: `hook_saves_failing` on `get_server_info` and `get_stats`
+
+Both tools now report whether the `hook_failure.json` breadcrumb written by
+`_bootstrap` is present, surfacing a hook that cannot reach `storage_core`
+through the MCP surface rather than only on discarded hook stderr.
+
+### Added: `upgrade_url` on the `import_sessions` limit response
+
+The free-tier limit-hit branch now carries `LORECONVO_UPGRADE_URL` alongside
+the limit message.
+
+### Fixed: FTS5 query sanitization in the fallback script
+
+`scripts/save_to_loreconvo.py` passed raw input to `MATCH`, so FTS5 parsed
+bare hyphens and colons as query syntax and `SH-100406` raised
+`no such column: 100406`. It now calls `storage_core.sanitize_fts_query()`,
+the same sanitizer the MCP and CLI search paths use, so ticket refs are
+searchable at all. `sanitize_fts_query()` and `expand_compound_token()` moved
+into `storage_core` to make that sharing possible instead of a second copy.
+
+The `MATCH` failure fallback also changed from a substring `LIKE` over the
+whole raw query to a per-term `AND` over `LIKE`. Matching the full string meant
+`SH-100406 substack` never appeared verbatim in any summary and returned zero
+rows, which read as "never saved": adding a term must narrow a result set,
+never erase it.
+
+---
+
 ## v0.10.3 (2026-08-11)
 
 ### Added: Opt-in semantic dedup pass in `consolidate_memories`
