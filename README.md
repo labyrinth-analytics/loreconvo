@@ -1,4 +1,4 @@
-# LoreConvo v0.10.3
+# LoreConvo v0.10.4
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -409,63 +409,43 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.3 (2026-08-11)
+## v0.10.4 (2026-08-14)
 
-### New: Merge sessions that say the same thing
+### Fixed: Session times are now consistent across your whole history
 
-If you work on one thing across several sessions, the same decision tends to
-get restated in each of them, and your project digest repeats it back to you
-several times. When you build a digest you can now ask LoreConvo to merge
-those near-duplicates first, so each point shows up once.
+Older sessions recorded their times in your computer's local timezone, while
+newer ones record UTC. With both in one database, sorting by "most recent"
+could put sessions in the wrong order, and a date filter could skip sessions
+saved near midnight.
 
-Just ask for it in conversation:
+Everything records UTC now. The first time you open your database after
+upgrading, LoreConvo converts the older entries once, using your machine's
+current offset. Entries whose stored value was never a real timestamp are left
+exactly as they are rather than guessed at. Nothing is deleted, and there is
+nothing you need to do.
 
-> "Rebuild the digest for my project, and merge the sessions that say the
-> same thing."
+### Fixed: Searching for a ticket number or any hyphenated term
 
-There are two levels. `conservative` merges only sessions that are nearly
-word-for-word repeats. `balanced` also merges ones that make the same point in
-different words. If you want it on for every run, set
-`LORECONVO_CONSOLIDATION_DEDUP=conservative` (or `balanced`) in your
-environment.
+In the fallback search script, a query like `SH-100406` was read as search
+syntax instead of as text, so it either errored or came back empty. Hyphens,
+colons and similar characters are now treated as part of the term you typed.
 
-This is off unless you ask for it, so nothing changes about your existing
-digests until you turn it on. Merging is never silent: the result tells you
-exactly which sessions were folded together and which one each was folded
-into. Nothing is deleted -- your sessions are untouched, only the digest is
-shorter.
+Adding a second word now narrows the search instead of emptying it. A two-word
+query used to be matched as one exact phrase, so adding a word to an otherwise
+good search could take you from several results to none.
 
-### Fixed: A failed save could show up as an error in your session
+### New: LoreConvo tells you when automatic saving has stopped working
 
-LoreConvo saves your session automatically when it ends, and again before a
-long conversation gets compacted. If that save failed -- most often because it
-was downloading the package for the first time, or PyPI was briefly
-unreachable -- the failure surfaced as an error in Claude Code, in a session
-that was otherwise perfectly fine.
+If the save hook cannot run, the sessions it should have captured simply were
+not there, and nothing said so. Asking LoreConvo about your server or your
+stats now reports whether saving is currently failing, so a silent gap in your
+history is something you can find out about instead of discovering later.
 
-Now a failed save is just a lost save. It gets written to the LoreConvo hook
-log and your session carries on normally. A memory tool should never be the
-reason your session breaks.
+### Improved: A clearer next step when an import hits the free limit
 
-### Fixed: Automatic capture summarized the same work twice
-
-If you turned on post-turn capture (`LORECONVO_POST_TURN_CAPTURE=1`), the
-background worker was not keeping track of what it had already done. Every
-time it ran, it re-summarized everything still sitting in the queue. That
-produced duplicate captures and burned through your daily capture allowance
-faster than it should have. It now skips anything it has already handled.
-
-### Fixed: The fallback save script ignored the Free tier limit
-
-**Worth knowing if you are on the Free tier.** When the MCP server is not
-available, LoreConvo falls back to a save script. That script was not checking
-the 50-session Free limit, so saving through it let you go past 50 sessions
-when saving the normal way would have stopped you.
-
-The script now applies the same limit everywhere. If you had gone over 50 this
-way, your sessions are all still there and nothing has been removed -- but new
-saves will now tell you the limit is reached until you upgrade. Updating a
-session you already saved is unaffected, since that does not add to the count.
+Importing more sessions than the free tier allows now returns the upgrade link
+along with the limit message, so you can see what the limit is and what to do
+about it in one place.
 
 <!-- WHATS_NEW:END -->
 

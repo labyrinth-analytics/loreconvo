@@ -4,6 +4,46 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.10.4 (2026-08-14)
+
+### Fixed: Session times are now consistent across your whole history
+
+Older sessions recorded their times in your computer's local timezone, while
+newer ones record UTC. With both in one database, sorting by "most recent"
+could put sessions in the wrong order, and a date filter could skip sessions
+saved near midnight.
+
+Everything records UTC now. The first time you open your database after
+upgrading, LoreConvo converts the older entries once, using your machine's
+current offset. Entries whose stored value was never a real timestamp are left
+exactly as they are rather than guessed at. Nothing is deleted, and there is
+nothing you need to do.
+
+### Fixed: Searching for a ticket number or any hyphenated term
+
+In the fallback search script, a query like `SH-100406` was read as search
+syntax instead of as text, so it either errored or came back empty. Hyphens,
+colons and similar characters are now treated as part of the term you typed.
+
+Adding a second word now narrows the search instead of emptying it. A two-word
+query used to be matched as one exact phrase, so adding a word to an otherwise
+good search could take you from several results to none.
+
+### New: LoreConvo tells you when automatic saving has stopped working
+
+If the save hook cannot run, the sessions it should have captured simply were
+not there, and nothing said so. Asking LoreConvo about your server or your
+stats now reports whether saving is currently failing, so a silent gap in your
+history is something you can find out about instead of discovering later.
+
+### Improved: A clearer next step when an import hits the free limit
+
+Importing more sessions than the free tier allows now returns the upgrade link
+along with the limit message, so you can see what the limit is and what to do
+about it in one place.
+
+---
+
 ## v0.10.3 (2026-08-11)
 
 ### New: Merge sessions that say the same thing
