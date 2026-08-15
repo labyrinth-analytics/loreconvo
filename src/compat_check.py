@@ -86,33 +86,47 @@ def detect_install_kind() -> str:
 
 
 def extract_live_version_from_source() -> Optional[str]:
-    """Extract version from pyproject.toml when in editable install.
+    """Extract version from the live source pyproject.toml when editable.
 
-    Returns the version string if found and readable, None otherwise.
-    Only useful when detect_install_kind() returns 'editable'.
+    For a PEP 660 editable install the dist-info sits in site-packages and
+    the real source root is recorded in direct_url.json's 'url' field.
+    Falls back to the legacy co-located layout (setup.py develop) before
+    giving up. Returns the version string if found and readable, None
+    otherwise. Only useful when detect_install_kind() returns 'editable'.
     """
     if detect_install_kind() != 'editable':
         return None
 
     try:
         from pathlib import Path
+        import json
         dist = importlib.metadata.distribution(_PRODUCT_DIST_NAME)
 
-        pyproject_path = None
+        candidates = []
         if hasattr(dist, '_path') and dist._path:
-            # Try dist-info parent directory
-            pyproject_path = dist._path.parent / 'pyproject.toml'
+            # PEP 660 editables: the source root is in direct_url.json.
+            direct_url_path = dist._path / 'direct_url.json'
+            if direct_url_path.exists():
+                try:
+                    data = json.loads(direct_url_path.read_text())
+                    url = data.get('url', '')
+                    if url.startswith('file://'):
+                        src_root = Path(url[7:])
+                        candidates.append(src_root / 'pyproject.toml')
+                except Exception:
+                    pass
+            # Legacy co-located installs: egg-info/dist-info inside the source tree.
+            candidates.append(dist._path.parent / 'pyproject.toml')
+            candidates.append(dist._path.parent.parent / 'pyproject.toml')
+
+        for pyproject_path in candidates:
             if not pyproject_path.exists():
-                pyproject_path = dist._path.parent.parent / 'pyproject.toml'
-
-        if not pyproject_path or not pyproject_path.exists():
-            return None
-
-        content = pyproject_path.read_text()
-        import re
-        match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
-        if match:
-            return match.group(1)
+                continue
+            content = pyproject_path.read_text()
+            import re
+            match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
+            if match:
+                return match.group(1)
         return None
     except Exception:
         return None
