@@ -228,6 +228,26 @@ def ensure_tables(conn):
     ensure_schema(conn)
 
 
+def _has_explicit_save_signature(tags_json: str | None) -> bool:
+    """True if the stored tags indicate an explicit agent_session_end.py save.
+
+    Explicit saves always carry role:<team> (agent_session_end.py adds it from
+    AGENT_ROLE). auto_save's own tags -- ['auto-captured'] plus optional
+    agent:/run: copied from the launcher environment -- never include a role:
+    tag, so role: is the reliable discriminator between a rich explicit save
+    and a shallow hook parse (SH-100589).
+    """
+    if not tags_json:
+        return False
+    try:
+        tags = json.loads(tags_json)
+    except Exception:
+        return False
+    if not isinstance(tags, list):
+        return False
+    return any(str(t).startswith("role:") for t in tags)
+
+
 def save_to_db(db_path, session_id, parsed, project=None, source="session"):
     """Save parsed session data via storage_core.
 
@@ -244,8 +264,10 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
         session_uuid = session_id
 
         # Check if session already exists (e.g., resumed session or duplicate hook fire)
-        cursor = conn.execute("SELECT id FROM sessions WHERE id = ?", (session_uuid,))
-        exists = cursor.fetchone() is not None
+        cursor = conn.execute("SELECT id, tags FROM sessions WHERE id = ?", (session_uuid,))
+        row = cursor.fetchone()
+        exists = row is not None
+        existing_tags_json = row[1] if row else None
 
         now = utc_now_iso()
         tags_json = json.dumps(auto_save_tags())
@@ -254,6 +276,16 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
         open_questions_json = json.dumps(parsed.get("open_questions", []))
 
         if exists:
+            # SH-100589: never regress an explicit (rich) save to a shallower
+            # hook parse. agent_session_end.py's save always carries
+            # role:<team>; auto_save's tags never do. If the existing row
+            # already has an explicit save, leave it untouched.
+            if _has_explicit_save_signature(existing_tags_json):
+                sys.stderr.write(
+                    "LoreConvo auto-save: skipping update -- existing session "
+                    f"{session_uuid} has an explicit save; nothing overwritten\n"
+                )
+                return True
             # Already saved -- update instead of duplicate.
             conn.execute(
                 """UPDATE sessions SET summary = ?, decisions = ?, artifacts = ?,
