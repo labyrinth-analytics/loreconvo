@@ -1928,15 +1928,30 @@ def get_server_info() -> dict:
     compatibility status. Useful for diagnosing version mismatches on running
     servers without requiring a restart.
 
-    Returns dict with: product_name, product_version, mcp_installed, mcp_tested,
-    mcp_accepted, status (ok|mismatch|undetermined|disabled|internal_error), note,
+    Returns dict with: product_name, product_version, install_kind (wheel|editable),
+    version_from_source (if editable), mcp_installed, mcp_tested, mcp_accepted,
+    status (ok|mismatch|undetermined|disabled|internal_error), note,
     error_detail (set only on internal_error), hook_saves_failing.
     """
-    # Defensive copy: check() returns its module-level cache object directly, so
-    # handing it out unwrapped lets any caller mutation corrupt the cache for
-    # every later call. Restored after SH-13429's second pass dropped it.
+    from compat_check import detect_install_kind, extract_live_version_from_source
+
     result = _compat_check()
     result_copy = dict(result)
+
+    install_kind = detect_install_kind()
+    result_copy["install_kind"] = install_kind
+
+    if install_kind == "editable":
+        live_version = extract_live_version_from_source()
+        if live_version:
+            result_copy["version_from_source"] = live_version
+        existing_note = result_copy.get("note", "")
+        editable_note = "Product version from install-time metadata (frozen at pip install -e); may lag actual source"
+        if existing_note:
+            result_copy["note"] = existing_note + "; " + editable_note
+        else:
+            result_copy["note"] = editable_note
+
     data_dir = Path(_get_db().config.db_path).parent
     breadcrumb_path = data_dir / "hook_failure.json"
     result_copy["hook_saves_failing"] = breadcrumb_path.exists()

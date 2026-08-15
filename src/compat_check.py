@@ -61,6 +61,63 @@ def _get_installed_mcp_version() -> Optional[str]:
     return None
 
 
+def detect_install_kind() -> str:
+    """Return 'wheel' or 'editable' based on install method.
+
+    Checks if installed via `pip install -e` (editable) by looking for
+    direct_url.json with "editable": true in the dist-info directory.
+    Returns 'wheel' if detection fails or not editable.
+    """
+    try:
+        dist = importlib.metadata.distribution(_PRODUCT_DIST_NAME)
+        if hasattr(dist, '_path') and dist._path:
+            direct_url_path = dist._path / 'direct_url.json'
+            if direct_url_path.exists():
+                import json
+                try:
+                    data = json.loads(direct_url_path.read_text())
+                    if data.get('dir_info', {}).get('editable'):
+                        return 'editable'
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return 'wheel'
+
+
+def extract_live_version_from_source() -> Optional[str]:
+    """Extract version from pyproject.toml when in editable install.
+
+    Returns the version string if found and readable, None otherwise.
+    Only useful when detect_install_kind() returns 'editable'.
+    """
+    if detect_install_kind() != 'editable':
+        return None
+
+    try:
+        from pathlib import Path
+        dist = importlib.metadata.distribution(_PRODUCT_DIST_NAME)
+
+        pyproject_path = None
+        if hasattr(dist, '_path') and dist._path:
+            # Try dist-info parent directory
+            pyproject_path = dist._path.parent / 'pyproject.toml'
+            if not pyproject_path.exists():
+                pyproject_path = dist._path.parent.parent / 'pyproject.toml'
+
+        if not pyproject_path or not pyproject_path.exists():
+            return None
+
+        content = pyproject_path.read_text()
+        import re
+        match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
+        if match:
+            return match.group(1)
+        return None
+    except Exception:
+        return None
+
+
 def check() -> Dict:
     """Return MCP compatibility status. Never raises.
 
