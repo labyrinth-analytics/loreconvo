@@ -23,6 +23,14 @@ from core.database import (
     _pinning_enabled, parse_session_id,
 )
 from core import graph
+from core.loredocs_bridge import (
+    CROSS_LINK_EMBEDDING_MODEL,
+    LoreDocsAccessError,
+    LoreDocsSchemaError,
+    discover_loredocs_db,
+    get_cross_product_links,
+    link_session_to_doc,
+)
 from core.config import Config, set_tier as _set_tier_config
 from core.license import get_license_status, LORECONVO_UPGRADE_URL
 from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onboard_config_path
@@ -1826,56 +1834,38 @@ def get_docs_for_session(session_id: str, limit: int = 5) -> dict:
         reason                  -- set when cross_product_available is False
     """
     try:
-        from loredocs.storage import (
-            VaultStorage, CROSS_LINK_SCHEMA_VERSION,
-            REQUIRED_CROSS_LINK_SCHEMA_VERSION,
-            _CROSS_LINK_EMBEDDING_MODEL,
-            discover_product_db, DiscoveryError,
-        )
-        from loredocs.tiers import get_tier, TIER_PRO
-    except ImportError:
+        ld_db = discover_loredocs_db()
+    except LoreDocsAccessError as exc:
         return {
             "schema_version": 0,
             "cross_product_available": False,
-            "reason": "Cross-product linking unavailable",
-            "links": [],
-        }
-
-    try:
-        ld_db = discover_product_db("loredocs")
-    except DiscoveryError:
-        return {
-            "schema_version": 0,
-            "cross_product_available": False,
-            "reason": "Cross-product linking unavailable",
+            "reason": f"LoreDocs installed but unreachable: {exc}",
             "links": [],
         }
     if ld_db is None:
         return {
             "schema_version": 0,
             "cross_product_available": False,
-            "reason": "Cross-product linking unavailable",
+            "reason": "LoreDocs not installed",
             "links": [],
         }
 
-    ld_storage = VaultStorage(ld_db.parent)
-    # Verify schema version before consuming
-    if CROSS_LINK_SCHEMA_VERSION < REQUIRED_CROSS_LINK_SCHEMA_VERSION:
+    try:
+        return get_cross_product_links(
+            ld_db,
+            source_product="loreconvo",
+            source_id=session_id,
+            current_embedding_model=CROSS_LINK_EMBEDDING_MODEL,
+            limit=limit,
+            is_pro=_get_db().config.is_pro,
+        )
+    except LoreDocsSchemaError as exc:
         return {
-            "schema_version": CROSS_LINK_SCHEMA_VERSION,
+            "schema_version": 0,
             "cross_product_available": False,
-            "reason": "Cross-product linking unavailable",
+            "reason": f"LoreDocs schema too old: {exc}",
             "links": [],
         }
-
-    is_pro = _get_db().config.is_pro
-    return ld_storage.get_cross_product_links(
-        source_product="loreconvo",
-        source_id=session_id,
-        current_embedding_model=_CROSS_LINK_EMBEDDING_MODEL,
-        limit=limit,
-        is_pro=is_pro,
-    )
 
 
 @mcp.tool(title="Link Session to Doc")
@@ -1892,32 +1882,30 @@ def session_link_doc(session_id: str, doc_id: str, vault_id: str) -> dict:
 
     Returns dict with:
         ok      -- bool
-        reason  -- failure description on error (generic; details in debug log)
+        reason  -- failure description on error. Specific since SH-100670:
+                   "LoreDocs not installed" | "LoreDocs installed but
+                   unreachable: <detail>" | "LoreDocs schema too old: <detail>"
+                   | "vault not found" | "vault has cross-linking disabled"
+                   | "document not found"
     """
     try:
-        from loredocs.storage import (
-            VaultStorage, discover_product_db, DiscoveryError,
-        )
-        from loredocs.tiers import get_tier, TIER_PRO
-    except ImportError:
-        return {"ok": False, "reason": "Cross-product linking unavailable"}
+        ld_db = discover_loredocs_db()
+    except LoreDocsAccessError as exc:
+        return {"ok": False, "reason": f"LoreDocs installed but unreachable: {exc}"}
+    if ld_db is None:
+        return {"ok": False, "reason": "LoreDocs not installed"}
 
     try:
-        ld_db = discover_product_db("loredocs")
-    except DiscoveryError:
-        return {"ok": False, "reason": "Cross-product linking unavailable"}
-    if ld_db is None:
-        return {"ok": False, "reason": "Cross-product linking unavailable"}
-
-    ld_storage = VaultStorage(ld_db.parent)
-    is_pro = _get_db().config.is_pro
-    return ld_storage.link_session_to_doc(
-        session_id=session_id,
-        doc_id=doc_id,
-        vault_id=vault_id,
-        link_type="manual",
-        is_pro=is_pro,
-    )
+        return link_session_to_doc(
+            ld_db,
+            session_id=session_id,
+            doc_id=doc_id,
+            vault_id=vault_id,
+            link_type="manual",
+            is_pro=_get_db().config.is_pro,
+        )
+    except LoreDocsSchemaError as exc:
+        return {"ok": False, "reason": f"LoreDocs schema too old: {exc}"}
 
 
 @mcp.tool(title="Get Server Info")
