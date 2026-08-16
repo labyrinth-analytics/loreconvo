@@ -34,6 +34,7 @@ from core.loredocs_bridge import (
 from core.config import Config, set_tier as _set_tier_config
 from core.license import get_license_status, LORECONVO_UPGRADE_URL
 from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onboard_config_path
+from core.timeutil import parse_iso_utc
 from compat_check import check as _compat_check, emit_startup_warnings as _compat_emit
 
 
@@ -353,6 +354,34 @@ def get_session(session_id: str) -> dict:
     }
 
 
+def _validate_date_range(after: str | None, before: str | None) -> str | None:
+    """Validate search_sessions() after/before params. Returns an error message, or None if valid.
+
+    Uses parse_iso_utc() rather than datetime.fromisoformat() directly so the
+    documented 'Z' suffix format works on Python 3.10 (see core/timeutil.py).
+    """
+    if after is not None:
+        try:
+            after_dt = parse_iso_utc(after)
+        except ValueError:
+            return f"after must be an ISO 8601 UTC instant (e.g. '2026-07-06T00:00:00Z'), got {after!r}"
+    else:
+        after_dt = None
+
+    if before is not None:
+        try:
+            before_dt = parse_iso_utc(before)
+        except ValueError:
+            return f"before must be an ISO 8601 UTC instant (e.g. '2026-07-06T00:00:00Z'), got {before!r}"
+    else:
+        before_dt = None
+
+    if after_dt is not None and before_dt is not None and after_dt >= before_dt:
+        return f"after ({after!r}) must be strictly before before ({before!r})"
+
+    return None
+
+
 @mcp.tool(title="Search Sessions")
 def search_sessions(
     query: str,
@@ -364,6 +393,8 @@ def search_sessions(
     include_external: bool = False,
     semantic: bool = False,
     include_expired: bool = False,
+    after: str | None = None,
+    before: str | None = None,
 ) -> list[dict]:
     """Search session memory by keyword, with optional filters.
 
@@ -384,8 +415,21 @@ def search_sessions(
             rebuild_index to build it after first Pro activation.
         include_expired: If True, include sessions whose expires_at is in the past.
             Default False (expired sessions are hidden from search).
+        after: Optional ISO 8601 UTC instant (e.g. "2026-07-06T00:00:00Z"). Only
+            sessions started at or after this instant are returned.
+        before: Optional ISO 8601 UTC instant. Only sessions started strictly
+            before this instant are returned.
+
+            To answer a question like "what did I work on last week", resolve
+            the range yourself -- you know the user's local date, the server
+            does not -- and pass the two instants. Do not put date words in
+            `query`; they are matched as literal keywords, not parsed.
     """
-    results = _get_db().search_sessions(query, persona, tags, skills, project, limit, include_external=include_external, semantic=semantic, include_expired=include_expired)
+    error = _validate_date_range(after, before)
+    if error:
+        return {"error": error}
+
+    results = _get_db().search_sessions(query, persona, tags, skills, project, limit, include_external=include_external, semantic=semantic, include_expired=include_expired, after=after, before=before)
     return [
         {
             "id": r.session.id,
