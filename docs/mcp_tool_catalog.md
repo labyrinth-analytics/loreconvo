@@ -524,6 +524,77 @@ Pinning can be disabled globally via `LORECONVO_DISABLE_PINNING=1` or
 
 ---
 
+## Cross-Product Linking (Pro)
+
+---
+
+### get_docs_for_session
+
+Retrieve LoreDocs documents cross-linked to a LoreConvo session. Requires both
+LoreConvo Pro and LoreDocs Pro -- free-tier callers get an empty list back, not
+an error.
+
+**When Claude uses this tool:**
+> You: "What LoreDocs pages relate to this session?"
+> Claude: *calls get_docs_for_session with the current session ID*
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `session_id` | text | yes | -- | UUID of the LoreConvo session to look up. |
+| `limit` | integer | no | 5 | Maximum number of linked documents to return. |
+
+Returns a dict with `schema_version`, `cross_product_available`, `tier_gate`
+(`"satisfied"` or `"pro_required"`), and `links` (list of matched documents,
+manual links sorted first, stale-embedding auto-links flagged with
+`is_stale` and an `upgrade_message`). When `cross_product_available` is
+`false`, a `reason` field explains why:
+
+| Reason | Meaning |
+|--------|---------|
+| `LoreDocs not installed` | No LoreDocs database found on this machine. |
+| `LoreDocs installed but unreachable: <detail>` | LoreDocs is installed but its database could not be opened. |
+| `LoreDocs schema too old: <detail>` | LoreDocs is installed but its database predates cross-product linking support -- upgrade LoreDocs. |
+
+---
+
+### session_link_doc
+
+Manually create a cross-product link from a LoreConvo session to a LoreDocs
+document. Manual links are available on all tiers (not Pro-gated) -- only the
+automatic discovery in `get_docs_for_session` requires Pro.
+
+**When Claude uses this tool:**
+> You: "Link this session to the architecture doc we just wrote."
+> Claude: *calls session_link_doc with the session ID, doc ID, and vault ID*
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `session_id` | text | yes | -- | UUID of the LoreConvo session. |
+| `doc_id` | text | yes | -- | ID of the LoreDocs document to link. |
+| `vault_id` | text | yes | -- | LoreDocs vault containing the document. |
+
+Returns `{"ok": true, "session_id": "...", "doc_id": "..."}` on success, or
+`{"ok": false, "reason": "..."}` on failure:
+
+| Reason | Meaning |
+|--------|---------|
+| `LoreDocs not installed` | No LoreDocs database found on this machine. |
+| `LoreDocs installed but unreachable: <detail>` | LoreDocs is installed but its database could not be opened. |
+| `LoreDocs schema too old: <detail>` | LoreDocs is installed but its database predates cross-product linking support -- upgrade LoreDocs. |
+| `vault not found` | The given `vault_id` does not exist in LoreDocs. |
+| `vault has cross-linking disabled` | The vault has cross-product linking opted out. |
+| `document not found` | The given `doc_id` does not exist (or was deleted) in that vault. |
+
+Both products read each other's database directly (no shared Python
+environment or package installation is required between them) -- installing
+LoreConvo and LoreDocs from separate marketplace installs is sufficient.
+
+---
+
 ## Quick Reference
 
 | Tool | One-line summary |
