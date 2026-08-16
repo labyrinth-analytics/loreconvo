@@ -26,6 +26,13 @@ now distinguishable in the tool responses: "LoreDocs not installed,"
 "installed but unreachable," and "schema too old," instead of all returning
 the same opaque message.
 
+### Fixed: Server info now reports the right version on a development install
+
+If you run LoreConvo from a local checkout instead of a normal install, the
+diagnostic info it reports about itself could silently be wrong -- it only
+knew how to find your version number in one specific layout, and reported
+nothing usable in the more common one. It now recognizes both.
+
 ## v0.10.4 (2026-08-14)
 
 ### Fixed: Session times are now consistent across your whole history
