@@ -24,6 +24,7 @@ import math
 import os
 import re
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -48,6 +49,22 @@ DEDUP_MODES = {
 DEDUP_DEFAULT = "off"       # r4: opt-in. Flipping this is a gated release decision.
 
 _dedup_log = logging.getLogger("loreconvo.consolidation.dedup")
+
+# Proactive consolidation trigger (SH-12693 r5)
+PROACTIVE_MIN_SIGNALS = None              # Default off -- opt in by setting env var LORECONVO_PROACTIVE_MIN_SIGNALS
+PROACTIVE_MIN_MESSAGES = 40               # minimum message count for any session
+PROACTIVE_COOLDOWN_MINUTES = 60           # minutes between consolidation of same (project, surface)
+RECOMMENDED_MIN_SIGNALS = 5               # suggested starting point, not a default
+
+
+@dataclass(frozen=True)
+class ProactiveTrigger:
+    """Passed consolidation gates; ready to run."""
+    project: Optional[str]
+    surface: str
+    message_count: int
+    signal_count: int
+    min_signals: int
 
 
 def _resolve_dedup(dedup_arg):
@@ -95,6 +112,137 @@ _TECHFACT_PREFIXES = (
     "stack:", "model:", "version ", "running on", "deployed to",
     "using ", "framework:", "library:", "tool:",
 )
+
+
+def check_proactive_consolidation(
+    *, project, surface, source, is_pro, message_count, signal_count, db, now=None
+) -> Optional[ProactiveTrigger]:
+    """Evaluate proactive consolidation gates.
+
+    Returns ProactiveTrigger if session qualifies, else None.
+    Each None path logs its reason. Pure except for reading memory_digest.updated_at.
+
+    Args:
+        project: session project name
+        surface: session surface (code/cowork/chat)
+        source: session source (session/periodic/stop/file_memory)
+        is_pro: whether user is Pro tier
+        message_count: number of messages in transcript
+        signal_count: decisions + open_questions
+        db: database connection
+        now: current timestamp (default: datetime.now(timezone.utc))
+
+    Returns:
+        ProactiveTrigger if gates pass, None if any gate rejects.
+    """
+
+    logger = logging.getLogger(__name__)
+
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    # Gate 1: ENV VAR UNSET OR INVALID -> None (Default state)
+    min_signals_str = os.environ.get("LORECONVO_PROACTIVE_MIN_SIGNALS", "").strip()
+    if not min_signals_str:
+        return None  # silent: feature is off by default
+
+    try:
+        min_signals = int(min_signals_str)
+        if not (1 <= min_signals <= 10000):
+            logger.warning(f"LORECONVO_PROACTIVE_MIN_SIGNALS out of range [1,10000]: {min_signals_str}")
+            return None
+    except ValueError:
+        logger.warning(f"LORECONVO_PROACTIVE_MIN_SIGNALS non-numeric: {min_signals_str}")
+        return None
+
+    # Gate 2: PRO TIER CHECK
+    if not is_pro:
+        logger.info(f"Proactive trigger: non-Pro user, skipping")
+        return None
+
+    # Gate 3: SOURCE ALLOWLIST (only 'session')
+    if source != "session":
+        logger.info(f"Proactive trigger: source={source!r} not allowed, skipping")
+        return None
+
+    # Gate 4-6: VALIDATE OTHER THRESHOLDS
+    # Min messages
+    min_messages_str = os.environ.get("LORECONVO_PROACTIVE_MIN_MESSAGES", "").strip()
+    if min_messages_str:
+        try:
+            min_messages = int(min_messages_str)
+            if not (1 <= min_messages <= 100000):
+                logger.warning(f"LORECONVO_PROACTIVE_MIN_MESSAGES out of range [1,100000]: {min_messages_str}")
+                return None
+        except ValueError:
+            logger.warning(f"LORECONVO_PROACTIVE_MIN_MESSAGES non-numeric: {min_messages_str}")
+            return None
+    else:
+        min_messages = PROACTIVE_MIN_MESSAGES
+
+    # Cooldown minutes
+    cooldown_str = os.environ.get("LORECONVO_PROACTIVE_COOLDOWN_MINUTES", "").strip()
+    if cooldown_str:
+        try:
+            cooldown_minutes = int(cooldown_str)
+            if not (1 <= cooldown_minutes <= 10080):  # 1 week max
+                logger.warning(f"LORECONVO_PROACTIVE_COOLDOWN_MINUTES out of range [1,10080]: {cooldown_str}")
+                return None
+        except ValueError:
+            logger.warning(f"LORECONVO_PROACTIVE_COOLDOWN_MINUTES non-numeric: {cooldown_str}")
+            return None
+    else:
+        cooldown_minutes = PROACTIVE_COOLDOWN_MINUTES
+
+    # Gate 5: SIGNAL COUNT CHECK
+    if signal_count < min_signals:
+        logger.debug(f"Proactive trigger: signal_count={signal_count} < min={min_signals}, skipping")
+        return None
+
+    # Gate 6: MESSAGE COUNT CHECK
+    if message_count < min_messages:
+        logger.debug(f"Proactive trigger: message_count={message_count} < min={min_messages}, skipping")
+        return None
+
+    # Gate 7: COOLDOWN CHECK
+    try:
+        row = db.execute(
+            "SELECT updated_at FROM memory_digest WHERE project = ? AND surface = ?",
+            (project or "", surface)
+        ).fetchone()
+
+        if row and row[0]:
+            # Parse the timestamp
+            try:
+                last_update = datetime.fromisoformat(row[0].replace('Z', '+00:00'))
+            except:
+                # Unparseable timestamp -> allow the run (erring toward running)
+                logger.info(f"Proactive trigger: digest timestamp unparseable, allowing run")
+                last_update = None
+
+            if last_update:
+                # Check clock skew (erring toward running)
+                delta = (now - last_update).total_seconds() / 60.0  # minutes
+
+                if delta < 0:
+                    # Clock moved backwards -> allow run
+                    logger.info(f"Proactive trigger: negative clock delta {delta:.1f}min, allowing run")
+                elif 0 <= delta < cooldown_minutes:
+                    # Within cooldown -> skip
+                    logger.debug(f"Proactive trigger: cooldown active ({delta:.1f}min < {cooldown_minutes}min), skipping")
+                    return None
+                # else: cooldown elapsed, fall through to Gate 8
+    except Exception as e:
+        logger.debug(f"Proactive trigger: cooldown check failed ({e}), allowing run")
+
+    # Gate 8: PASS -> return trigger
+    return ProactiveTrigger(
+        project=project,
+        surface=surface,
+        message_count=message_count,
+        signal_count=signal_count,
+        min_signals=min_signals
+    )
 
 
 class HeuristicConsolidator:
