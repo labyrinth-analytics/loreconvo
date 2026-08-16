@@ -47,6 +47,20 @@ constant-sync check.
 New coverage: `tests/test_search_date_range.py`, plus additions to
 `tests/test_start_date_normalization.py` and `tests/test_timeutil.py`.
 
+### Fixed: `compat_check.extract_live_version_from_source()` PEP 660 resolution (SH-100401)
+
+Only handled the legacy co-located editable-install layout (dist-info
+alongside the source tree), so a proper PEP 660 editable install (dist-info
+in site-packages, source root elsewhere) returned `None` instead of the live
+version. Now reads `direct_url.json`'s `url` field first to locate the real
+source root, falling back to the legacy layout. `get_server_info`'s
+`install_kind`/`version_from_source` self-declaration depends on this
+function, so this is what made that reporting correct on a real editable
+install rather than only on the co-located dev layout. Also fixed a
+cross-contamination bug where `compat_check.py`'s absolute import could
+resolve to LoreDocs' `compat_check` module instead of its own. 14 new tests
+(6 loreconvo `compat_check`, 6 loredocs `compat_check`, 2 shape-parity).
+
 ## v0.10.4 (2026-08-14)
 
 ### Added: `core/timeutil.utc_now_iso()` as the single timestamp source
