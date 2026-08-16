@@ -715,13 +715,14 @@ class SessionDatabase:
             # without it one bad row aborts the entire migration on the
             # sessions.start_date NOT NULL constraint, and would blank out an
             # otherwise valid end_date/updated_at.
-            self.conn.execute("""
+            start_date_cursor = self.conn.execute("""
                 UPDATE sessions
                 SET start_date = strftime('%Y-%m-%dT%H:%M:%SZ', start_date || ?)
                 WHERE start_date NOT LIKE '%Z'
                   AND start_date NOT GLOB '*[+-][0-9][0-9]:[0-9][0-9]'
                   AND strftime('%Y-%m-%dT%H:%M:%SZ', start_date || ?) IS NOT NULL
             """, (offset_formatted, offset_formatted))
+            converted_count = start_date_cursor.rowcount
 
             self.conn.execute("""
                 UPDATE sessions
@@ -732,14 +733,28 @@ class SessionDatabase:
                   AND strftime('%Y-%m-%dT%H:%M:%SZ', end_date || ?) IS NOT NULL
             """, (offset_formatted, offset_formatted))
 
+            # NOTE (SH-100303 r4 HIGH disposition): the `sessions` table has no
+            # `updated_at` column -- verified against storage_core.py's schema.
+            # The architecture proposal conflated it with memory_digests.updated_at,
+            # a separate table. An UPDATE against sessions.updated_at was removed
+            # here: it always raised sqlite3.OperationalError, which the
+            # top-level except swallowed silently, aborting this method before
+            # the audit-log write below ever ran (isolation_level=None means the
+            # start_date/end_date UPDATEs above still committed individually).
+
+            # Records the one unrecoverable assumption this migration makes --
+            # a naive-local row's original offset cannot be known, so the
+            # machine's current offset stands in for it (SH-100303 r4 HIGH
+            # disposition: "the assumed offset is recorded, not hidden").
             self.conn.execute("""
-                UPDATE sessions
-                SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', updated_at || ?)
-                WHERE updated_at IS NOT NULL
-                  AND updated_at NOT LIKE '%Z'
-                  AND updated_at NOT GLOB '*[+-][0-9][0-9]:[0-9][0-9]'
-                  AND strftime('%Y-%m-%dT%H:%M:%SZ', updated_at || ?) IS NOT NULL
-            """, (offset_formatted, offset_formatted))
+                INSERT OR REPLACE INTO schema_migration_log
+                    (migration_name, from_version, to_version)
+                VALUES (?, ?, ?)
+            """, (
+                "normalize_start_date_utc",
+                "naive-local (assumed offset unknown)",
+                f"utc+z (assumed_offset={offset_formatted}, converted={converted_count})",
+            ))
 
             self.conn.commit()
 
@@ -1798,6 +1813,8 @@ class SessionDatabase:
         limit: int,
         include_external: bool,
         include_expired: bool = False,
+        after: Optional[str] = None,
+        before: Optional[str] = None,
     ) -> List[SearchResult]:
         """Fetch sessions by ID (Lance results) and apply post-filters.
 
@@ -1806,11 +1823,18 @@ class SessionDatabase:
         _exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
         placeholders = ",".join("?" * len(session_ids))
         sql = f"SELECT * FROM sessions WHERE id IN ({placeholders})"
+        params = list(session_ids)
         if _exclusion_enabled and not include_external:
             sql += " AND (external_tool_session IS NULL OR external_tool_session = 0)"
         if not include_expired:
             sql += " AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
-        rows = self.conn.execute(sql, session_ids).fetchall()
+        if after is not None:
+            sql += " AND start_date >= ?"
+            params.append(after)
+        if before is not None:
+            sql += " AND start_date < ?"
+            params.append(before)
+        rows = self.conn.execute(sql, params).fetchall()
 
         # Preserve relevance order from session_ids
         id_to_row = {row['id']: row for row in rows}
@@ -2696,6 +2720,8 @@ class SessionDatabase:
         include_external: bool = False,
         semantic: bool = False,
         include_expired: bool = False,
+        after: Optional[str] = None,
+        before: Optional[str] = None,
     ) -> List[SearchResult]:
         # Semantic path: Pro tier + Lance index available
         if semantic and self.config.is_pro:
@@ -2711,6 +2737,7 @@ class SessionDatabase:
                     return self._fetch_sessions_for_semantic(
                         session_ids, persona, tags, skills, limit, include_external,
                         include_expired=include_expired,
+                        after=after, before=before,
                     )
             # Fall through to FTS5 if Lance unavailable or no results
 
@@ -2727,6 +2754,13 @@ class SessionDatabase:
         if not include_expired:
             sql += " AND (s.expires_at IS NULL OR s.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
         params = [fts_query]
+
+        if after is not None:
+            sql += " AND s.start_date >= ?"
+            params.append(after)
+        if before is not None:
+            sql += " AND s.start_date < ?"
+            params.append(before)
 
         if persona:
             sql += " AND s.id IN (SELECT session_id FROM persona_sessions WHERE persona_name LIKE ?)"
