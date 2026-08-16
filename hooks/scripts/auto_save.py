@@ -380,6 +380,10 @@ def main():
             sys.stderr.write(f"LoreConvo: Auto-saved session '{parsed['title']}'\n")
             if _is_valid_transcript_path(transcript_path):
                 _dispatch_async_summarizer(session_id, transcript_path)
+            # Dispatch proactive consolidation trigger (SH-12693 r5)
+            signal_count = len(parsed.get("decisions", [])) + len(parsed.get("open_questions", []))
+            message_count = parsed.get("message_count", 0)
+            _dispatch_proactive_consolidation(project, "code", signal_count, message_count)
 
     except json.JSONDecodeError:
         sys.exit(0)
@@ -442,6 +446,42 @@ def _dispatch_async_summarizer(session_id, transcript_path):
         )
     except Exception as exc:
         sys.stderr.write(f"LoreConvo: async summarizer dispatch failed (non-fatal): {exc}\n")
+
+
+def _dispatch_proactive_consolidation(project, surface, signal_count, message_count):
+    """Fire-and-forget proactive consolidation trigger (SH-12693 r5).
+
+    Spawns the proactive_consolidate.py runner if LORECONVO_PROACTIVE_MIN_SIGNALS is set.
+    The hook returns immediately; consolidation happens asynchronously.
+    """
+    import subprocess
+    if not os.environ.get("LORECONVO_PROACTIVE_MIN_SIGNALS"):
+        return  # default off; no import, no work, no cost
+    try:
+        hook_dir = os.path.dirname(os.path.abspath(__file__))
+        runner = os.path.join(hook_dir, "..", "..", "src", "proactive_consolidate.py")
+        if not os.path.exists(runner):
+            return  # half-shipped release -> inert, not a crash
+        args = [
+            sys.executable, runner,
+            "--signals", str(signal_count),
+            "--messages", str(message_count),
+            "--project", project or "",
+            "--surface", surface
+        ]
+        # Pass current env so LORECONVO_* vars are inherited
+        def _log_path():
+            return str(os.path.join(os.path.expanduser("~"), ".loreconvo", "consolidate.log"))
+
+        subprocess.Popen(
+            args,
+            env=os.environ.copy(),
+            stdout=subprocess.DEVNULL,
+            stderr=open(_log_path(), "a"),  # stderr to log file, not DEVNULL
+            start_new_session=True,
+        )
+    except Exception as exc:
+        sys.stderr.write(f"LoreConvo: proactive consolidation dispatch failed (non-fatal): {exc}\n")
 
 
 if __name__ == "__main__":
