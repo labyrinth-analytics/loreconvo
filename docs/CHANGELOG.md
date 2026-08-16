@@ -4,7 +4,14 @@ What changed in each release, written for users (not developers).
 
 ---
 
-## Unreleased
+## v0.10.5 (2026-08-16)
+
+### New: Search sessions by date range
+
+Ask "what did I work on last week" or "show me sessions from before August,"
+and LoreConvo can now narrow the search to that window instead of returning
+everything and leaving you to scroll for it. You don't need to know any tool
+syntax -- just ask naturally, and the date range is resolved for you.
 
 ### Fixed: Cross-product linking now works on every install, not just dev machines
 

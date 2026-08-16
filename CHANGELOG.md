@@ -1,5 +1,52 @@
 # LoreConvo Changelog
 
+## v0.10.5 (2026-08-16)
+
+### Added: `core/loredocs_bridge.py` -- direct-sqlite3 LoreDocs access (SH-100670)
+
+Marketplace installs run LoreConvo and LoreDocs in isolated uvx environments,
+so `from loredocs.storage import ...` raised `ImportError` even when LoreDocs
+was installed and its database present -- a code path that only worked on a
+dev machine with both packages pip-installed into the same venv.
+`loredocs_bridge.py` reaches `~/.loredocs/loredocs.db` directly via `sqlite3`,
+mirroring the approach LoreDocs already uses in the reverse direction.
+Cross-link constants (schema version, embedding model/dim, L2 threshold,
+per-entity cap and debounce) are vendored copies of `loredocs/storage.py`'s
+definitions; `test_loredocs_bridge.py::TestConstantSync` imports the real
+`loredocs.storage` when available and asserts equality against it -- errors,
+does not skip, when loredocs is not importable (drift rule 1).
+
+Two new exception types, `LoreDocsAccessError` and `LoreDocsSchemaError`,
+make the three failure branches distinguishable instead of collapsing to one
+opaque message: not installed, installed but the DB is unreadable, and
+installed with a schema older than `REQUIRED_CROSS_LINK_SCHEMA_VERSION`. Four
+call sites converted: `get_docs_for_session`, `session_link_doc`,
+`_graph_cross_product_links`, `cross_link_session`. 32 new tests plus the
+constant-sync check.
+
+### Added: `after`/`before` date-range params on `search_sessions()` (SH-100303)
+
+`core/database.py:search_sessions()` and the `search_sessions` MCP tool in
+`server.py` take optional ISO-8601 UTC-instant `after`/`before` params, both
+`None` by default and inert when unset -- inclusive on `after`, exclusive on
+`before`. Closes the four open HIGH dispositions from the r4 review:
+
+- `datetime.fromisoformat()` rejects a trailing `Z` on Python 3.10 (accepted
+  from 3.11 on); the new `core/timeutil.parse_iso_utc()` normalizes `Z` ->
+  `+00:00` before parsing, so behavior no longer depends on interpreter
+  version.
+- The backfill-offset assumption from the v0.10.4 UTC migration is now
+  recorded in `schema_migration_log` -- the table existed but nothing wrote
+  to it.
+- Removed a dead `UPDATE` against `sessions.updated_at`, a column that does
+  not exist on `sessions` (the original proposal conflated it with
+  `memory_digests.updated_at`); it always raised `OperationalError`, silently
+  swallowed by the method's top-level `except`, which also skipped the
+  audit-log write above it.
+
+New coverage: `tests/test_search_date_range.py`, plus additions to
+`tests/test_start_date_normalization.py` and `tests/test_timeutil.py`.
+
 ## v0.10.4 (2026-08-14)
 
 ### Added: `core/timeutil.utc_now_iso()` as the single timestamp source

@@ -1,4 +1,4 @@
-# LoreConvo v0.10.4
+# LoreConvo v0.10.5
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -410,43 +410,27 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.4 (2026-08-14)
+## v0.10.5 (2026-08-16)
 
-### Fixed: Session times are now consistent across your whole history
+### New: Search sessions by date range
 
-Older sessions recorded their times in your computer's local timezone, while
-newer ones record UTC. With both in one database, sorting by "most recent"
-could put sessions in the wrong order, and a date filter could skip sessions
-saved near midnight.
+Ask "what did I work on last week" or "show me sessions from before August,"
+and LoreConvo can now narrow the search to that window instead of returning
+everything and leaving you to scroll for it. You don't need to know any tool
+syntax -- just ask naturally, and the date range is resolved for you.
 
-Everything records UTC now. The first time you open your database after
-upgrading, LoreConvo converts the older entries once, using your machine's
-current offset. Entries whose stored value was never a real timestamp are left
-exactly as they are rather than guessed at. Nothing is deleted, and there is
-nothing you need to do.
+### Fixed: Cross-product linking now works on every install, not just dev machines
 
-### Fixed: Searching for a ticket number or any hyphenated term
-
-In the fallback search script, a query like `SH-100406` was read as search
-syntax instead of as text, so it either errored or came back empty. Hyphens,
-colons and similar characters are now treated as part of the term you typed.
-
-Adding a second word now narrows the search instead of emptying it. A two-word
-query used to be matched as one exact phrase, so adding a word to an otherwise
-good search could take you from several results to none.
-
-### New: LoreConvo tells you when automatic saving has stopped working
-
-If the save hook cannot run, the sessions it should have captured simply were
-not there, and nothing said so. Asking LoreConvo about your server or your
-stats now reports whether saving is currently failing, so a silent gap in your
-history is something you can find out about instead of discovering later.
-
-### Improved: A clearer next step when an import hits the free limit
-
-Importing more sessions than the free tier allows now returns the upgrade link
-along with the limit message, so you can see what the limit is and what to do
-about it in one place.
+When you installed both LoreConvo and LoreDocs from the marketplace, linking
+a session to a document always returned "unavailable." The two plugins run in
+isolated environments, and LoreConvo was trying to import LoreDocs as a
+Python package -- something that works on a dev machine with both pip-installed
+but never on a real install. LoreConvo now reads the LoreDocs database
+directly (the same approach LoreDocs already uses in the other direction),
+so the linking tools work on every machine. The three failure conditions are
+now distinguishable in the tool responses: "LoreDocs not installed,"
+"installed but unreachable," and "schema too old," instead of all returning
+the same opaque message.
 
 <!-- WHATS_NEW:END -->
 
