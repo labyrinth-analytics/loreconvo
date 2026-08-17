@@ -18,7 +18,21 @@ fi
 RUN_PYTHON="uvx --from loreconvo==$PIN python"
 
 INPUT=$(cat)
+# SH-100629: timestamp before launch so the breadcrumb fallback can tell
+# whether the hook's own handler already wrote a fresher one.
+SINCE_EPOCH=$(date +%s)
 # $RUN_PYTHON is intentionally unquoted: it must word-split into command + args
 echo "$INPUT" | PYTHONPATH="$PLUGIN_ROOT/src" $RUN_PYTHON "$PLUGIN_ROOT/hooks/scripts/stop_save.py" >> "$LOG" 2>&1
+EXIT_CODE=$?
+
+if [ "$EXIT_CODE" -ne 0 ]; then
+    echo "[$(date)] status: failed (exit $EXIT_CODE)" >> "$LOG"
+    # A failure this early could be a module-scope import error that died
+    # before stop_save.py's own BootstrapError handler ever ran -- fall back
+    # to a generic breadcrumb via plain python3 (no package import needed).
+    # No-ops if a richer breadcrumb was already written this run.
+    python3 "$PLUGIN_ROOT/hooks/scripts/_write_generic_failure_breadcrumb.py" \
+        "stop_save" "$EXIT_CODE" "$SINCE_EPOCH" >> "$LOG" 2>&1
+fi
 
 exit 0
