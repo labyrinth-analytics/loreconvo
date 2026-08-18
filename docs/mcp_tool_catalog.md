@@ -96,6 +96,8 @@ Search session memory by keyword, with optional filters. Matches against titles,
 | `tags` | list of text | no | none | Filter to sessions with any of these tags |
 | `skills` | list of text | no | none | Filter to sessions that used any of these skills |
 | `project` | text | no | none | Filter to sessions in this project |
+| `after` | text | no | none | Return only sessions starting on or after this ISO-8601 UTC instant (e.g. `2026-08-01T00:00:00Z`). Inclusive. |
+| `before` | text | no | none | Return only sessions starting before this ISO-8601 UTC instant. Exclusive. |
 | `limit` | integer | no | 10 | Maximum results |
 
 **Returns:** Matching sessions ranked by relevance score, with summary preview and decisions.
