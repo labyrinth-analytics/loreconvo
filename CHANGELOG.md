@@ -1,5 +1,24 @@
 # LoreConvo Changelog
 
+## v0.10.6 (2026-08-19)
+
+### Fixed: `hook_saves_failing` blind spot on module-scope import failures (SH-100629)
+
+A module-scope import error in a hook process dies before `_bootstrap`'s
+`except BootstrapError` handler exists, so no `hook_failure.json` breadcrumb
+was ever written -- `hook_saves_failing` silently reported false throughout
+the outage (production hit this for 3h11m on 2026-08-14, `ModuleNotFoundError:
+loreconvo.src`). `hooks/scripts/_write_generic_failure_breadcrumb.py` is a
+stdlib-only fallback now invoked by the three save-hook shell wrappers
+(`on_stop.sh`, `on_session_end.sh`, `on_pre_compact.sh`) on non-zero exit; it
+writes a generic breadcrumb only if the hook's own handler hasn't already
+written a fresher, richer one this run (mtime-vs-launch-timestamp check).
+`scripts/audit_hook_module_imports.py` adds an AST-based static check (wired
+into `safe_git.py` Step 0n) banning module-scope `import <product>` in hook
+scripts, blocking the bug class at commit time. Out of scope:
+`on_periodic_save.sh` (opt-in) and `on_session_start.sh` (read path, not a
+save).
+
 ## v0.10.5 (2026-08-16)
 
 ### Added: `core/loredocs_bridge.py` -- direct-sqlite3 LoreDocs access (SH-100670)

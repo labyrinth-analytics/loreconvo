@@ -4,6 +4,17 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.10.6 (2026-08-19)
+
+### Fixed: Failure alerts could go silent during the exact outage they're meant to catch
+
+If a save hook crashed early enough -- before it finished starting up -- no
+failure was ever recorded, so the "automatic saving has stopped working"
+alert stayed silent through the one situation it exists to catch. Save hooks
+now record a failure through a backup path even when they die this early, so
+the alert fires for every failure mode, not just the ones that get far
+enough along to report on themselves.
+
 ## v0.10.5 (2026-08-16)
 
 ### New: Search sessions by date range
