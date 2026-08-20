@@ -1,4 +1,4 @@
-# LoreConvo v0.10.5
+# LoreConvo v0.10.6
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -410,27 +410,16 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.5 (2026-08-16)
+## v0.10.6 (2026-08-19)
 
-### New: Search sessions by date range
+### Fixed: Failure alerts could go silent during the exact outage they're meant to catch
 
-Ask "what did I work on last week" or "show me sessions from before August,"
-and LoreConvo can now narrow the search to that window instead of returning
-everything and leaving you to scroll for it. You don't need to know any tool
-syntax -- just ask naturally, and the date range is resolved for you.
-
-### Fixed: Cross-product linking now works on every install, not just dev machines
-
-When you installed both LoreConvo and LoreDocs from the marketplace, linking
-a session to a document always returned "unavailable." The two plugins run in
-isolated environments, and LoreConvo was trying to import LoreDocs as a
-Python package -- something that works on a dev machine with both pip-installed
-but never on a real install. LoreConvo now reads the LoreDocs database
-directly (the same approach LoreDocs already uses in the other direction),
-so the linking tools work on every machine. The three failure conditions are
-now distinguishable in the tool responses: "LoreDocs not installed,"
-"installed but unreachable," and "schema too old," instead of all returning
-the same opaque message.
+If a save hook crashed early enough -- before it finished starting up -- no
+failure was ever recorded, so the "automatic saving has stopped working"
+alert stayed silent through the one situation it exists to catch. Save hooks
+now record a failure through a backup path even when they die this early, so
+the alert fires for every failure mode, not just the ones that get far
+enough along to report on themselves.
 
 <!-- WHATS_NEW:END -->
 
