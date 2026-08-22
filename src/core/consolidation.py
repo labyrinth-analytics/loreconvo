@@ -207,7 +207,7 @@ def check_proactive_consolidation(
     # Gate 7: COOLDOWN CHECK
     try:
         row = db.execute(
-            "SELECT updated_at FROM memory_digest WHERE project = ? AND surface = ?",
+            "SELECT updated_at FROM memory_digests WHERE project = ? AND surface = ?",
             (project or "", surface)
         ).fetchone()
 
