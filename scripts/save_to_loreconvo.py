@@ -224,7 +224,7 @@ def save_session(args):
     now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
     # Parse JSON list args (accept both JSON strings and plain strings)
-    def parse_list(val):
+    def parse_list(val, flag_name=None):
         if not val:
             return []
         try:
@@ -233,12 +233,22 @@ def save_session(args):
                 return parsed
         except (json.JSONDecodeError, TypeError):
             pass
+        # Non-JSON fallback: warn but keep exit code 0
+        if flag_name:
+            truncated = val[:80] + ("..." if len(val) > 80 else "")
+            print(
+                f"WARNING: --{flag_name} value is not valid JSON. "
+                f"Expected format: '[\"item1\",\"item2\"]'. "
+                f"Received (truncated): {truncated!r}. "
+                f"Stored as single list element.",
+                file=sys.stderr,
+            )
         return [val]
 
-    decisions = parse_list(args.decisions)
-    artifacts = parse_list(args.artifacts)
-    open_questions = parse_list(args.open_questions)
-    tags = parse_list(args.tags)
+    decisions = parse_list(args.decisions, flag_name="decisions")
+    artifacts = parse_list(args.artifacts, flag_name="artifacts")
+    open_questions = parse_list(args.open_questions, flag_name="open-questions")
+    tags = parse_list(args.tags, flag_name="tags")
 
     if provided_id:
         existing = conn.execute(
