@@ -236,10 +236,16 @@ def save_session(
 
     # Merge artifacts with any existing auto-saved record when session_id is known
     merged_artifacts = artifacts or []
+    preserved_start_date = None
     if session_id is not None and not artifacts:
         existing = _get_db().get_session(session_id)
         if existing and existing.artifacts:
             merged_artifacts = existing.artifacts
+    # Preserve start_date when updating an existing session without explicit start_date
+    if session_id is not None and not start_date:
+        existing = _get_db().get_session(session_id)
+        if existing:
+            preserved_start_date = existing.start_date
 
     session = Session(
         title=title,
@@ -258,6 +264,8 @@ def save_session(
         session.id = session_id
     if start_date:
         session.start_date = start_date
+    elif preserved_start_date:
+        session.start_date = preserved_start_date
     if end_date:
         session.end_date = end_date
 
@@ -350,6 +358,7 @@ def get_session(session_id: str) -> dict:
         "open_questions": session.open_questions,
         "tags": session.tags,
         "skills_used": session.skills_used,
+        "reasoning_notes": session.reasoning_notes,
         "previous_summary": session.previous_summary,
     }
 
