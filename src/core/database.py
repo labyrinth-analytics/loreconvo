@@ -507,6 +507,7 @@ class SessionDatabase:
         self.conn.executescript(ANTI_PATTERN_SCHEMA_SQL)
         _validate_anti_pattern_schema(self.conn)
         self._sweep_anti_pattern_orphans()
+        self._sweep_cooccurrence_orphans()
         self._ensure_keep_forever_schema()
         self._migrate_add_agent_context_configs()
         self._migrate_add_memory_items_table()
@@ -1436,6 +1437,42 @@ class SessionDatabase:
                 "Startup sweep removed %d orphaned anti_pattern_sessions rows. "
                 "PRAGMA foreign_keys may not have been enforced on all prior connections. "
                 "Verify _open_conn() is used for every connection in database.py.",
+                orphan_count,
+            )
+
+    def _sweep_cooccurrence_orphans(self):
+        """Startup cleanup: remove orphaned session_cooccurrences rows (SH-100951).
+
+        Rows whose session_id references a deleted sessions row are legacy
+        residue from deletes performed before FK enforcement existed or
+        through connections that bypassed _open_conn(). The schema declares
+        ON DELETE CASCADE, but CASCADE only fires when PRAGMA foreign_keys=ON,
+        which SQLite defaults OFF per connection. All current delete paths
+        (delete_session, prune_expired_sessions) go through _open_conn()
+        connections with FK enforcement, so no new orphans accumulate -- this
+        sweep repairs existing damage only. Idempotent: a second run removes
+        0 rows and does not error. Logs the count removed so a customer with
+        a large repair sees what happened.
+        """
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            self.conn.execute("""
+                DELETE FROM session_cooccurrences
+                WHERE session_id NOT IN (SELECT id FROM sessions)
+            """)
+            orphan_count = self.conn.execute("SELECT changes()").fetchone()[0]
+            self.conn.execute("COMMIT")
+        except Exception:
+            self.conn.execute("ROLLBACK")
+            raise
+
+        if orphan_count > 0:
+            logger.warning(
+                "Startup sweep removed %d orphaned session_cooccurrences rows. "
+                "These are legacy residue from deletes performed before FK "
+                "enforcement existed or through connections that bypassed "
+                "_open_conn(). No new orphans should accumulate through the "
+                "supported path.",
                 orphan_count,
             )
 
