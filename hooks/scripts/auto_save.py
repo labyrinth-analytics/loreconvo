@@ -232,7 +232,7 @@ def _has_explicit_save_signature(tags_json: str | None) -> bool:
     """True if the stored tags indicate an explicit agent_session_end.py save.
 
     Explicit saves always carry role:<team> (agent_session_end.py adds it from
-    AGENT_ROLE). auto_save's own tags -- ['auto-captured'] plus optional
+    AGENT_SESSION_ROLE). auto_save's own tags -- ['auto-captured'] plus optional
     agent:/run: copied from the launcher environment -- never include a role:
     tag, so role: is the reliable discriminator between a rich explicit save
     and a shallow hook parse (SH-100589).
