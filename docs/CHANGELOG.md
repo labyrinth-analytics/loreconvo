@@ -4,6 +4,42 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.10.7 (2026-08-28)
+
+### Fixed: Updating a saved session no longer loses its original start date
+
+When you saved new details onto an existing session (adding a summary,
+decisions, or tags later in the day), the session's start date was quietly
+reset instead of being kept. Updates now preserve the original start date
+unless you explicitly provide a new one.
+
+### Fixed: Reasoning notes were saved but couldn't be read back
+
+Sessions saved with reasoning notes stored them correctly, but reading the
+session back never included them. Reading a session now returns the
+reasoning notes along with everything else.
+
+### Fixed: Proactive consolidation's cooldown timer now works
+
+For those using the opt-in proactive consolidation feature: the cooldown
+that spaces out consolidation runs was looking in the wrong place for the
+last run time, so it could run more often than your configured interval.
+The cooldown is now enforced as configured.
+
+### Fixed: Old leftover link rows are cleaned up automatically
+
+Sessions deleted long ago (before stricter database rules were in place)
+could leave behind orphaned "related sessions" link rows. LoreConvo now
+sweeps these out automatically at startup -- a one-time cleanup that keeps
+related-session results accurate. Nothing you saved is touched.
+
+### Improved: Clearer feedback when a save option isn't formatted as a list
+
+Saving from the command line with `--decisions`, `--artifacts`,
+`--open-questions`, or `--tags` expects a JSON list. If you pass plain text
+instead, the save still succeeds exactly as before, but you now get a
+warning explaining the expected format instead of silence.
+
 ## v0.10.6 (2026-08-19)
 
 ### Fixed: Failure alerts could go silent during the exact outage they're meant to catch
