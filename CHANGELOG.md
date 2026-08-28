@@ -1,5 +1,40 @@
 # LoreConvo Changelog
 
+## v0.10.7 (2026-08-28)
+
+### Fixed: MCP round-trip bugs -- start_date clobber + unreadable reasoning_notes (SH-101061)
+
+`src/server.py save_session` reset an existing session's `start_date` when
+updating without an explicit `start_date` arg; it now reads the existing row
+and preserves it. `get_session` omitted `reasoning_notes` from its response
+dict; now included. Regression tests: `tests/test_mcp_roundtrip_bugs.py`.
+
+### Fixed: proactive-consolidation cooldown queried wrong table (SH-100337)
+
+`src/core/consolidation.py check_proactive_consolidation` Gate 7 queried
+`memory_digest` (nonexistent) instead of `memory_digests`, so the cooldown
+read always fell into the "unreadable clock -> allow" branch. Table name
+corrected; cooldown now enforced. Tests: `tests/test_proactive_consolidation.py`.
+
+### Fixed: orphaned session_cooccurrences sweep at startup (SH-100951)
+
+`src/core/database.py` gains `_sweep_cooccurrence_orphans()`, wired into
+`_init_schema` (idempotent, logs removed count). Repairs legacy residue from
+deletes that predate FK enforcement; audit of all six sessions(id)-FK tables
+found only `session_cooccurrences` affected. Mutation-verified tests:
+`tests/test_cooccurrence_orphan_sweep.py`.
+
+### Improved: parse_list warns on non-JSON list args (SH-100992)
+
+`scripts/save_to_loreconvo.py parse_list()` emits a stderr warning naming the
+flag, expected format, and truncated received value when a list flag isn't
+valid JSON. Behavior unchanged (stored as single element, exit 0).
+
+### Internal: AGENT_ROLE comment reference renamed to AGENT_SESSION_ROLE (SH-101172)
+
+Comment-only in `hooks/scripts/auto_save.py`; matches the fleet-side env var
+rename. No behavior change.
+
 ## v0.10.6 (2026-08-19)
 
 ### Fixed: `hook_saves_failing` blind spot on module-scope import failures (SH-100629)
