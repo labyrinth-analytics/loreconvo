@@ -65,6 +65,8 @@ bash install.sh
 
 This creates a virtual environment, installs dependencies, and verifies everything works. No system Python changes, no manual pip commands.
 
+**Using the Claude Agent SDK directly?** `git clone` the public repo and point the SDK's local-directory plugin loader at it -- the repo root is a self-contained plugin directory (`.claude-plugin/plugin.json` + `.mcp.json`). No separate SDK-installable bundle exists or is needed.
+
 ## Using LoreConvo
 
 ### Claude Code (Terminal)
