@@ -32,6 +32,8 @@ Save a session summary to persistent memory. Claude calls this at the end of a s
 | `summarize` | boolean | no | Pass `true` to compress the summary via the Claude Haiku API before saving. Requires `ANTHROPIC_API_KEY` and `pip install loreconvo[bridge]`. Defaults to `false`. Falls back to saving the raw summary if the API call fails. |
 | `reasoning_notes` | text | no | Optional free-form text capturing the reasoning chain behind key decisions in this session -- why you made a particular choice, what alternatives were considered, or what constraints shaped the outcome. Stored separately from the summary. Not indexed for search. |
 
+**Note on `start_date`:** When updating an existing session, omitting `start_date` preserves the original value. Pass an explicit `start_date` only if you need to overwrite it.
+
 **Returns:** The new session ID and a confirmation.
 
 **Example conversation:**
@@ -77,7 +79,7 @@ Get the full details of a specific session, including the complete summary, all 
 |------|------|----------|-------------|
 | `session_id` | text | yes | The UUID of the session to retrieve |
 
-**Returns:** Complete session data including summary, decisions, artifacts, open questions, tags, skills, and `previous_summary` (the summary text from the prior save of the same session, or null if the session has never been updated). Use `previous_summary` to audit how a session summary evolved over time -- for example, to see what context was captured before a `/compact` mid-session save replaced it.
+**Returns:** Complete session data including summary, decisions, artifacts, open questions, tags, skills, `reasoning_notes`, and `previous_summary` (the summary text from the prior save of the same session, or null if the session has never been updated). Use `previous_summary` to audit how a session summary evolved over time -- for example, to see what context was captured before a `/compact` mid-session save replaced it. `reasoning_notes` is null if none were saved.
 
 ---
 
