@@ -4,6 +4,26 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## Unreleased
+
+Documentation and packaging only so far. Held from a 0.10.8 release on
+2026-08-30 pending an actual code change to ship alongside.
+
+### Documentation: Using LoreConvo with the Claude Agent SDK
+
+The README now explains how to load LoreConvo when you are building on the
+Claude Agent SDK directly: clone the public repo and point the SDK's
+local-directory plugin loader at it. The repo root is already a
+self-contained plugin directory, so there is no separate SDK bundle to
+install.
+
+### Documentation: Two clarifications in the tool reference
+
+The tool reference now states that updating a session without passing a
+start date preserves the original one, and that reading a session back
+returns its reasoning notes. Both behaviors shipped in v0.10.7 -- only the
+documentation was missing.
+
 ## v0.10.7 (2026-08-28)
 
 ### Fixed: Updating a saved session no longer loses its original start date
