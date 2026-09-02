@@ -35,6 +35,7 @@ from core.config import Config, set_tier as _set_tier_config
 from core.license import get_license_status, LORECONVO_UPGRADE_URL
 from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onboard_config_path
 from core.timeutil import parse_iso_utc
+from core import trust_framing
 from compat_check import check as _compat_check, emit_startup_warnings as _compat_emit
 
 
@@ -475,17 +476,21 @@ def get_context_for(
             if index not yet built.
     """
     results = _get_db().get_context_for(topic, max_results, include_external=include_external, semantic=semantic)
-    return [
-        {
-            "session_title": r.session.title,
-            "date": r.session.start_date,
-            "summary": r.session.summary,
-            "decisions": r.session.decisions,
-            "open_questions": r.session.open_questions,
+    out = []
+    for r in results:
+        s = r.session
+        # SH-13436: wrap content-bearing fields in the untrusted-session-content
+        # delimiter. session_title/date/match_score stay raw (not recalled
+        # content -- metadata only). Only non-empty strings are wrapped.
+        out.append({
+            "session_title": s.title,
+            "date": s.start_date,
+            "summary": trust_framing.wrap_untrusted(s.summary) if s.summary else s.summary,
+            "decisions": [trust_framing.wrap_untrusted(d) if d else d for d in s.decisions] if s.decisions else s.decisions,
+            "open_questions": [trust_framing.wrap_untrusted(q) if q else q for q in s.open_questions] if s.open_questions else s.open_questions,
             "match_score": r.match_score,
-        }
-        for r in results
-    ]
+        })
+    return out
 
 
 # -- Agent context injection (SH-12766) --
@@ -844,6 +849,13 @@ def inject_agent_context(
         warning = "Context truncated at 4000 chars."
     if timed_out:
         warning = (warning + " " if warning else "") + "Injection timed out; partial results used."
+
+    # SH-13436: wrap the assembled context in the untrusted-session-content
+    # delimiter before returning it to the calling agent. The wrap happens
+    # after the char cap is applied, so wrapper overhead is additive to (not
+    # counted against) the 4000-char cap.
+    if markdown:
+        markdown = trust_framing.wrap_untrusted(markdown)
 
     if source == "stored_config":
         try:
