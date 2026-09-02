@@ -137,7 +137,7 @@ def _neutralize_literal_markers(body):
     return neutralized, count
 
 
-def derive_session_nonce(session_id):
+def derive_session_nonce(session_id=None):
     """Derive the per-session delimiter nonce.
 
     Deterministic (sha256(session_id)[:8]) for a real, present session_id --
@@ -150,7 +150,7 @@ def derive_session_nonce(session_id):
     return hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:8]
 
 
-def wrap_untrusted(body, *, session_nonce):
+def wrap_untrusted(body, *, session_nonce=None):
     """Wrap `body` in the untrusted-recalled-content delimiter.
 
     Neutralizes literal occurrences of the delimiter tag inside `body` and
@@ -164,6 +164,9 @@ def wrap_untrusted(body, *, session_nonce):
             "LoreConvo auto-load: WARNING possible boundary-spoof near-miss "
             f"detected ({near_miss_count} occurrence(s))\n"
         )
+
+    if session_nonce is None:
+        session_nonce = derive_session_nonce()
 
     open_block = _OPEN_TEMPLATE.format(nonce=session_nonce)
     close_block = _CLOSE_TEMPLATE.format(nonce=session_nonce)
