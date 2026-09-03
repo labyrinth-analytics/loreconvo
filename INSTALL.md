@@ -120,7 +120,7 @@ The `--env=LORECONVO_PRO=<your-license-key>` flag is optional -- omit it if you 
 | `HF_HUB_OFFLINE` | Blocks HuggingFace Hub network calls after the initial model download (Pro tier only, optional) | Set to `1` to prevent all post-download hub requests: `--env=HF_HUB_OFFLINE=1` |
 
 If `LORECONVO_DB_PATH` is not set, LoreConvo defaults to `~/.loreconvo/sessions.db`.
-If `LORECONVO_PRO` is not set, LoreConvo runs on the free tier (up to 50 sessions).
+If `LORECONVO_PRO` is not set, LoreConvo runs on the free tier (up to 50 sessions). To upgrade, use the Pro link in README.md; your license key is emailed to your checkout address, usually within one business day.
 If `LORECONVO_PROJECT_PATH` is not set, LoreConvo scans the current working directory for a MEMORY.md file.
 
 ### Verify the connection
