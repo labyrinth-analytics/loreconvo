@@ -1,4 +1,4 @@
-# LoreConvo v0.10.7
+# LoreConvo v0.10.8
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -412,41 +412,32 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.7 (2026-08-28)
+## v0.10.8 (2026-09-02)
 
-### Fixed: Updating a saved session no longer loses its original start date
+### Changed: Retrieved session content is now wrapped in a trust boundary everywhere, not just in Claude Code
 
-When you saved new details onto an existing session (adding a summary,
-decisions, or tags later in the day), the session's start date was quietly
-reset instead of being kept. Updates now preserve the original start date
-unless you explicitly provide a new one.
+Session content returned by the context-recall and agent-context tools is
+now wrapped in the same untrusted-data delimiter already used by the
+auto-load hook, so any MCP client -- not only Claude Code -- gets the same
+framing/boundary-integrity protection when it reads recalled content back.
+This is a defense-in-depth framing fix, not a claim to solve prompt
+injection; nothing about the tools' inputs, outputs, or behavior otherwise
+changes.
 
-### Fixed: Reasoning notes were saved but couldn't be read back
+### Documentation: Using LoreConvo with the Claude Agent SDK
 
-Sessions saved with reasoning notes stored them correctly, but reading the
-session back never included them. Reading a session now returns the
-reasoning notes along with everything else.
+The README now explains how to load LoreConvo when you are building on the
+Claude Agent SDK directly: clone the public repo and point the SDK's
+local-directory plugin loader at it. The repo root is already a
+self-contained plugin directory, so there is no separate SDK bundle to
+install.
 
-### Fixed: Proactive consolidation's cooldown timer now works
+### Documentation: Two clarifications in the tool reference
 
-For those using the opt-in proactive consolidation feature: the cooldown
-that spaces out consolidation runs was looking in the wrong place for the
-last run time, so it could run more often than your configured interval.
-The cooldown is now enforced as configured.
-
-### Fixed: Old leftover link rows are cleaned up automatically
-
-Sessions deleted long ago (before stricter database rules were in place)
-could leave behind orphaned "related sessions" link rows. LoreConvo now
-sweeps these out automatically at startup -- a one-time cleanup that keeps
-related-session results accurate. Nothing you saved is touched.
-
-### Improved: Clearer feedback when a save option isn't formatted as a list
-
-Saving from the command line with `--decisions`, `--artifacts`,
-`--open-questions`, or `--tags` expects a JSON list. If you pass plain text
-instead, the save still succeeds exactly as before, but you now get a
-warning explaining the expected format instead of silence.
+The tool reference now states that updating a session without passing a
+start date preserves the original one, and that reading a session back
+returns its reasoning notes. Both behaviors shipped in v0.10.7 -- only the
+documentation was missing.
 
 <!-- WHATS_NEW:END -->
 

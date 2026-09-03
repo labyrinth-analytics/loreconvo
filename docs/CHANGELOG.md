@@ -4,10 +4,17 @@ What changed in each release, written for users (not developers).
 
 ---
 
-## Unreleased
+## v0.10.8 (2026-09-02)
 
-Documentation and packaging only so far. Held from a 0.10.8 release on
-2026-08-30 pending an actual code change to ship alongside.
+### Changed: Retrieved session content is now wrapped in a trust boundary everywhere, not just in Claude Code
+
+Session content returned by the context-recall and agent-context tools is
+now wrapped in the same untrusted-data delimiter already used by the
+auto-load hook, so any MCP client -- not only Claude Code -- gets the same
+framing/boundary-integrity protection when it reads recalled content back.
+This is a defense-in-depth framing fix, not a claim to solve prompt
+injection; nothing about the tools' inputs, outputs, or behavior otherwise
+changes.
 
 ### Documentation: Using LoreConvo with the Claude Agent SDK
 
