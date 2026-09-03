@@ -1,9 +1,24 @@
 # LoreConvo Changelog
 
-## Unreleased
+## v0.10.8 (2026-09-02)
 
-Documentation and packaging only so far. Held from a 0.10.8 release on
-2026-08-30 pending an actual code change to ship alongside.
+### Security: MCP-tool trust boundary extension -- get_context_for + inject_agent_context (SH-101476)
+
+Extended the SH-13436 trust-boundary control from the Claude-Code-exclusive
+SessionStart hook to the MCP retrieval/injection surface. `get_context_for`
+wraps `summary` and every `decisions`/`open_questions` element in place;
+`inject_agent_context` wraps its assembled `context` field after the
+4000-char cap is applied (wrapper overhead is additive, not counted against
+the cap). Field names and types are unchanged on both tools -- only string
+*values* now carry wrapper markers.
+
+New vendored copy `src/core/trust_framing.py` (third copy alongside the hook
+and LoreDocs copies; HTML-comment convention since this surface is
+cross-vendor, not `<system-reminder>`). `scripts/check_trust_framing_sync.py`
+extended to three-way pairwise. 21 new tests (`test_trust_framing_mcp.py`) +
+2 updated (`test_agent_context_crud.py`) + 8 updated sync-check tests, all
+passing. Found by Brock (SH-101424, HIGH): these two tools were the only
+LoreConvo MCP surface still returning recalled session content unwrapped.
 
 ### Documentation: Agent SDK local-load note in README (SH-101152)
 
