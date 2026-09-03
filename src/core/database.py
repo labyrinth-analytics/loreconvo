@@ -3126,7 +3126,23 @@ class SessionDatabase:
         )
         self.conn.commit()
 
-    def get_session_chain(self, session_id: str) -> List[Session]:
+    def get_session_chain(
+        self, session_id: str, include_auto: bool = False
+    ) -> List[Session]:
+        """Return the user-curated chain containing session_id.
+
+        A chain is the explicit narrative thread: sessions reachable through
+        link_sessions() links ('continues' / 'related' / 'supersedes').
+        Machine auto-links ('auto:cooccurrence', 'auto:embedding') are
+        similarity signals, not curation -- traversing them turned one
+        explicit link into a 12-session similarity blob (SH-101421).
+
+        include_auto=True opts into the similarity walk for callers that
+        genuinely want the connected component of the full link graph.
+        """
+        link_predicate = "link_type NOT LIKE 'auto:%'"
+        if include_auto:
+            link_predicate = "1=1"
         chain_ids = set()
         to_visit = [session_id]
         while to_visit:
@@ -3135,9 +3151,11 @@ class SessionDatabase:
                 continue
             chain_ids.add(current)
             links = self.conn.execute(
-                """SELECT to_session_id FROM session_links WHERE from_session_id = ?
-                   UNION
-                   SELECT from_session_id FROM session_links WHERE to_session_id = ?""",
+                f"""SELECT to_session_id FROM session_links
+                    WHERE from_session_id = ? AND {link_predicate}
+                    UNION
+                    SELECT from_session_id FROM session_links
+                    WHERE to_session_id = ? AND {link_predicate}""",
                 (current, current)
             ).fetchall()
             for link in links:
