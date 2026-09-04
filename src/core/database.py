@@ -167,12 +167,50 @@ def _validate_memory_session_id(conn: sqlite3.Connection, session_id: Optional[s
 
 _MEMORY_ITEM_FIELD_CAP = 4096
 
+# Ratified capture-time caps (SH-13531), already enforced on the SessionEnd
+# hook path (hooks/scripts/auto_save.py). SH-101425 extends them to the
+# direct-write save_session path (MCP tool + this DB layer).
+_MAX_SESSION_SUMMARY_LENGTH = 8000
+_MAX_SESSION_LIST_ITEM_LENGTH = 500
+
 
 def _truncate_text(value):
     """Cap plain text at _MEMORY_ITEM_FIELD_CAP chars. Returns (value, truncated)."""
     if value is None or len(value) <= _MEMORY_ITEM_FIELD_CAP:
         return value, False
     return value[:_MEMORY_ITEM_FIELD_CAP], True
+
+
+def truncate_session_fields(session: Session) -> bool:
+    """Cap session.summary/reasoning_notes and each decisions/open_questions
+    item at the ratified lengths (SH-13531), mutating session in place.
+
+    Mirrors the caps auto_save.py already enforces on the SessionEnd hook
+    path; this is the direct-write path's equivalent (SH-101425). Returns
+    True if any field was cut.
+    """
+    truncated = False
+    if session.summary and len(session.summary) > _MAX_SESSION_SUMMARY_LENGTH:
+        session.summary = session.summary[:_MAX_SESSION_SUMMARY_LENGTH]
+        truncated = True
+    if session.reasoning_notes and len(session.reasoning_notes) > _MAX_SESSION_SUMMARY_LENGTH:
+        session.reasoning_notes = session.reasoning_notes[:_MAX_SESSION_SUMMARY_LENGTH]
+        truncated = True
+
+    def _cap_list(items):
+        nonlocal truncated
+        capped = []
+        for item in items:
+            if item and len(item) > _MAX_SESSION_LIST_ITEM_LENGTH:
+                capped.append(item[:_MAX_SESSION_LIST_ITEM_LENGTH])
+                truncated = True
+            else:
+                capped.append(item)
+        return capped
+
+    session.decisions = _cap_list(session.decisions)
+    session.open_questions = _cap_list(session.open_questions)
+    return truncated
 
 
 def _truncate_json_list(items: list) -> tuple:
@@ -2467,6 +2505,7 @@ class SessionDatabase:
                 "Use the Session dataclass (which auto-generates a UUID) "
                 "instead of raw SQL inserts."
             )
+        truncate_session_fields(session)
         # Enforce BSL 1.1 free-tier session limit.
         # Pro mode (valid LORECONVO_PRO license key) bypasses this check.
         if not self.config.is_pro:
@@ -4106,11 +4145,12 @@ class SessionDatabase:
         if err is not None:
             return err
 
+        title, title_truncated = _truncate_text(title)
         stored_body = artifact_type if item_type == "artifact" else body
         stored_body, body_truncated = _truncate_text(stored_body)
         tags_json, tags_truncated = _truncate_json_list(tags)
         metadata_json, metadata_truncated = _truncate_json_dict(metadata)
-        truncated = body_truncated or tags_truncated or metadata_truncated
+        truncated = title_truncated or body_truncated or tags_truncated or metadata_truncated
 
         item_id = str(uuid.uuid4())
         status = _MEMORY_ITEM_INITIAL_STATUS[item_type]
