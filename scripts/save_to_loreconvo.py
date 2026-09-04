@@ -23,6 +23,9 @@ Usage (read one session by ID):
 
 Usage (search sessions):
     python scripts/save_to_loreconvo.py --search "test suite"
+
+Usage (semantic search; Pro, degrades to keyword search if unavailable):
+    python scripts/save_to_loreconvo.py --search "how did we fix the flaky test" --semantic
 """
 
 import argparse
@@ -176,12 +179,38 @@ def _check_session_tier_limit(conn):
 def _find_loreconvo_db():
     """Find the LoreConvo sessions.db, checking common locations.
 
-    Mounted paths are checked FIRST. In Cowork VMs, os.path.expanduser("~")
+    `LORECONVO_DB`, when set, is the highest-precedence *discovery*
+    candidate (below the `--db-path` flag, which callers check before this
+    function runs). Resolution delegates to Config itself (the optional-
+    import pattern already used elsewhere in this file for the license
+    module) rather than duplicating its env-check -- one implementation, not
+    two. An explicitly-set-but-unresolvable LORECONVO_DB is a hard error,
+    never a silent fall-through to a different corpus (SH-101500).
+
+    Mounted paths are checked next. In Cowork VMs, os.path.expanduser("~")
     resolves to the ephemeral VM home (e.g. /sessions/sharp-adoring-dijkstra/),
     NOT Debbie's Mac home. Writing to VM ~ loses all data when the session ends.
     Checking /sessions/*/mnt/.loreconvo/ first ensures we find the Mac-backed
     mount when running in a Cowork VM.
     """
+    if os.environ.get("LORECONVO_DB"):
+        try:
+            from loreconvo.core.config import Config
+            resolved = Config().db_path
+        except ImportError:
+            # Package absent. Config's set-case resolution is the env var
+            # verbatim, so this is the same value, not a second derivation.
+            resolved = os.environ["LORECONVO_DB"]
+        if not os.path.isfile(resolved):
+            print(
+                f"ERROR: LORECONVO_DB is set but no database exists at "
+                f"{resolved}. Refusing to fall back to a different corpus. "
+                f"Fix the path, unset LORECONVO_DB, or pass --db-path.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        return resolved
+
     # Cowork VM mount paths FIRST -- VM ~ is ephemeral, mount is Debbie's Mac
     import glob
     candidates = sorted(glob.glob("/sessions/*/mnt/.loreconvo/sessions.db"))
@@ -462,8 +491,65 @@ def search_rows(args):
     return rows
 
 
+def _cmd_search_semantic(args):
+    """Attempt Pro semantic search via SessionDatabase.search_sessions(semantic=True).
+
+    Reuses the exact call the MCP search_sessions tool makes rather than
+    re-implementing ranking/fusion -- a second caller, never a second
+    implementation.
+
+    Returns True if semantic results were printed to stdout (caller is
+    done). Returns False after printing a degrade tip to stderr; the
+    caller should then run the ordinary keyword search on stdout, never a
+    mix of tip and result text on the same stream.
+    """
+    tip = (
+        "Semantic search requires LoreConvo Pro. Returning keyword results "
+        "instead. Set your LORECONVO_PRO license key to activate."
+    )
+    if not _is_pro_licensed():
+        print(tip, file=sys.stderr)
+        return False
+
+    try:
+        from loreconvo.core.database import SessionDatabase
+        from loreconvo.core.config import Config
+    except ImportError:
+        print(tip, file=sys.stderr)
+        return False
+
+    db_path = args.db_path or _find_loreconvo_db()
+    if not db_path:
+        print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
+        sys.exit(1)
+
+    db = SessionDatabase(Config(db_path=db_path))
+    try:
+        results = db.search_sessions(args.search, limit=args.limit, semantic=True)
+    finally:
+        db.close()
+
+    if not results:
+        print(f"No sessions matching '{args.search}' (semantic).")
+        return True
+
+    print(f"Found {len(results)} session(s) matching '{args.search}' (semantic):")
+    print()
+    for r in results:
+        s = r.session
+        preview = s.summary[:300] + "..." if len(s.summary) > 300 else s.summary
+        print(f"[{s.start_date}] ({s.surface}) {s.title}")
+        print(f"  ID: {s.id}")
+        print(f"  {preview}")
+        print()
+    return True
+
+
 def search_sessions(args):
-    """Search sessions and print the results."""
+    """Search sessions and print the results (or semantically with --semantic)."""
+    if getattr(args, "semantic", False) and _cmd_search_semantic(args):
+        return
+
     rows = search_rows(args)
 
     if not rows:
@@ -492,6 +578,9 @@ def main():
     parser.add_argument("--read-id", type=str, dest="read_id",
                         help="Read full content of one session by UUID")
     parser.add_argument("--search", type=str, help="Search sessions by keyword")
+    parser.add_argument("--semantic", action="store_true",
+                        help="Use semantic (hybrid vector+keyword) search with --search. "
+                             "Pro tier only; degrades to keyword search if unavailable.")
 
     # Save args
     parser.add_argument("--title", type=str, help="Session title")
