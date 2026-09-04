@@ -20,7 +20,7 @@ from core.models import Session
 from core.database import (
     SessionDatabase, SessionLimitReachedError, _MAX_IMPORT_BYTES,
     _MAX_SESSIONS_PER_FILE, _IMPORT_FIELD_CAPS,
-    _pinning_enabled, parse_session_id,
+    _pinning_enabled, parse_session_id, truncate_session_fields,
 )
 from core import graph
 from core.loredocs_bridge import (
@@ -200,10 +200,13 @@ def save_session(
     Args:
         title: Short descriptive title for the session
         surface: Where this session ran - 'cowork', 'code', or 'chat'
-        summary: 2-3 paragraph narrative summary of what happened
-        decisions: List of key decisions made during the session
+        summary: 2-3 paragraph narrative summary of what happened. Capped at
+            8000 chars.
+        decisions: List of key decisions made during the session. Each item
+            capped at 500 chars.
         artifacts: List of files created or modified
-        open_questions: Unresolved questions to carry forward
+        open_questions: Unresolved questions to carry forward. Each item
+            capped at 500 chars.
         tags: Freeform tags for categorization
         skills_used: Skills that were invoked during this session
         project: Project name if part of a defined project
@@ -221,8 +224,8 @@ def save_session(
             contamination. Override exclusion with include_external=True on search,
             or set LORECONVO_EXTERNAL_TOOL_EXCLUSION=0 to disable globally.
         reasoning_notes: Optional free-form text capturing the reasoning chain
-            or thought process behind decisions. Stored as-is; blank or None
-            leaves the field empty.
+            or thought process behind decisions. Blank or None leaves the
+            field empty. Capped at 8000 chars.
         summarize: If True and ANTHROPIC_API_KEY is set, send the summary to
             Claude API (Haiku) for compression before saving. Opt-in only;
             defaults to False. Falls back to the raw summary on any API error
@@ -270,6 +273,8 @@ def save_session(
     if end_date:
         session.end_date = end_date
 
+    fields_truncated = truncate_session_fields(session)
+
     try:
         saved_id = _get_db().save_session(session)
         # Mark summary_source when LLM compression was applied via MCP save_session.
@@ -294,6 +299,8 @@ def save_session(
     is_first_session = _get_db().session_count() == 1 and not config_exists
 
     result = {"session_id": saved_id, "status": "saved", "title": title}
+    if fields_truncated:
+        result["truncated"] = True
     if is_first_session:
         result["setup_tip"] = (
             "First session detected. Run loreconvo_onboard() to set up tag "
@@ -2219,6 +2226,7 @@ def save_memory_item(
     Args:
         item_type: One of 'decision', 'open_question', 'artifact'.
         title: The decision text, the question text, or the artifact identifier.
+            Capped at 4096 chars.
         body: Free-text detail/rationale for decision/open_question. Ignored
             for artifacts -- use artifact_type instead. Capped at 4096 chars.
         session_id: Originating session, if any. Must reference an existing session.
