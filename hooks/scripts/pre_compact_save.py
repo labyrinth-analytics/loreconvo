@@ -32,7 +32,7 @@ upsert_session = _storage.upsert_session
 # Reuse transcript parsing from auto_save.py
 _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
-from auto_save import parse_transcript
+from auto_save import parse_transcript, _has_explicit_save_signature
 
 
 def get_db_path():
@@ -64,13 +64,27 @@ def save_pre_compact(db_path, session_id, parsed, trigger, project=None):
     try:
         ensure_schema(conn)
 
-        cursor = conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
+        cursor = conn.execute("SELECT id, tags FROM sessions WHERE id = ?", (session_id,))
+        row = cursor.fetchone()
         now = utc_now_iso()
         tags_json = json.dumps(tags)
         decisions_json = json.dumps(parsed["decisions"])
         artifacts_json = json.dumps(parsed["artifacts"])
 
-        if cursor.fetchone():
+        if row:
+            # SH-101571: Guard against overwriting explicit (role:) saves with shallow pre-compact tags
+            existing_tags_json = row[1]
+
+            if _has_explicit_save_signature(existing_tags_json):
+                sys.stderr.write(
+                    f"LoreConvo pre-compact: skipping update of session {session_id} "
+                    "-- existing session has explicit save signature (role: tag); "
+                    "will not clobber with shallow pre-compact capture\n"
+                )
+                conn.commit()
+                conn.close()
+                return True
+
             conn.execute(
                 """UPDATE sessions SET summary = ?, decisions = ?, artifacts = ?,
                    tags = ?, end_date = ?,
