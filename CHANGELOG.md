@@ -1,8 +1,28 @@
 # LoreConvo Changelog
 
-## Unreleased
+## v0.10.9 (2026-09-05)
 
-### Added: fallback contract tier -- `--semantic` on `save_to_loreconvo.py` (SH-101553)
+### Fixed: SessionEnd/Stop auto-capture clobber race (SH-101571)
+
+`hooks/scripts/pre_compact_save.py` now guards against overwriting an
+explicit save with a shallow auto-capture: `_has_explicit_save_signature()`
+(imported from `auto_save.py`) is checked before the UPDATE that would
+otherwise silently replace `source='session'`/tagged content with
+`source='periodic'`-style shallow data. New
+`hooks/scripts/detect_clobbered_sessions.py` CLI scans an existing DB for
+sessions with an `auto-captured` tag but no `role:` tag (pre-fix clobber
+victims). 6 new tests (`tests/test_save_clobber_race.py`), including a
+mutation test confirming the guard is load-bearing.
+
+The diagnostic script itself shipped with two same-day follow-on fixes:
+a raw `sqlite3.connect()` that violated the `test_no_duplicate_ddl.py`
+DDL-invariant (rewritten to use the `SessionDatabase` accessor, SH-101582),
+and a package-path bug (`loreconvo.src.core.*` instead of
+`loreconvo.core.*`, matching the actual `pyproject.toml` package-dir
+mapping) that made the script's own documented CLI usage always raise
+`ImportError` (SH-101589).
+
+### Added: fallback contract tier -- `--semantic` and `--get-doc`, env-var hard-fail (SH-101553)
 
 `scripts/save_to_loreconvo.py` gains `--semantic` on `--search` (Pro;
 degrades to keyword search with a stderr tip, never a hard crash),
@@ -11,8 +31,37 @@ call. `_find_loreconvo_db()` now checks `LORECONVO_DB` ahead of the
 Cowork-mount/home-dir fallbacks; a set-but-unresolvable override hard-fails
 (`sys.exit(1)`, no stdout rows) instead of silently querying a different
 corpus (SH-101500). New canonical contract doc: `FALLBACK_CONTRACT.md`. New
-drift guard: `tests/test_fallback_mcp_parity.py`, asserting the fallback
-and the MCP server agree on every tier-(a) read operation.
+drift guard: `tests/test_fallback_mcp_parity.py` (5 tests), asserting the
+fallback and the MCP server agree on every tier-(a) read operation,
+including both hard invariants above. Shared `unwrap_result()` helper
+extracted to `internal_tools/loremcp_fixtures/fixtures.py` (fixes a
+FastMCP string-wrapped-JSON unwrapping bug surfaced while writing the
+LoreDocs-side parity test) so both products' parity tests import one
+implementation instead of each redefining `_payload()`.
+
+### Added: capture-time field caps on the MCP direct-write path (SH-101425)
+
+New `core.database.truncate_session_fields()` (single source of truth,
+imported by both `server.py`'s `save_session` MCP tool and `database.py`'s
+direct-write path) applies the same 8000/500-char caps already ratified
+for the SessionEnd hook (SH-13531) to `save_session`'s
+summary/decisions/open_questions/reasoning_notes fields -- closing a
+previously-uncapped door on the direct-write surface. `save_memory_item`'s
+`title` field is now also capped via the existing `_truncate_text`/
+`_MEMORY_ITEM_FIELD_CAP` pattern. Both tools surface `truncated: true` when
+a field is cut.
+
+### Fixed: get_session_chain ignores auto-generated links by default (SH-101421)
+
+`get_session_chain` now filters to explicit links only unless
+`include_auto=True` is passed; previously a single explicit link could
+pull in an entire `auto:cooccurrence`-contaminated chain of unrelated
+sessions.
+
+### Documentation: Pro key-issuance runbook note (follow-up to SH-100131)
+
+`README.md`/`INSTALL.md` set the post-checkout expectation for manual Pro
+key issuance.
 
 ## v0.10.8 (2026-09-02)
 
