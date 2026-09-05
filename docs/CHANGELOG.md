@@ -4,6 +4,18 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## Unreleased
+
+### Added: the fallback script can now do semantic search
+
+If the LoreConvo MCP server is unreachable, the fallback command-line
+script (`save_to_loreconvo.py`) can now run a semantic search (Pro),
+matching what the MCP tools already do. If you set `LORECONVO_DB` to point
+the fallback at a specific database and that path doesn't actually exist,
+the fallback now stops with a clear error instead of silently searching
+somewhere else. See `FALLBACK_CONTRACT.md` in the LoreConvo install for
+what the fallback guarantees.
+
 ## v0.10.8 (2026-09-02)
 
 ### Changed: Retrieved session content is now wrapped in a trust boundary everywhere, not just in Claude Code
