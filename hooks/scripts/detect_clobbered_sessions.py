@@ -17,13 +17,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 try:
-    from loreconvo.src.core.database import SessionDatabase
-    from loreconvo.src.core.config import Config
+    from loreconvo.core.database import SessionDatabase
+    from loreconvo.core.config import Config
 except ImportError:
+    # Fallback for development mode when loreconvo is not pip-installed
     try:
-        from src.core.database import SessionDatabase
-        from src.core.config import Config
-    except ImportError:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src'))
+        from core.database import SessionDatabase
+        from core.config import Config
+    except (ImportError, ModuleNotFoundError):
         sys.stderr.write(
             "Error: Cannot import SessionDatabase from loreconvo package. "
             "Ensure loreconvo is installed or PYTHONPATH is set correctly.\n"
