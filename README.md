@@ -1,4 +1,4 @@
-# LoreConvo v0.10.8
+# LoreConvo v0.10.9
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -414,32 +414,48 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.8 (2026-09-02)
+## v0.10.9 (2026-09-05)
 
-### Changed: Retrieved session content is now wrapped in a trust boundary everywhere, not just in Claude Code
+### Fixed: session auto-capture no longer overwrites a save you already made
 
-Session content returned by the context-recall and agent-context tools is
-now wrapped in the same untrusted-data delimiter already used by the
-auto-load hook, so any MCP client -- not only Claude Code -- gets the same
-framing/boundary-integrity protection when it reads recalled content back.
-This is a defense-in-depth framing fix, not a claim to solve prompt
-injection; nothing about the tools' inputs, outputs, or behavior otherwise
-changes.
+If you (or an agent) explicitly saved a rich session summary, the
+background auto-capture that runs when a session ends or is compacted
+could, in rare timing cases, silently replace it with a shallow one --
+losing the detail you saved. Auto-capture now checks for an existing
+explicit save first and leaves it alone. A new diagnostic script is
+included to scan an existing database for sessions this may have already
+affected.
 
-### Documentation: Using LoreConvo with the Claude Agent SDK
+### Added: the fallback script can now do semantic search, and follows a documented contract
 
-The README now explains how to load LoreConvo when you are building on the
-Claude Agent SDK directly: clone the public repo and point the SDK's
-local-directory plugin loader at it. The repo root is already a
-self-contained plugin directory, so there is no separate SDK bundle to
-install.
+If the LoreConvo MCP server is unreachable, the fallback command-line
+script (`save_to_loreconvo.py`) can now run a semantic search (Pro),
+matching what the MCP tools already do. If you set `LORECONVO_DB` to point
+the fallback at a specific database and that path doesn't actually exist,
+the fallback now stops with a clear error instead of silently searching
+somewhere else. See `FALLBACK_CONTRACT.md` in the LoreConvo install for
+exactly what the fallback guarantees and how it's kept in sync with the
+MCP server.
 
-### Documentation: Two clarifications in the tool reference
+### Fixed: session chains no longer pull in unrelated sessions automatically
 
-The tool reference now states that updating a session without passing a
-start date preserves the original one, and that reading a session back
-returns its reasoning notes. Both behaviors shipped in v0.10.7 -- only the
-documentation was missing.
+Asking for a session's chain (`get_session_chain`) now follows only the
+links you explicitly made by default, instead of also following
+automatically-generated "related session" links -- so one deliberate link
+no longer returns a large chain of loosely-related sessions you never
+asked to connect. Pass `include_auto` if you want the old, broader
+behavior.
+
+### Changed: long session fields are now capped everywhere they're written
+
+Session summaries, decisions, and open questions saved directly through
+the MCP tools are now length-capped the same way they already are when a
+session ends normally, preventing unbounded growth from any write path.
+
+### Documentation: Pro license key issuance
+
+The README and install docs now set expectations for how you receive your
+Pro license key after checkout.
 
 <!-- WHATS_NEW:END -->
 
