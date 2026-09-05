@@ -4,9 +4,19 @@ What changed in each release, written for users (not developers).
 
 ---
 
-## Unreleased
+## v0.10.9 (2026-09-05)
 
-### Added: the fallback script can now do semantic search
+### Fixed: session auto-capture no longer overwrites a save you already made
+
+If you (or an agent) explicitly saved a rich session summary, the
+background auto-capture that runs when a session ends or is compacted
+could, in rare timing cases, silently replace it with a shallow one --
+losing the detail you saved. Auto-capture now checks for an existing
+explicit save first and leaves it alone. A new diagnostic script is
+included to scan an existing database for sessions this may have already
+affected.
+
+### Added: the fallback script can now do semantic search, and follows a documented contract
 
 If the LoreConvo MCP server is unreachable, the fallback command-line
 script (`save_to_loreconvo.py`) can now run a semantic search (Pro),
@@ -14,7 +24,28 @@ matching what the MCP tools already do. If you set `LORECONVO_DB` to point
 the fallback at a specific database and that path doesn't actually exist,
 the fallback now stops with a clear error instead of silently searching
 somewhere else. See `FALLBACK_CONTRACT.md` in the LoreConvo install for
-what the fallback guarantees.
+exactly what the fallback guarantees and how it's kept in sync with the
+MCP server.
+
+### Fixed: session chains no longer pull in unrelated sessions automatically
+
+Asking for a session's chain (`get_session_chain`) now follows only the
+links you explicitly made by default, instead of also following
+automatically-generated "related session" links -- so one deliberate link
+no longer returns a large chain of loosely-related sessions you never
+asked to connect. Pass `include_auto` if you want the old, broader
+behavior.
+
+### Changed: long session fields are now capped everywhere they're written
+
+Session summaries, decisions, and open questions saved directly through
+the MCP tools are now length-capped the same way they already are when a
+session ends normally, preventing unbounded growth from any write path.
+
+### Documentation: Pro license key issuance
+
+The README and install docs now set expectations for how you receive your
+Pro license key after checkout.
 
 ## v0.10.8 (2026-09-02)
 
