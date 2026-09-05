@@ -1,5 +1,19 @@
 # LoreConvo Changelog
 
+## Unreleased
+
+### Added: fallback contract tier -- `--semantic` on `save_to_loreconvo.py` (SH-101553)
+
+`scripts/save_to_loreconvo.py` gains `--semantic` on `--search` (Pro;
+degrades to keyword search with a stderr tip, never a hard crash),
+delegating to the existing `SessionDatabase.search_sessions(semantic=True)`
+call. `_find_loreconvo_db()` now checks `LORECONVO_DB` ahead of the
+Cowork-mount/home-dir fallbacks; a set-but-unresolvable override hard-fails
+(`sys.exit(1)`, no stdout rows) instead of silently querying a different
+corpus (SH-101500). New canonical contract doc: `FALLBACK_CONTRACT.md`. New
+drift guard: `tests/test_fallback_mcp_parity.py`, asserting the fallback
+and the MCP server agree on every tier-(a) read operation.
+
 ## v0.10.8 (2026-09-02)
 
 ### Security: MCP-tool trust boundary extension -- get_context_for + inject_agent_context (SH-101476)
