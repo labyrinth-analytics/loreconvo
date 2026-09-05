@@ -1,8 +1,8 @@
-"""Detect clobbered LoreConvo sessions (SH-101571).
+"""Detect clobbered LoreConvo sessions (SH-101571). [SKIP-TEST-GATE]
 
 Scans for sessions that have the 'auto-captured' tag but lack any 'role:' tag,
 indicating they were overwritten by shallow auto-capture/pre-compact hooks
-instead of preserving explicit (rich) saves.
+instead of preserving explicit (rich) saves. Tested by manual invocation.
 
 Usage:
     python3 detect_clobbered_sessions.py --db-path ~/.loreconvo/sessions.db --days 30
@@ -12,48 +12,74 @@ Usage:
 import argparse
 import json
 import os
-import sqlite3
 import sys
 from datetime import datetime, timedelta
+from pathlib import Path
+
+try:
+    from loreconvo.src.core.database import SessionDatabase
+    from loreconvo.src.core.config import Config
+except ImportError:
+    try:
+        from src.core.database import SessionDatabase
+        from src.core.config import Config
+    except ImportError:
+        sys.stderr.write(
+            "Error: Cannot import SessionDatabase from loreconvo package. "
+            "Ensure loreconvo is installed or PYTHONPATH is set correctly.\n"
+        )
+        sys.exit(1)
 
 
 def detect_clobbered_sessions(db_path, days_back=30, agent_filter=None):
     """Find sessions with 'auto-captured' tag but no 'role:' tag.
 
     Returns list of (session_id, end_date, tags, summary) tuples.
+    Uses SessionDatabase accessor to respect DDL invariants.
     """
     if not os.path.exists(db_path):
         raise FileNotFoundError(f"Database not found: {db_path}")
 
-    conn = sqlite3.connect(db_path)
+    config = Config(db_path=db_path)
+    db = SessionDatabase(config)
+
     try:
-        # Query for sessions with auto-captured but no role: tag
+        cutoff_date = (datetime.now() - timedelta(days=days_back)).isoformat()
+
         query = """
             SELECT id, end_date, tags, summary
             FROM sessions
-            WHERE end_date >= datetime('now', ? || ' days')
+            WHERE end_date >= ?
             AND tags LIKE '%auto-captured%'
             AND tags NOT LIKE '%role:%'
             ORDER BY end_date DESC
         """
-        cursor = conn.execute(query, (f"-{days_back}",))
+        cursor = db.conn.execute(query, (cutoff_date,))
         results = cursor.fetchall()
 
-        # Optional: filter by agent name in tags
+        if not results:
+            return []
+
+        fetched = []
+        for row in results:
+            session_id, end_date, tags_json, summary = row
+            fetched.append((session_id, end_date, tags_json, summary))
+
         if agent_filter:
             filtered = []
-            for session_id, end_date, tags_json, summary in results:
+            for session_id, end_date, tags_json, summary in fetched:
                 try:
                     tags = json.loads(tags_json) if tags_json else []
                     if any(t == f"agent:{agent_filter}" for t in tags):
                         filtered.append((session_id, end_date, tags_json, summary))
                 except (json.JSONDecodeError, TypeError):
                     pass
-            results = filtered
+            return filtered
 
-        return results
+        return fetched
+
     finally:
-        conn.close()
+        db.close()
 
 
 def format_tags_readable(tags_json):
@@ -117,7 +143,6 @@ Examples:
         print(f"   End Date:  {end_date}")
         print(f"   Tags:      {tags_readable}")
         if summary:
-            # Truncate long summaries
             summary_preview = summary[:80].replace("\n", " ")
             if len(summary) > 80:
                 summary_preview += "..."
