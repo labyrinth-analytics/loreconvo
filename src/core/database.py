@@ -55,6 +55,14 @@ from .loredocs_bridge import _connect_readwrite, _verify_schema
 
 logger = logging.getLogger(__name__)
 
+
+def normalize_expiry_timestamp(value: str) -> str:
+    """Normalize an absolute ISO 8601 timestamp to UTC with a Z suffix."""
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("expires_at must include a timezone offset")
+    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
 # DDL constants for keep_forever schema components.
 # Used for both creation (slow path) and body validation (fast path).
 _CREATE_TRIGGER_SQL = (
@@ -462,6 +470,7 @@ class SessionDatabase:
         # _open_conn() sets isolation_level=None, WAL, busy_timeout=10000,
         # foreign_keys=ON, check_same_thread=False, row_factory=Row.
         self._conn = _open_conn(self.config.db_path)
+        self._register_connection_functions(self._conn)
         # True only after an explicit close() -- distinguishes a terminal
         # close from an idle-watchdog release, which must keep reopening.
         self._closed = False
@@ -505,7 +514,19 @@ class SessionDatabase:
             )
         if self._conn is None:
             self._conn = _open_conn(self.config.db_path)
+            self._register_connection_functions(self._conn)
         return self._conn
+
+    @staticmethod
+    def _register_connection_functions(conn: sqlite3.Connection) -> None:
+        conn.create_function(
+            "loreconvo_tag_matches",
+            2,
+            lambda stored, requested: int(
+                requested in SessionDatabase._parse_json_field(stored)
+            ),
+            deterministic=True,
+        )
 
     def release_idle_connection(self) -> None:
         """Close the connection to release the sqlite write lock while idle.
@@ -1439,11 +1460,13 @@ class SessionDatabase:
         DELETE, so we must count rows before deletion to get the accurate count.
         """
         before = self.conn.execute(
-            "SELECT COUNT(*) FROM sessions_prunable WHERE expires_at < ?", (cutoff_ts,)
+            "SELECT COUNT(*) FROM sessions_prunable "
+            "WHERE julianday(expires_at) < julianday(?)", (cutoff_ts,)
         ).fetchone()[0]
         with self.conn:
             self.conn.execute(
-                "DELETE FROM sessions_prunable WHERE expires_at < ?", (cutoff_ts,)
+                "DELETE FROM sessions_prunable "
+                "WHERE julianday(expires_at) < julianday(?)", (cutoff_ts,)
             )
         if before == 0:
             logger.debug(
@@ -1919,7 +1942,10 @@ class SessionDatabase:
         if _exclusion_enabled and not include_external:
             sql += " AND (external_tool_session IS NULL OR external_tool_session = 0)"
         if not include_expired:
-            sql += " AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
+            sql += (
+                " AND (expires_at IS NULL "
+                "OR julianday(expires_at) > julianday('now'))"
+            )
         if after is not None:
             sql += " AND start_date >= ?"
             params.append(after)
@@ -2800,7 +2826,10 @@ class SessionDatabase:
         if _exclusion_enabled and not include_external:
             query += " AND (external_tool_session IS NULL OR external_tool_session = 0)"
         if not include_expired:
-            query += " AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
+            query += (
+                " AND (expires_at IS NULL "
+                "OR julianday(expires_at) > julianday('now'))"
+            )
         params = [cutoff]
 
         if project:
@@ -2862,7 +2891,10 @@ class SessionDatabase:
         if _exclusion_enabled and not include_external:
             sql += " AND (s.external_tool_session IS NULL OR s.external_tool_session = 0)"
         if not include_expired:
-            sql += " AND (s.expires_at IS NULL OR s.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
+            sql += (
+                " AND (s.expires_at IS NULL "
+                "OR julianday(s.expires_at) > julianday('now'))"
+            )
         params = [fts_query]
 
         if after is not None:
@@ -2886,20 +2918,12 @@ class SessionDatabase:
             params.extend(skills)
 
         if tags:
-            placeholders = ",".join("?" for _ in tags)
-            legacy_checks = " OR ".join(
-                "instr(',' || replace(COALESCE(s.tags, ''), ' ', '') || ',', "
-                "',' || ? || ',') > 0"
-                for _ in tags
+            tag_checks = " OR ".join(
+                "loreconvo_tag_matches(s.tags, ?) = 1" for _ in tags
             )
             sql += (
-                " AND (EXISTS (SELECT 1 FROM json_each("
-                "CASE WHEN json_valid(s.tags) THEN s.tags ELSE '[]' END) AS tag "
-                f"WHERE CAST(tag.value AS TEXT) IN ({placeholders})) "
-                "OR (json_valid(COALESCE(s.tags, '')) = 0 AND ("
-                f"{legacy_checks})))"
+                f" AND ({tag_checks})"
             )
-            params.extend(tags)
             params.extend(tags)
 
         sql += " ORDER BY sessions_fts.rank LIMIT ?"
@@ -3920,8 +3944,8 @@ class SessionDatabase:
             "SELECT id FROM sessions "
             f"WHERE id IN ({placeholders}) AND project=? "
             "AND (source IS NULL OR source NOT IN ('periodic', 'file_memory')) "
-            "AND (expires_at IS NULL OR expires_at > "
-            "strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
+            "AND (expires_at IS NULL "
+            "OR julianday(expires_at) > julianday('now'))"
         )
         params: list = [*source_ids, digest["project"]]
         if digest.get("surface") is not None:
@@ -3980,6 +4004,18 @@ class SessionDatabase:
         if row["keep_forever"]:
             return {"ok": False, "code": "session_pinned",
                     "message": "Session is pinned. Unpin before setting expiry."}
+        if expires_at is not None:
+            try:
+                expires_at = normalize_expiry_timestamp(expires_at)
+            except (TypeError, ValueError):
+                return {
+                    "ok": False,
+                    "code": "invalid_expiry",
+                    "message": (
+                        "expires_at must be an ISO 8601 timestamp with a "
+                        "timezone offset"
+                    ),
+                }
         self.conn.execute(
             "UPDATE sessions SET expires_at=? WHERE id=?",
             (expires_at, session_id)
@@ -4017,8 +4053,8 @@ class SessionDatabase:
             "FROM sessions "
             "WHERE project=? "
             "AND (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
-            " AND (expires_at IS NULL OR expires_at > "
-            "strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
+            " AND (expires_at IS NULL "
+            "OR julianday(expires_at) > julianday('now'))"
         )
         if os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0":
             sql += (
@@ -4184,11 +4220,13 @@ class SessionDatabase:
             or self.compute_content_hash(session.title, session.summary, session.created_at)
         )
         origin_machine = session.origin_machine or self._get_origin_machine()
-        present = fields_present or {
-            "source", "shared_by", "origin_machine", "content_hash",
-            "external_tool_session", "reasoning_notes", "previous_summary",
-            "expires_at", "staleness_hint", "keep_forever",
-        }
+        present = fields_present
+        if present is None:
+            present = {
+                "source", "shared_by", "origin_machine", "content_hash",
+                "external_tool_session", "reasoning_notes", "previous_summary",
+                "expires_at", "staleness_hint", "keep_forever",
+            }
         expires_at = None if session.keep_forever else session.expires_at
         self.conn.execute(
             """INSERT INTO sessions

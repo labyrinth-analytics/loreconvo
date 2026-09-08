@@ -21,6 +21,7 @@ from core.database import (
     SessionDatabase, SessionLimitReachedError, _MAX_IMPORT_BYTES,
     _MAX_SESSIONS_PER_FILE, _IMPORT_FIELD_CAPS,
     _pinning_enabled, parse_session_id, truncate_session_fields,
+    normalize_expiry_timestamp,
 )
 from core import graph
 from core.loredocs_bridge import (
@@ -1313,11 +1314,12 @@ def export_sessions(
     limit: int = 1000,
     format: str = "json",
 ) -> dict:
-    """Export sessions to JSON or JSONL for backup or migration.
+    """Export portable session records to JSON or JSONL for migration.
 
-    Exports all matching sessions with full detail (including skills, tags,
-    artifacts). Use output_path to write to a file; omit it to receive the
-    data inline. Use import_sessions to load the exported file.
+    Exports matching session fields, skills, tags, and artifacts. Links and
+    independent structured memory items are outside this export. Use
+    output_path to write to a file; omit it to receive the data inline. Use
+    import_sessions to load the exported file.
 
     Args:
         output_path: File path to write export (e.g. '/tmp/loreconvo_export.json').
@@ -1334,6 +1336,7 @@ def export_sessions(
 
     def _session_to_dict(s) -> dict:
         return {
+            "export_version": "1.1",
             "id": s.id,
             "title": s.title,
             "surface": s.surface,
@@ -1559,11 +1562,15 @@ def import_sessions(
             if not isinstance(expires_at, str):
                 return {"error": "expires_at must be an ISO 8601 timestamp or null"}
             try:
-                parse_iso_utc(expires_at)
-            except ValueError:
-                return {"error": "expires_at must be an ISO 8601 timestamp or null"}
-        if "source" in raw_s and not isinstance(raw_s["source"], str):
-            return {"error": "source must be a string"}
+                expires_at = normalize_expiry_timestamp(expires_at)
+            except ValueError as exc:
+                return {"error": str(exc)}
+        if (
+            "source" in raw_s
+            and raw_s["source"] is not None
+            and not isinstance(raw_s["source"], str)
+        ):
+            return {"error": "source must be a string or null"}
         title = str(raw_s.get("title", "") or "")[:_IMPORT_FIELD_CAPS["title"]]
         summary = str(raw_s.get("summary", "") or "")[:_IMPORT_FIELD_CAPS["summary"]]
         decisions = [str(d)[:_IMPORT_FIELD_CAPS["list_item"]] for d in (raw_s.get("decisions") or [])]

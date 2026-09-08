@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Session JSON/JSONL exports preserve recall controls and metadata; imports
+  preserve omitted legacy fields on replacement and validate explicit controls.
+- Existing session updates remain available at the Free session cap. FTS tag
+  filtering occurs before LIMIT, and summary history retains the last distinct
+  summary across normal, async, hook, and import-replace updates.
 - Digest consolidation and recall validate source eligibility and provenance,
   preventing external or expired sessions from reappearing through a digest.
   Legacy digests require reconsolidation.
