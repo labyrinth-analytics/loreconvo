@@ -280,9 +280,11 @@ Activate a tier (free or pro) for LoreConvo. Pro tier removes the free-tier sess
 
 ### `export_sessions`
 
-Export sessions to JSON or JSONL for backup or migration. Includes full session detail: decisions, artifacts, open questions, tags, and skills.
+Export sessions to JSON or JSONL for migration or sharing. Includes session metadata and recall controls: decisions, artifacts, open questions, tags, skills, external-tool-session flag, expiry, and pinning state.
 
-**When Claude uses it:** When you ask "export my LoreConvo sessions" or "back up my session history."
+> **Scope note:** This export is NOT a full-store backup. Session links (relationships between sessions) and independent structured memory items (decisions, questions, and artifacts saved via `save_memory_item`) are not included in the export. Exported files are suitable for moving sessions to a new machine or sharing context with a teammate; they are not a substitute for a file-level backup of `~/.loreconvo/`.
+
+**When Claude uses it:** When you ask "export my LoreConvo sessions" or "share my session history with a teammate."
 
 **Parameters:**
 
@@ -318,6 +320,13 @@ Import sessions from a LoreConvo export file (JSON or JSONL). Session UUIDs are 
 | `dry_run` | boolean | no | false | If true, parse and validate the file but make no database changes |
 
 **Returns:** A dict with `status`, `imported` count, `skipped` count, and any `errors` encountered.
+
+**Import behavior notes:**
+
+- **on_conflict=`skip` (default):** Existing sessions are left exactly as-is -- their recall controls are not updated by the import.
+- **on_conflict=`replace`:** The import overwrites the existing session with the exported data. Recall controls present in the export (external-tool-session flag, pin state, expiry) are applied. Fields omitted from a legacy export (produced before recall controls were included in the schema) are left at their current database values rather than reset to defaults.
+- **Pinned imports clear expiry:** When an imported session carries a pin flag, expiry is cleared on import so the pin takes effect as intended.
+- **Expiry validation:** Expiry values without timezone information are rejected. Timezone-aware values are normalized to UTC.
 
 **Example conversation:**
 > You: "Import sessions from /tmp/loreconvo_export.json -- skip duplicates."
