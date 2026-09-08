@@ -252,13 +252,23 @@ def _call_claude_api(transcript_excerpt: str, api_key: str) -> dict:
 
 def _update_session_with_llm_summary(conn: sqlite3.Connection,
                                       session_id: str, result: dict) -> None:
+    existing = conn.execute(
+        "SELECT summary, project, surface FROM sessions WHERE id=?",
+        (session_id,),
+    ).fetchone()
     conn.execute(
         """UPDATE sessions SET
-           title=?, summary=?, decisions=?, artifacts=?, open_questions=?,
+           title=?,
+           previous_summary=CASE
+               WHEN summary IS NOT ? THEN summary
+               ELSE previous_summary
+           END,
+           summary=?, decisions=?, artifacts=?, open_questions=?,
            summary_source='claude_async', fallback_reason=NULL
            WHERE id=?""",
         (
             result.get("title"),
+            result.get("summary"),
             result.get("summary"),
             result.get("decisions"),
             result.get("artifacts"),
@@ -266,6 +276,15 @@ def _update_session_with_llm_summary(conn: sqlite3.Connection,
             session_id,
         ),
     )
+    if existing and existing["summary"] != result.get("summary"):
+        try:
+            conn.execute(
+                "UPDATE memory_digests SET safety_invalidated=1 "
+                "WHERE project=? AND (surface IS NULL OR surface IS ?)",
+                (existing["project"], existing["surface"]),
+            )
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
 
 

@@ -1,5 +1,16 @@
 # LoreConvo Changelog
 
+## Unreleased
+
+### Fixed
+
+- Digest consolidation and recall validate source eligibility and provenance,
+  preventing external or expired sessions from reappearing through a digest.
+  Legacy digests require reconsolidation.
+- Opt-in post-turn capture is registered in the plugin and included in wheel
+  packages. The worker uses the real license gate, honors processed queue
+  markers, and serializes shared daily call reservations.
+
 ## v0.10.9 (2026-09-05)
 
 ### Fixed: SessionEnd/Stop auto-capture clobber race (SH-101571)

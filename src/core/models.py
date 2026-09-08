@@ -29,6 +29,8 @@ class Session:
     reasoning_notes: Optional[str] = None
     previous_summary: Optional[str] = None
     keep_forever: bool = False  # True = excluded from auto-cleanup and expiry
+    expires_at: Optional[str] = None
+    staleness_hint: Optional[str] = None
 
 
 @dataclass
