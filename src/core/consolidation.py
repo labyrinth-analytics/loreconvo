@@ -366,6 +366,7 @@ class HeuristicConsolidator:
 
             db.upsert_memory_digest(project, surface, {
                 "source_count": len(sessions),
+                "source_session_ids": [session["id"] for session in sessions],
                 "oldest_session_date": oldest,
                 "newest_session_date": newest,
                 "decisions": json.dumps(decisions),

@@ -4,6 +4,15 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## Unreleased
+
+### Fixed
+
+- Memory digests respect session exclusions and expiry. Older digests need to
+  be consolidated again before they can be recalled.
+- Opt-in post-turn capture now runs from both plugin and package installs,
+  recognizes Pro licenses, and avoids repeating successfully processed work.
+
 ## v0.10.9 (2026-09-05)
 
 ### Fixed: session auto-capture no longer overwrites a save you already made
