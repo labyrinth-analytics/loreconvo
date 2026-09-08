@@ -153,7 +153,8 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
         )
         # SH-10248: exclude expired sessions from auto-load context
         expiry_filter = (
-            " AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
+            " AND (expires_at IS NULL "
+            "OR julianday(expires_at) > julianday('now'))"
             if "expires_at" in col_names else ""
         )
         # Keep-forever user-curation signal (v0.8.1)
@@ -488,8 +489,8 @@ def query_digest_for_injection(db_path: str, project: str, surface: str):
                 "SELECT id FROM sessions "
                 f"WHERE id IN ({placeholders}) AND project=? "
                 "AND (source IS NULL OR source NOT IN ('periodic', 'file_memory')) "
-                "AND (expires_at IS NULL OR expires_at > "
-                "strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
+                "AND (expires_at IS NULL "
+                "OR julianday(expires_at) > julianday('now'))"
             )
             source_params = [*source_ids, project]
             if surface is not None:

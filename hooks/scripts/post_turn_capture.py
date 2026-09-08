@@ -15,6 +15,7 @@ STATE_PATH = Path.home() / '.loreconvo' / 'capture_state.json'
 STATE_LOCK_PATH = Path.home() / '.loreconvo' / '.capture_state.lock'
 QUEUE_DIR = Path.home() / '.loreconvo' / 'capture_queue'
 MAX_DAYS_OLD = 7
+SESSION_STATE_TTL_HOURS = 24
 
 
 def load_state():
@@ -24,11 +25,9 @@ def load_state():
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         now_utc = datetime.now(timezone.utc)
         return {
-            'session_id': str(uuid.uuid4()),
-            'tool_call_count': 0,
+            'sessions': {},
             'daily_haiku_calls': 0,
             'daily_date_utc': now_utc.strftime('%Y-%m-%d'),
-            'worker_not_found_warned': False,
         }
 
 
@@ -122,21 +121,53 @@ def read_transcript(hook_input=None, raw_stdin=''):
     return raw_stdin[-500:] if len(raw_stdin) > 500 else raw_stdin
 
 
+def _session_states(state, now_utc):
+    sessions = state.get('sessions')
+    if not isinstance(sessions, dict):
+        sessions = {}
+
+    legacy_session_id = state.pop('session_id', None)
+    legacy_count = state.pop('tool_call_count', 0)
+    legacy_warned = state.pop('worker_not_found_warned', False)
+    if legacy_session_id and legacy_session_id not in sessions:
+        sessions[legacy_session_id] = {
+            'tool_call_count': int(legacy_count or 0),
+            'worker_not_found_warned': bool(legacy_warned),
+            'last_seen': now_utc.isoformat(),
+        }
+
+    cutoff = (now_utc - timedelta(hours=SESSION_STATE_TTL_HOURS)).isoformat()
+    state['sessions'] = {
+        session_id: session_state
+        for session_id, session_state in sessions.items()
+        if isinstance(session_state, dict)
+        and session_state.get('last_seen', '') >= cutoff
+    }
+    return state['sessions']
+
+
 def _advance_capture_state(requested_session_id):
     lock = _lock_file(STATE_LOCK_PATH)
     if lock is None:
-        return None, None
+        return None, None, None
     try:
         state = load_state()
-        session_id = requested_session_id or state.get('session_id') or str(uuid.uuid4())
-        if state.get('session_id') != session_id:
-            state['session_id'] = session_id
-            state['tool_call_count'] = 0
-            state['worker_not_found_warned'] = False
-        state['tool_call_count'] = int(state.get('tool_call_count', 0)) + 1
+        now_utc = datetime.now(timezone.utc)
+        sessions = _session_states(state, now_utc)
+        if requested_session_id:
+            session_id = requested_session_id
+        else:
+            session_id = state.setdefault('fallback_session_id', str(uuid.uuid4()))
+        session_state = sessions.setdefault(session_id, {
+            'tool_call_count': 0,
+            'worker_not_found_warned': False,
+        })
+        count = int(session_state.get('tool_call_count', 0)) + 1
+        session_state['tool_call_count'] = count
+        session_state['last_seen'] = now_utc.isoformat()
         if not save_state(state):
-            return None, None
-        return state, session_id
+            return None, None, None
+        return state, session_id, count
     finally:
         _unlock_file(lock)
 
@@ -190,11 +221,13 @@ def _mark_worker_missing(session_id):
         return False
     try:
         state = load_state()
-        if state.get('session_id') != session_id:
+        sessions = _session_states(state, datetime.now(timezone.utc))
+        session_state = sessions.get(session_id)
+        if session_state is None:
             return False
-        if state.get('worker_not_found_warned', False):
+        if session_state.get('worker_not_found_warned', False):
             return False
-        state['worker_not_found_warned'] = True
+        session_state['worker_not_found_warned'] = True
         return save_state(state)
     finally:
         _unlock_file(lock)
@@ -241,7 +274,8 @@ def main():
             os.environ.get('LORECONVO_AGENT_RUN_SESSION_ID')
             or hook_input.get('session_id')
         )
-        state, session_id = _advance_capture_state(requested_session_id)
+        state, session_id, tool_call_count = _advance_capture_state(
+            requested_session_id)
         if state is None:
             return 0
 
@@ -249,7 +283,7 @@ def main():
             interval = int(os.environ.get('LORECONVO_TURN_CAPTURE_INTERVAL', '10'))
         except ValueError:
             return 0
-        if interval <= 0 or state['tool_call_count'] % interval != 0:
+        if interval <= 0 or tool_call_count % interval != 0:
             return 0
 
         excerpt = read_transcript(hook_input, raw_stdin)

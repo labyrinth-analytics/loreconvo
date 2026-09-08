@@ -8,6 +8,11 @@ What changed in each release, written for users (not developers).
 
 ### Fixed
 
+- Session export/import preserves exclusions, pinning, expiry, and summary
+  history. Session exports do not include separate memory items or session links.
+- You can update existing sessions when the Free plan is full. Tag-filtered
+  search returns matching results beyond the first unfiltered page, and saving
+  an unchanged summary preserves the previous distinct summary.
 - Memory digests respect session exclusions and expiry. Older digests need to
   be consolidated again before they can be recalled.
 - Opt-in post-turn capture now runs from both plugin and package installs,

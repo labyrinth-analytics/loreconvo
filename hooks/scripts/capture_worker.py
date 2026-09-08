@@ -14,6 +14,7 @@ QUEUE_DIR = BASE_DIR / 'capture_queue'
 LOG_DIR = BASE_DIR / 'capture_log'
 STATE_PATH = BASE_DIR / 'capture_state.json'
 STATE_LOCK_PATH = BASE_DIR / '.capture_state.lock'
+WORKER_LOCK_PATH = BASE_DIR / '.capture_worker.lock'
 
 
 def load_state():
@@ -93,7 +94,7 @@ def call_haiku(excerpt):
     try:
         client = Anthropic(api_key=api_key)
         response = client.messages.create(
-            model='claude-3-5-haiku-20241022',
+            model='claude-haiku-4-5-20251001',
             max_tokens=100,
             messages=[{
                 'role': 'user',
@@ -281,16 +282,24 @@ def main():
         prune_old_logs(QUEUE_DIR, 7)
         prune_old_logs(LOG_DIR, 7)
 
-        pro = is_pro_tier()
-        can_call_haiku = pro and haiku_available()
-        daily_limit = get_daily_limit()
+        worker_lock = lock_queue_file(WORKER_LOCK_PATH)
+        if worker_lock is None:
+            return 0
+        try:
+            pro = is_pro_tier()
+            can_call_haiku = pro and haiku_available()
+            daily_limit = get_daily_limit()
 
-        for queue_file in sorted(QUEUE_DIR.glob('*.jsonl')):
-            lock = lock_queue_file(queue_file)
-            if lock is None:
-                continue
-            try:
-                for entry in read_queue_entries(lock):
+            for queue_file in sorted(QUEUE_DIR.glob('*.jsonl')):
+                queue_lock = lock_queue_file(queue_file)
+                if queue_lock is None:
+                    continue
+                try:
+                    entries = read_queue_entries(queue_lock)
+                finally:
+                    unlock_queue_file(queue_lock)
+
+                for entry in entries:
                     excerpt = entry.get('excerpt', '')
                     session_id = entry.get('session_id', '')
                     surface = entry.get('surface', 'code')
@@ -301,9 +310,14 @@ def main():
                         summary = call_haiku(excerpt)
 
                     if write_capture_log(ts, 1, summary, session_id, surface):
-                        mark_processed(lock, ts, session_id)
-            finally:
-                unlock_queue_file(lock)
+                        marker_lock = lock_queue_file(queue_file)
+                        if marker_lock is not None:
+                            try:
+                                mark_processed(marker_lock, ts, session_id)
+                            finally:
+                                unlock_queue_file(marker_lock)
+        finally:
+            unlock_queue_file(worker_lock)
     except Exception:
         pass
     return 0
