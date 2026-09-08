@@ -317,6 +317,46 @@ If you see that line, the hook is saving your session before compaction.
 
 ---
 
+### Post-Turn Capture (Opt-In, Pro)
+
+Post-turn capture takes a lightweight snapshot after every N tool calls during a session. Unlike the SessionEnd hook (which saves once at the end), post-turn capture builds an incremental record of how your session evolved -- useful for long-running or complex sessions where mid-session state matters.
+
+**This hook is opt-in and disabled by default.** The plugin registers it as a PostToolUse event, but it exits immediately unless you set the environment variable below.
+
+**To enable,** add `LORECONVO_POST_TURN_CAPTURE=1` to your `claude mcp add` command:
+
+```bash
+claude mcp add --scope user \
+  "--env=LORECONVO_POST_TURN_CAPTURE=1" \
+  "--env=LORECONVO_PRO=<your-license-key>" \
+  loreconvo -- \
+  uvx loreconvo==<version>
+```
+
+**How it works:**
+
+1. **Stage 1 (fast, every N tool calls):** `post_turn_capture.py` enqueues a snapshot to `~/.loreconvo/capture_queue/` and exits. The interval is per-session and controlled by `LORECONVO_TURN_CAPTURE_INTERVAL` (default: every 10 tool calls).
+2. **Stage 2 (async worker):** `capture_worker.py` drains the queue, summarizes captured content using `claude-haiku-4-5-20251001`, and saves to your database.
+
+**Environment variables:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LORECONVO_POST_TURN_CAPTURE` | `0` | Set to `1` to enable. Any other value disables. |
+| `LORECONVO_TURN_CAPTURE_INTERVAL` | `10` | Tool calls between snapshots (per session). |
+| `LORECONVO_TURN_CAPTURE_MAX_CALLS_PER_DAY` | `100` | Daily cap on Haiku API calls across all sessions. |
+
+**Requirements:**
+
+- **Pro license required.** The worker checks your Pro license before making API calls.
+- **`anthropic` package required.** Install it with: `pip install anthropic`
+  The `anthropic` package is not included in the base LoreConvo install. If it is not installed, the worker skips API calls silently.
+- **API key required.** Set `ANTHROPIC_API_KEY` in your environment.
+
+**Queue cleanup:** Queue entries older than 7 days are discarded automatically. If the daily cap is reached, remaining queue entries are held until the next day.
+
+---
+
 ## Memory Recall (Dreaming)
 
 Starting with v0.6.0, LoreConvo can consolidate your session history into a persistent memory digest. After you have saved 10 or more sessions, run the consolidation tool once to give Claude a compact summary of your project's standing decisions, open questions, and tech stack facts. The digest is automatically injected at session start from then on.
