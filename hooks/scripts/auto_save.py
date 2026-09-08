@@ -264,7 +264,10 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
         session_uuid = session_id
 
         # Check if session already exists (e.g., resumed session or duplicate hook fire)
-        cursor = conn.execute("SELECT id, tags FROM sessions WHERE id = ?", (session_uuid,))
+        cursor = conn.execute(
+            "SELECT id, tags, project, surface, summary FROM sessions WHERE id = ?",
+            (session_uuid,),
+        )
         row = cursor.fetchone()
         exists = row is not None
         existing_tags_json = row[1] if row else None
@@ -288,10 +291,16 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
                 return True
             # Already saved -- update instead of duplicate.
             conn.execute(
-                """UPDATE sessions SET summary = ?, decisions = ?, artifacts = ?,
+                """UPDATE sessions SET
+                   previous_summary = CASE
+                       WHEN summary IS NOT ? THEN summary
+                       ELSE previous_summary
+                   END,
+                   summary = ?, decisions = ?, artifacts = ?,
                    open_questions = ?, tags = ?, end_date = ?, project = ?, source = ?
                    WHERE id = ?""",
                 (
+                    parsed["summary"],
                     parsed["summary"],
                     decisions_json,
                     artifacts_json,
@@ -303,6 +312,17 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
                     session_uuid,
                 ),
             )
+            if row[4] != parsed["summary"] or row[2] != project:
+                try:
+                    for digest_project in (row[2], project):
+                        if digest_project is not None:
+                            conn.execute(
+                                "UPDATE memory_digests SET safety_invalidated=1 "
+                                "WHERE project=? AND (surface IS NULL OR surface IS ?)",
+                                (digest_project, row[3]),
+                            )
+                except Exception:
+                    pass
         else:
             upsert_session(
                 conn,

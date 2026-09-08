@@ -1347,6 +1347,16 @@ def export_sessions(
             "tags": s.tags,
             "skills_used": s.skills_used,
             "created_at": s.created_at,
+            "source": s.source,
+            "shared_by": s.shared_by,
+            "origin_machine": s.origin_machine,
+            "content_hash": s.content_hash,
+            "external_tool_session": s.external_tool_session,
+            "reasoning_notes": s.reasoning_notes,
+            "previous_summary": s.previous_summary,
+            "expires_at": s.expires_at,
+            "staleness_hint": s.staleness_hint,
+            "keep_forever": s.keep_forever,
         }
 
     session_dicts = [_session_to_dict(s) for s in sessions]
@@ -1356,7 +1366,7 @@ def export_sessions(
     else:
         export_obj = {
             "loreconvo_export": {
-                "version": "1.0",
+                "version": "1.1",
                 "session_count": len(session_dicts),
                 "filters": {
                     "project": project,
@@ -1541,6 +1551,19 @@ def import_sessions(
     limit_hit = False
 
     for raw_s in raw_sessions:
+        for bool_field in ("external_tool_session", "keep_forever"):
+            if bool_field in raw_s and not isinstance(raw_s[bool_field], bool):
+                return {"error": f"{bool_field} must be a boolean"}
+        expires_at = raw_s.get("expires_at")
+        if expires_at is not None:
+            if not isinstance(expires_at, str):
+                return {"error": "expires_at must be an ISO 8601 timestamp or null"}
+            try:
+                parse_iso_utc(expires_at)
+            except ValueError:
+                return {"error": "expires_at must be an ISO 8601 timestamp or null"}
+        if "source" in raw_s and not isinstance(raw_s["source"], str):
+            return {"error": "source must be a string"}
         title = str(raw_s.get("title", "") or "")[:_IMPORT_FIELD_CAPS["title"]]
         summary = str(raw_s.get("summary", "") or "")[:_IMPORT_FIELD_CAPS["summary"]]
         decisions = [str(d)[:_IMPORT_FIELD_CAPS["list_item"]] for d in (raw_s.get("decisions") or [])]
@@ -1562,7 +1585,19 @@ def import_sessions(
             tags=tags,
             skills_used=skills_used,
             created_at=raw_s.get("created_at", ""),
+            source=raw_s.get("source", "session"),
+            shared_by=raw_s.get("shared_by"),
+            origin_machine=raw_s.get("origin_machine"),
+            content_hash=raw_s.get("content_hash"),
+            external_tool_session=raw_s.get("external_tool_session", False),
+            reasoning_notes=raw_s.get("reasoning_notes"),
+            previous_summary=raw_s.get("previous_summary"),
+            keep_forever=raw_s.get("keep_forever", False),
+            expires_at=expires_at,
+            staleness_hint=raw_s.get("staleness_hint"),
         )
+        if session.keep_forever:
+            session.expires_at = None
         if not session.id:
             skipped += 1
             continue
@@ -1578,7 +1613,11 @@ def import_sessions(
             continue
 
         try:
-            result = _get_db().import_session(session, replace=(on_conflict == "replace"))
+            result = _get_db().import_session(
+                session,
+                replace=(on_conflict == "replace"),
+                fields_present=set(raw_s),
+            )
         except SessionLimitReachedError:
             limit_hit = True
             break

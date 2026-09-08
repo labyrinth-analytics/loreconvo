@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Schema revision -- increment on any DDL change.
 # Used as PRAGMA user_version for cross-environment compatibility gating.
-SCHEMA_REVISION = 1
+SCHEMA_REVISION = 2
 
 # ---------------------------------------------------------------------------
 # DDL constants
@@ -42,7 +42,15 @@ CREATE TABLE IF NOT EXISTS sessions (
     tags            TEXT,
     created_at      TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     source          TEXT DEFAULT 'session',
-    external_tool_session INTEGER DEFAULT 0
+    external_tool_session INTEGER DEFAULT 0,
+    shared_by       TEXT,
+    origin_machine  TEXT,
+    content_hash    TEXT,
+    reasoning_notes TEXT,
+    previous_summary TEXT,
+    expires_at      TEXT,
+    staleness_hint  TEXT,
+    keep_forever    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS session_skills (
@@ -122,6 +130,8 @@ CREATE TABLE IF NOT EXISTS memory_digests (
     tier            TEXT DEFAULT 'free',
     disabled        INTEGER DEFAULT 0,
     api_key_found   INTEGER DEFAULT 1,
+    source_session_ids TEXT,
+    safety_invalidated INTEGER DEFAULT 0,
     UNIQUE(project, surface)
 );
 """
@@ -265,6 +275,24 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     lower (never downgrades).
     """
     conn.executescript(SCHEMA_SQL)
+    session_cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
+    }
+    missing_columns = {
+        "shared_by": "TEXT",
+        "origin_machine": "TEXT",
+        "content_hash": "TEXT",
+        "reasoning_notes": "TEXT",
+        "previous_summary": "TEXT",
+        "expires_at": "TEXT",
+        "staleness_hint": "TEXT",
+        "keep_forever": "INTEGER NOT NULL DEFAULT 0",
+    }
+    for name, column_type in missing_columns.items():
+        if name not in session_cols:
+            conn.execute(
+                f"ALTER TABLE sessions ADD COLUMN {name} {column_type}"
+            )
     row = conn.execute("PRAGMA user_version").fetchone()
     current = row[0] if row else 0
     if current < SCHEMA_REVISION:
@@ -282,22 +310,64 @@ def upsert_session(conn: sqlite3.Connection, session_id: str, title: str,
                    open_questions: str = None, tags: str = None,
                    source: str = "session",
                    external_tool_session: int = 0) -> None:
-    """Insert or replace a session row.
+    """Insert or update a session row.
 
-    Uses INSERT OR REPLACE with the canonical column set. All callers
+    Uses an UPSERT with the canonical column set. All callers
     (hooks, core, fallback script, summarizer) use this single definition
     so FK cascades, column defaults, and conflict resolution are uniform.
     """
+    existing = conn.execute(
+        "SELECT summary, project, surface, source, external_tool_session "
+        "FROM sessions WHERE id=?",
+        (session_id,),
+    ).fetchone()
     conn.execute(
-        """INSERT OR REPLACE INTO sessions
+        """INSERT INTO sessions
            (id, title, surface, project, start_date, end_date,
             summary, decisions, artifacts, open_questions, tags,
             source, external_tool_session)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+           title=excluded.title,
+           surface=excluded.surface,
+           project=excluded.project,
+           start_date=excluded.start_date,
+           end_date=excluded.end_date,
+           previous_summary=CASE
+               WHEN sessions.summary IS NOT excluded.summary THEN sessions.summary
+               ELSE sessions.previous_summary
+           END,
+           summary=excluded.summary,
+           decisions=excluded.decisions,
+           artifacts=excluded.artifacts,
+           open_questions=excluded.open_questions,
+           tags=excluded.tags,
+           source=excluded.source,
+           external_tool_session=excluded.external_tool_session""",
         (session_id, title, surface, project, start_date, end_date,
          summary, decisions, artifacts, open_questions, tags,
          source, external_tool_session),
     )
+    if existing and any((
+        existing["summary"] != summary,
+        existing["project"] != project,
+        existing["surface"] != surface,
+        existing["source"] != source,
+        bool(existing["external_tool_session"]) != bool(external_tool_session),
+    )):
+        try:
+            for digest_project, digest_surface in (
+                (existing["project"], existing["surface"]),
+                (project, surface),
+            ):
+                if digest_project is not None:
+                    conn.execute(
+                        "UPDATE memory_digests SET safety_invalidated=1 "
+                        "WHERE project=? AND (surface IS NULL OR surface IS ?)",
+                        (digest_project, digest_surface),
+                    )
+        except sqlite3.OperationalError:
+            pass
 
 
 # ---------------------------------------------------------------------------

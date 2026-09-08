@@ -71,11 +71,18 @@ build-backend = "setuptools.build_meta"
 # src/ IS the loreconvo package (flat structure: src/server.py, src/core/, etc.)
 # This maps `loreconvo` -> src/ so that `loreconvo.server:main` resolves correctly.
 [tool.setuptools]
-packages = ["loreconvo", "loreconvo.core"]
+packages = [
+    "loreconvo",
+    "loreconvo.core",
+    "loreconvo.hooks",
+    "loreconvo.hooks.scripts",
+]
 
 [tool.setuptools.package-dir]
 "loreconvo" = "src"
 "loreconvo.core" = "src/core"
+"loreconvo.hooks" = "hooks"
+"loreconvo.hooks.scripts" = "hooks/scripts"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
