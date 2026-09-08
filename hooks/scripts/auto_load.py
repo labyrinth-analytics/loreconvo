@@ -457,7 +457,8 @@ def query_digest_for_injection(db_path: str, project: str, surface: str):
                 return None
 
             row = conn.execute(
-                "SELECT digest_markdown, disabled, updated_at "
+                "SELECT digest_markdown, disabled, updated_at, source_count, "
+                "source_session_ids, safety_invalidated "
                 "FROM memory_digests WHERE project=? AND surface IS ?",
                 (project, surface)
             ).fetchone()
@@ -465,6 +466,42 @@ def query_digest_for_injection(db_path: str, project: str, surface: str):
             if row is None:
                 return None
             if row["disabled"]:
+                return None
+            if row["safety_invalidated"]:
+                return None
+
+            try:
+                source_ids = json.loads(row["source_session_ids"] or "null")
+            except (TypeError, json.JSONDecodeError):
+                return None
+            if (
+                not isinstance(source_ids, list)
+                or not source_ids
+                or any(not isinstance(item, str) or not item for item in source_ids)
+                or len(set(source_ids)) != len(source_ids)
+                or row["source_count"] != len(source_ids)
+            ):
+                return None
+
+            placeholders = ",".join("?" for _ in source_ids)
+            source_sql = (
+                "SELECT id FROM sessions "
+                f"WHERE id IN ({placeholders}) AND project=? "
+                "AND (source IS NULL OR source NOT IN ('periodic', 'file_memory')) "
+                "AND (expires_at IS NULL OR expires_at > "
+                "strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
+            )
+            source_params = [*source_ids, project]
+            if surface is not None:
+                source_sql += " AND surface=?"
+                source_params.append(surface)
+            if os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0":
+                source_sql += (
+                    " AND (external_tool_session IS NULL "
+                    "OR external_tool_session=0)"
+                )
+            source_rows = conn.execute(source_sql, source_params).fetchall()
+            if len(source_rows) != len(source_ids):
                 return None
 
             # Freshness: updated_at must be within 7 days

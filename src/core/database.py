@@ -532,6 +532,7 @@ class SessionDatabase:
         self._migrate_add_external_tool_session_column()
         self._migrate_index_existing_cooccurrences()
         self._migrate_add_dreaming_columns()
+        self._migrate_add_digest_safety_columns()
         self._migrate_add_reasoning_notes_column()
         self._migrate_fts_v3()
         self._migrate_add_project_instructions_column()
@@ -999,6 +1000,22 @@ class SessionDatabase:
                 self.conn.execute(col_sql)
             except sqlite3.OperationalError:
                 pass  # column already exists
+
+    def _migrate_add_digest_safety_columns(self):
+        """Add source provenance used to reject unsafe memory digests."""
+        cols = {
+            row[1] for row in self.conn.execute("PRAGMA table_info(memory_digests)")
+        }
+        if "source_session_ids" not in cols:
+            self.conn.execute(
+                "ALTER TABLE memory_digests ADD COLUMN source_session_ids TEXT"
+            )
+        if "safety_invalidated" not in cols:
+            self.conn.execute(
+                "ALTER TABLE memory_digests "
+                "ADD COLUMN safety_invalidated INTEGER DEFAULT 0"
+            )
+        self.conn.commit()
 
     def _migrate_add_project_instructions_column(self):
         """Add instructions TEXT column to projects table.
@@ -2506,9 +2523,14 @@ class SessionDatabase:
                 "instead of raw SQL inserts."
             )
         truncate_session_fields(session)
+        existing = self.conn.execute(
+            "SELECT summary, project, surface, source, external_tool_session, "
+            "start_date FROM sessions WHERE id = ?",
+            (session.id,),
+        ).fetchone()
         # Enforce BSL 1.1 free-tier session limit.
         # Pro mode (valid LORECONVO_PRO license key) bypasses this check.
-        if not self.config.is_pro:
+        if not existing and not self.config.is_pro:
             current_count = self.session_count()
             if current_count >= self.config.max_free_sessions:
                 raise SessionLimitReachedError(
@@ -2522,13 +2544,6 @@ class SessionDatabase:
             or self.compute_content_hash(session.title, session.summary, session.created_at)
         )
         origin_machine = session.origin_machine or self._get_origin_machine()
-        # Capture prior summary before INSERT OR REPLACE clobbers it (SH-10398).
-        prior_summary = None
-        existing = self.conn.execute(
-            "SELECT summary FROM sessions WHERE id = ?", (session.id,)
-        ).fetchone()
-        if existing:
-            prior_summary = existing[0]
         self.conn.execute(
             """INSERT INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
@@ -2553,7 +2568,11 @@ class SessionDatabase:
                content_hash = excluded.content_hash,
                external_tool_session = excluded.external_tool_session,
                reasoning_notes = excluded.reasoning_notes,
-               previous_summary = excluded.previous_summary""",
+               previous_summary = CASE
+                   WHEN sessions.summary IS NOT excluded.summary
+                   THEN sessions.summary
+                   ELSE sessions.previous_summary
+               END""",
             (
                 session.id, session.title, session.surface, session.project,
                 session.start_date, session.end_date, session.summary,
@@ -2563,9 +2582,24 @@ class SessionDatabase:
                 session.shared_by, origin_machine, content_hash,
                 1 if session.external_tool_session else 0,
                 session.reasoning_notes if session.reasoning_notes else None,
-                prior_summary,
+                None,
             )
         )
+        if existing and any((
+            existing["summary"] != session.summary,
+            existing["project"] != session.project,
+            existing["surface"] != session.surface,
+            existing["source"] != session.source,
+            bool(existing["external_tool_session"])
+            != session.external_tool_session,
+            existing["start_date"] != session.start_date,
+        )):
+            self._invalidate_memory_digests_for_session_scope(
+                existing["project"], existing["surface"]
+            )
+            self._invalidate_memory_digests_for_session_scope(
+                session.project, session.surface
+            )
         for skill_name in session.skills_used:
             self.conn.execute(
                 """INSERT OR REPLACE INTO session_skills
@@ -2851,6 +2885,23 @@ class SessionDatabase:
             sql += f" AND s.id IN (SELECT session_id FROM session_skills WHERE skill_name IN ({placeholders}))"
             params.extend(skills)
 
+        if tags:
+            placeholders = ",".join("?" for _ in tags)
+            legacy_checks = " OR ".join(
+                "instr(',' || replace(COALESCE(s.tags, ''), ' ', '') || ',', "
+                "',' || ? || ',') > 0"
+                for _ in tags
+            )
+            sql += (
+                " AND (EXISTS (SELECT 1 FROM json_each("
+                "CASE WHEN json_valid(s.tags) THEN s.tags ELSE '[]' END) AS tag "
+                f"WHERE CAST(tag.value AS TEXT) IN ({placeholders})) "
+                "OR (json_valid(COALESCE(s.tags, '')) = 0 AND ("
+                f"{legacy_checks})))"
+            )
+            params.extend(tags)
+            params.extend(tags)
+
         sql += " ORDER BY sessions_fts.rank LIMIT ?"
         params.append(limit)
 
@@ -2862,12 +2913,6 @@ class SessionDatabase:
                 session=session,
                 match_score=abs(row["rank"]) if row["rank"] else 0.0
             ))
-
-        if tags:
-            results = [
-                r for r in results
-                if any(t in r.session.tags for t in tags)
-            ]
 
         return results
 
@@ -3493,6 +3538,8 @@ class SessionDatabase:
             reasoning_notes=row["reasoning_notes"] if "reasoning_notes" in row_keys else None,
             previous_summary=row["previous_summary"] if "previous_summary" in row_keys else None,
             keep_forever=bool(row["keep_forever"]) if "keep_forever" in row_keys else False,
+            expires_at=row["expires_at"] if "expires_at" in row_keys else None,
+            staleness_hint=row["staleness_hint"] if "staleness_hint" in row_keys else None,
         )
 
     def get_sessions_for_shared_export(
@@ -3776,6 +3823,12 @@ class SessionDatabase:
     def upsert_memory_digest(self, project: str, surface: Optional[str], data: dict) -> None:
         """Insert or update a memory digest keyed by (project, surface)."""
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        source_session_ids = data.get("source_session_ids")
+        source_session_ids_json = (
+            json.dumps(source_session_ids)
+            if source_session_ids is not None
+            else None
+        )
         existing = self.conn.execute(
             "SELECT id FROM memory_digests WHERE project=? AND surface IS ?",
             (project, surface)
@@ -3794,7 +3847,10 @@ class SessionDatabase:
                    digest_markdown=COALESCE(?,digest_markdown),
                    mode=COALESCE(?,mode),
                    tier=COALESCE(?,tier),
-                   api_key_found=COALESCE(?,api_key_found)
+                   api_key_found=COALESCE(?,api_key_found),
+                   source_session_ids=COALESCE(?,source_session_ids),
+                   safety_invalidated=CASE WHEN ? IS NOT NULL THEN 0
+                                           ELSE safety_invalidated END
                    WHERE project=? AND surface IS ?""",
                 (
                     now,
@@ -3809,6 +3865,8 @@ class SessionDatabase:
                     data.get("mode"),
                     data.get("tier"),
                     data.get("api_key_found"),
+                    source_session_ids_json,
+                    source_session_ids_json,
                     project, surface,
                 )
             )
@@ -3819,8 +3877,9 @@ class SessionDatabase:
                    (id, project, surface, created_at, updated_at,
                     source_count, oldest_session_date, newest_session_date,
                     decisions, open_questions, known_stack, stale_facts,
-                    digest_markdown, mode, tier, api_key_found)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    digest_markdown, mode, tier, api_key_found,
+                    source_session_ids, safety_invalidated)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)""",
                 (
                     digest_id, project, surface, now, now,
                     data.get("source_count", 0),
@@ -3834,9 +3893,47 @@ class SessionDatabase:
                     data.get("mode", "heuristic"),
                     data.get("tier", "free"),
                     data.get("api_key_found", 1),
+                    source_session_ids_json,
                 )
             )
         self.conn.commit()
+
+    def _digest_sources_are_eligible(self, digest: dict) -> bool:
+        """Return whether every recorded source is still recall-eligible."""
+        if digest.get("safety_invalidated"):
+            return False
+        try:
+            source_ids = json.loads(digest.get("source_session_ids") or "null")
+        except (TypeError, json.JSONDecodeError):
+            return False
+        if (
+            not isinstance(source_ids, list)
+            or not source_ids
+            or any(not isinstance(item, str) or not item for item in source_ids)
+            or len(set(source_ids)) != len(source_ids)
+            or digest.get("source_count") != len(source_ids)
+        ):
+            return False
+
+        placeholders = ",".join("?" for _ in source_ids)
+        sql = (
+            "SELECT id FROM sessions "
+            f"WHERE id IN ({placeholders}) AND project=? "
+            "AND (source IS NULL OR source NOT IN ('periodic', 'file_memory')) "
+            "AND (expires_at IS NULL OR expires_at > "
+            "strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
+        )
+        params: list = [*source_ids, digest["project"]]
+        if digest.get("surface") is not None:
+            sql += " AND surface=?"
+            params.append(digest["surface"])
+        exclusion_enabled = (
+            os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
+        )
+        if exclusion_enabled:
+            sql += " AND (external_tool_session IS NULL OR external_tool_session=0)"
+        rows = self.conn.execute(sql, params).fetchall()
+        return len(rows) == len(source_ids)
 
     def get_memory_digest(self, project: str, surface: Optional[str]) -> Optional[dict]:
         """Return the current digest for (project, surface) as a dict, or None."""
@@ -3846,7 +3943,19 @@ class SessionDatabase:
         ).fetchone()
         if not row:
             return None
-        return dict(row)
+        digest = dict(row)
+        return digest if self._digest_sources_are_eligible(digest) else None
+
+    def _invalidate_memory_digests_for_session_scope(
+        self, project: Optional[str], surface: Optional[str]
+    ) -> None:
+        if project is None:
+            return
+        self.conn.execute(
+            "UPDATE memory_digests SET safety_invalidated=1 "
+            "WHERE project=? AND (surface IS NULL OR surface IS ?)",
+            (project, surface),
+        )
 
     def update_digest_disabled(self, project: str, surface: Optional[str], disabled: bool) -> None:
         """Set the disabled flag on a digest to suppress auto-load injection."""
@@ -3863,7 +3972,8 @@ class SessionDatabase:
         Refuses to set expiry on a pinned (keep_forever=1) session.
         """
         row = self.conn.execute(
-            "SELECT keep_forever FROM sessions WHERE id=?", (session_id,)
+            "SELECT keep_forever, project, surface FROM sessions WHERE id=?",
+            (session_id,),
         ).fetchone()
         if not row:
             return {"ok": False, "code": "session_not_found", "message": "Session not found."}
@@ -3873,6 +3983,9 @@ class SessionDatabase:
         self.conn.execute(
             "UPDATE sessions SET expires_at=? WHERE id=?",
             (expires_at, session_id)
+        )
+        self._invalidate_memory_digests_for_session_scope(
+            row["project"], row["surface"]
         )
         self.conn.commit()
         return {"ok": True}
@@ -3904,7 +4017,14 @@ class SessionDatabase:
             "FROM sessions "
             "WHERE project=? "
             "AND (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
+            " AND (expires_at IS NULL OR expires_at > "
+            "strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
         )
+        if os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0":
+            sql += (
+                " AND (external_tool_session IS NULL "
+                "OR external_tool_session = 0)"
+            )
         if surface is not None:
             sql += " AND surface=?"
             params.append(surface)
@@ -4034,10 +4154,15 @@ class SessionDatabase:
 
         return sessions
 
-    def import_session(self, session: Session, replace: bool = False) -> str:
+    def import_session(
+        self,
+        session: Session,
+        replace: bool = False,
+        fields_present: Optional[set[str]] = None,
+    ) -> str:
         """Import one session. Returns 'imported', 'replaced', or 'skipped'."""
         existing = self.conn.execute(
-            "SELECT id FROM sessions WHERE id = ?", (session.id,)
+            "SELECT * FROM sessions WHERE id = ?", (session.id,)
         ).fetchone()
 
         if existing and not replace:
@@ -4059,12 +4184,20 @@ class SessionDatabase:
             or self.compute_content_hash(session.title, session.summary, session.created_at)
         )
         origin_machine = session.origin_machine or self._get_origin_machine()
+        present = fields_present or {
+            "source", "shared_by", "origin_machine", "content_hash",
+            "external_tool_session", "reasoning_notes", "previous_summary",
+            "expires_at", "staleness_hint", "keep_forever",
+        }
+        expires_at = None if session.keep_forever else session.expires_at
         self.conn.execute(
             """INSERT INTO sessions
                (id, title, surface, project, start_date, end_date, summary,
                 decisions, artifacts, open_questions, tags, created_at, source,
-                shared_by, origin_machine, content_hash, external_tool_session)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                shared_by, origin_machine, content_hash, external_tool_session,
+                reasoning_notes, previous_summary, expires_at, staleness_hint,
+                keep_forever)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                title = excluded.title,
                surface = excluded.surface,
@@ -4076,11 +4209,24 @@ class SessionDatabase:
                artifacts = excluded.artifacts,
                open_questions = excluded.open_questions,
                tags = excluded.tags,
-               source = excluded.source,
-               shared_by = excluded.shared_by,
-               origin_machine = excluded.origin_machine,
-               content_hash = excluded.content_hash,
-               external_tool_session = excluded.external_tool_session""",
+               source = CASE WHEN ? THEN excluded.source ELSE sessions.source END,
+               shared_by = CASE WHEN ? THEN excluded.shared_by ELSE sessions.shared_by END,
+               origin_machine = CASE WHEN ? THEN excluded.origin_machine ELSE sessions.origin_machine END,
+               content_hash = CASE WHEN ? THEN excluded.content_hash ELSE sessions.content_hash END,
+               external_tool_session = CASE WHEN ? THEN excluded.external_tool_session ELSE sessions.external_tool_session END,
+               reasoning_notes = CASE WHEN ? THEN excluded.reasoning_notes ELSE sessions.reasoning_notes END,
+               previous_summary = CASE
+                   WHEN sessions.summary IS NOT excluded.summary THEN sessions.summary
+                   WHEN ? THEN excluded.previous_summary
+                   ELSE sessions.previous_summary
+               END,
+               expires_at = CASE
+                   WHEN (CASE WHEN ? THEN excluded.keep_forever ELSE sessions.keep_forever END) = 1 THEN NULL
+                   WHEN ? THEN excluded.expires_at
+                   ELSE sessions.expires_at
+               END,
+               staleness_hint = CASE WHEN ? THEN excluded.staleness_hint ELSE sessions.staleness_hint END,
+               keep_forever = CASE WHEN ? THEN excluded.keep_forever ELSE sessions.keep_forever END""",
             (
                 session.id, session.title, session.surface, session.project,
                 session.start_date, session.end_date, session.summary,
@@ -4089,8 +4235,45 @@ class SessionDatabase:
                 session.created_at, session.source,
                 session.shared_by, origin_machine, content_hash,
                 1 if session.external_tool_session else 0,
+                session.reasoning_notes, session.previous_summary,
+                expires_at, session.staleness_hint,
+                1 if session.keep_forever else 0,
+                "source" in present,
+                "shared_by" in present,
+                "origin_machine" in present,
+                "content_hash" in present,
+                "external_tool_session" in present,
+                "reasoning_notes" in present,
+                "previous_summary" in present,
+                "keep_forever" in present,
+                "expires_at" in present,
+                "staleness_hint" in present,
+                "keep_forever" in present,
             )
         )
+        if existing:
+            invalidating_change = (
+                existing["summary"] != session.summary
+                or existing["project"] != session.project
+                or existing["surface"] != session.surface
+                or (
+                    "source" in present
+                    and existing["source"] != session.source
+                )
+                or (
+                    "external_tool_session" in present
+                    and bool(existing["external_tool_session"])
+                    != session.external_tool_session
+                )
+                or "expires_at" in present
+            )
+            if invalidating_change:
+                self._invalidate_memory_digests_for_session_scope(
+                    existing["project"], existing["surface"]
+                )
+                self._invalidate_memory_digests_for_session_scope(
+                    session.project, session.surface
+                )
         if existing:
             self.conn.execute(
                 "DELETE FROM session_skills WHERE session_id = ?", (session.id,)
