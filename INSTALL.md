@@ -130,17 +130,6 @@ to verify LoreConvo is connected. You should see `loreconvo` listed with a green
 
 ---
 
-## Connecting to Cowork
-
-Install via the `.plugin` file in the cloned directory:
-
-1. Open Cowork settings
-2. Click "Add plugin from file"
-3. Select `loreconvo-dev.plugin` from the cloned repo
-4. Restart Cowork
-
----
-
 ## Connecting to Cursor IDE
 
 Cursor uses the same MCP protocol as Claude Code. Configure it by creating a `.cursor/mcp.json` file in your project root:
