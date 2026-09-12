@@ -1,31 +1,25 @@
-# LoreConvo CLI Reference
+# LoreConvo Bypass CLI Reference
 
-LoreConvo includes a command-line interface (CLI) for managing session memory from your terminal. Use it when you want to save, search, or export sessions without going through Claude.
-
-**Version:** 0.6.1
+LoreConvo ships with a bypass CLI for the MCP-unavailable case -- use it when the MCP server is not running, the MCP client is not connected, or you need to script session saves from outside Claude. This is not the separate LoreConvo CLI product (in pre-launch). If you are in a Claude session with MCP working, use the MCP tools directly; they are faster and return structured data.
 
 ---
 
 ## Getting Started
 
-Run the CLI from the LoreConvo directory:
+Invoke via the Python module interface from any terminal where LoreConvo is installed:
 
 ```bash
-python src/cli.py [command] [options]
+python -m loreconvo.cli [command] [options]
 ```
 
-If you installed LoreConvo with `install.sh`, use the virtual environment Python:
-
-```bash
-.venv/bin/python3 src/cli.py [command] [options]
-```
-
-Check your version:
+Check that it is working and see the installed version:
 
 ```
-$ .venv/bin/python3 src/cli.py --version
-loreconvo, version 0.6.0
+$ python -m loreconvo.cli --version
+loreconvo, version 0.10.8
 ```
+
+(The version you see will reflect your installed version, which may differ from the example above.)
 
 ---
 
@@ -52,7 +46,7 @@ Save a session to memory. Use this after finishing a work session or from an aut
 ### Syntax
 
 ```
-python src/cli.py save -t "TITLE" -s SURFACE -m "SUMMARY" [options]
+python -m loreconvo.cli save -t "TITLE" -s SURFACE -m "SUMMARY" [options]
 ```
 
 ### Options
@@ -71,7 +65,7 @@ python src/cli.py save -t "TITLE" -s SURFACE -m "SUMMARY" [options]
 ### Example
 
 ```
-$ python src/cli.py save -t "Fixed login bug" -s code -m "Debugged the auth timeout issue in the session middleware" --tags "bugfix" --decisions "Switch to JWT tokens"
+$ python -m loreconvo.cli save -t "Fixed login bug" -s code -m "Debugged the auth timeout issue in the session middleware" --tags "bugfix" --decisions "Switch to JWT tokens"
 Saved session: 922b287f-6cd6-44b0-8701-ef778199966e
   Title: Fixed login bug
   Surface: code
@@ -80,7 +74,7 @@ Saved session: 922b287f-6cd6-44b0-8701-ef778199966e
 ### Example with project and multiple decisions
 
 ```
-$ python src/cli.py save \
+$ python -m loreconvo.cli save \
     -t "Tax pipeline debugging" \
     -s code \
     -m "Fixed the K-1 parser edge case for partnership distributions" \
@@ -95,6 +89,12 @@ Saved session: a1b2c3d4-e5f6-7890-abcd-ef1234567890
   Project: secret-agent-man
 ```
 
+### Field length limits
+
+`summary` is capped at 8,000 characters. Each individual `-d`/`--decisions` entry is capped at 500 characters. Content that exceeds the cap is stored truncated without an ellipsis; the command output shows `truncated: true` when any cap fires but does not say which field was cut.
+
+Keep each decision entry to a short, self-contained claim. Use `--summary` for narrative detail.
+
 ### Common errors
 
 **"Missing option '-t'."** -- You forgot the required `--title` flag. All three of `--title`, `--surface`, and `--summary` are required.
@@ -108,7 +108,7 @@ List recent sessions, newest first. Use this to see what you have been working o
 ### Syntax
 
 ```
-python src/cli.py list [options]
+python -m loreconvo.cli list [options]
 ```
 
 ### Options
@@ -123,7 +123,7 @@ python src/cli.py list [options]
 ### Example
 
 ```
-$ python src/cli.py list -n 3
+$ python -m loreconvo.cli list -n 3
   2026-04-04  code    Fixed login bug
            id: 922b287f-6cd6-44b0-8701-ef778199966e
 
@@ -141,7 +141,7 @@ Search session memory by keyword. Matches against session titles, summaries, and
 ### Syntax
 
 ```
-python src/cli.py search QUERY [options]
+python -m loreconvo.cli search QUERY [options]
 ```
 
 ### Options
@@ -156,7 +156,7 @@ python src/cli.py search QUERY [options]
 ### Example
 
 ```
-$ python src/cli.py search "login"
+$ python -m loreconvo.cli search "login"
   [0.0] 2026-04-04  Fixed login bug
          [decision] Switch to JWT tokens
          id: 922b287f-6cd6-44b0-8701-ef778199966e
@@ -175,7 +175,7 @@ Export a session for pasting into Claude Chat or sharing with others. Outputs ei
 ### Syntax
 
 ```
-python src/cli.py export [SESSION_ID] [options]
+python -m loreconvo.cli export [SESSION_ID] [options]
 ```
 
 ### Options
@@ -190,7 +190,7 @@ You must provide either a session ID or the `--last` flag.
 ### Example (markdown)
 
 ```
-$ python src/cli.py export --last
+$ python -m loreconvo.cli export --last
 # Context from Previous Session
 
 **Title:** Fixed login bug
@@ -207,7 +207,7 @@ Debugged the auth timeout issue in the session middleware
 ### Example (JSON)
 
 ```
-$ python src/cli.py export --last --format json
+$ python -m loreconvo.cli export --last --format json
 {
   "id": "922b287f-6cd6-44b0-8701-ef778199966e",
   "title": "Fixed login bug",
@@ -242,7 +242,7 @@ Show all sessions that used a specific skill. Use this to track how often and in
 ### Syntax
 
 ```
-python src/cli.py skill-history SKILL_NAME [options]
+python -m loreconvo.cli skill-history SKILL_NAME [options]
 ```
 
 ### Options
@@ -254,7 +254,7 @@ python src/cli.py skill-history SKILL_NAME [options]
 ### Example
 
 ```
-$ python src/cli.py skill-history rental-property-accounting
+$ python -m loreconvo.cli skill-history rental-property-accounting
   2026-04-01  cowork  Rental expense review for Q1
   2026-03-28  code    Depreciation schedule update
 
@@ -270,13 +270,13 @@ List all distinct skills that have been recorded in session memory, sorted by ho
 ### Syntax
 
 ```
-python src/cli.py skills list
+python -m loreconvo.cli skills list
 ```
 
 ### Example
 
 ```
-$ python src/cli.py skills list
+$ python -m loreconvo.cli skills list
      5  us-federal-tax
      3  rental-property-accounting
      2  ynab-multi-budget-management
@@ -296,13 +296,13 @@ Show a quick summary of your session memory: total sessions, projects, and the m
 ### Syntax
 
 ```
-python src/cli.py stats
+python -m loreconvo.cli stats
 ```
 
 ### Example
 
 ```
-$ python src/cli.py stats
+$ python -m loreconvo.cli stats
 Total sessions: 1
 Projects: 0
 Most recent: Fixed login bug (2026-04-04)
@@ -311,7 +311,7 @@ Most recent: Fixed login bug (2026-04-04)
 When you have projects defined, stats shows a breakdown by project:
 
 ```
-$ python src/cli.py stats
+$ python -m loreconvo.cli stats
 Total sessions: 47
 Projects: 3
   secret-agent-man: 28 sessions

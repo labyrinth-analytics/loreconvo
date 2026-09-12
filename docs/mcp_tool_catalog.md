@@ -34,6 +34,13 @@ Save a session summary to persistent memory. Claude calls this at the end of a s
 
 **Note on `start_date`:** When updating an existing session, omitting `start_date` preserves the original value. Pass an explicit `start_date` only if you need to overwrite it.
 
+**Field length limits:** `save_session` enforces two caps on the stored content:
+
+- `summary` and `reasoning_notes`: each limited to 8,000 characters.
+- Each individual item in `decisions`, `artifacts`, and `open_questions`: limited to 500 characters per item. This is a per-item cap, not a per-list cap -- a list with 20 items can store up to 20 x 500 = 10,000 characters across the list, but any single item longer than 500 characters is cut at that point.
+
+If a value exceeds its cap, it is stored truncated without an ellipsis. The response includes `"truncated": true` when any cap fired, but does not identify which field or item was affected. To avoid silent truncation: keep each `decisions`, `artifacts`, and `open_questions` entry to a short, self-contained claim (one sentence is usually enough). Use `summary` for narrative detail -- its 8,000-character budget is large enough for several paragraphs.
+
 **Returns:** The new session ID and a confirmation.
 
 **Example conversation:**

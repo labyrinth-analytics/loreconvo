@@ -48,7 +48,7 @@ Call the `save_session` MCP tool with structured data extracted from the convers
 1. **Title**: Short, descriptive (e.g., "LoreConvo PRD and architecture design")
 2. **Surface**: Where this ran - `cowork`, `code`, or `chat`
 3. **Summary**: 2-3 paragraphs covering what was done, why, and what matters for future sessions
-4. **Decisions**: List every decision made, even small ones. These are the most searchable items.
+4. **Decisions**: List every decision made, even small ones -- these are the most searchable items. Keep each entry to one short, self-contained claim (one sentence is usually enough). Narrative detail belongs in **Summary**, which has a much larger budget. Each decision entry is capped at 500 characters and stored truncated without warning if exceeded; a tight entry never hits the cap.
 5. **Artifacts**: Files created or modified, with paths
 6. **Open questions**: Unresolved items to carry forward
 7. **Skills used**: List all skills invoked during this session (check the conversation for "skill is loading" messages)
