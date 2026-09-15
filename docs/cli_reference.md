@@ -25,17 +25,22 @@ loreconvo, version 0.10.8
 
 ## Commands
 
-LoreConvo has 7 commands (including the `skills` subgroup):
+LoreConvo has 12 commands (10 top-level plus the `skills list` and `license clear` subcommands):
 
 | Command | What it does |
 |---------|-------------|
 | `save` | Save a session to memory |
 | `list` | List recent sessions |
 | `search` | Search session memory by keyword |
-| `export` | Export a session as markdown or JSON |
+| `inspect` | Inspect, filter, or delete stored sessions |
+| `export` | Export a session as markdown, JSON, or a shareable team bundle (Pro) |
+| `merge` | Import sessions from a shared export file (Pro) |
+| `pin` | Pin a session to exclude it from automated cleanup |
+| `rebuild-index` | Rebuild the LanceDB semantic search index (Pro) |
 | `skill-history` | Show sessions that used a specific skill |
 | `skills list` | List all skills by usage count |
 | `stats` | Show memory statistics |
+| `license clear` | Clear a LoreConvo Pro license |
 
 ---
 
@@ -61,6 +66,8 @@ python -m loreconvo.cli save -t "TITLE" -s SURFACE -m "SUMMARY" [options]
 | `--skills` | text | no | none | Skills used (use multiple times) |
 | `--tags` | text | no | none | Tags for categorization (use multiple times) |
 | `--reasoning-notes` | text | no | none | Optional reasoning chain text: why a decision was made, what alternatives were considered |
+| `--external-tool` | flag | no | off | Mark as an external tool session; excluded from auto-load and search by default |
+| `--permanent` | flag | no | off | Pin this session immediately so it is never auto-pruned |
 
 ### Example
 
@@ -152,6 +159,7 @@ python -m loreconvo.cli search QUERY [options]
 | `-p`, `--project` | text | none | Filter to sessions in this project |
 | `--skill` | text | none | Filter to sessions that used this skill |
 | `-n`, `--limit` | integer | 10 | Maximum results to return |
+| `--semantic` | flag | off | Use LanceDB hybrid (vector + BM25) search. Pro tier only. Requires `rebuild-index` to have been run at least once. |
 
 ### Example
 
@@ -170,7 +178,7 @@ Results are ranked by relevance score (shown in brackets). Decisions from matchi
 
 ## `export`
 
-Export a session for pasting into Claude Chat or sharing with others. Outputs either a clean markdown summary or raw JSON.
+Export a session for pasting into Claude Chat or sharing with others. Outputs a clean markdown summary, raw JSON, a shareable team bundle, or an Anthropic managed-agents bundle.
 
 ### Syntax
 
@@ -183,9 +191,23 @@ python -m loreconvo.cli export [SESSION_ID] [options]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--last` | flag | off | Export the most recent session (instead of specifying an ID) |
-| `--format` | choice | markdown | Output format: `markdown` or `json` |
+| `--format` | choice | markdown | Output format: `markdown`, `json`, `shared` (Pro), or `anthropic-v1` (Pro) |
+| `-p`, `--project` | text | none | Filter by project (`shared` and `anthropic-v1` formats only) |
+| `--session-ids` | text | none | Comma-separated list of session IDs to include (`shared` and `anthropic-v1` formats only) |
+| `--all` | flag | off | Export all sessions (`shared` and `anthropic-v1` formats; use with care) |
+| `--out` | text | none | Output file path (`shared` and `anthropic-v1` formats) |
+| `--days-back` | integer | none | Limit to sessions from the last N days (`anthropic-v1` only) |
 
-You must provide either a session ID or the `--last` flag.
+You must provide either a session ID or the `--last` flag for single-session exports. For multi-session formats (`shared`, `anthropic-v1`) use `--session-ids`, `--project`, or `--all`.
+
+#### Format guide
+
+| Format | Use when |
+|--------|----------|
+| `markdown` | Pasting context into Claude Chat or sharing with a colleague |
+| `json` | Scripts and automation that process session data programmatically |
+| `shared` | Sharing a session bundle with a teammate who will import it via `merge` (Pro) |
+| `anthropic-v1` | Exporting to Anthropic managed-agents memory format (Pro) |
 
 ### Example (markdown)
 
@@ -227,11 +249,138 @@ $ python -m loreconvo.cli export --last --format json
 }
 ```
 
-### When to use each format
+---
 
-**Markdown** is best for pasting into Claude Chat or sharing with a colleague. It is human-readable and includes all the important context.
+## `inspect`
 
-**JSON** is best for scripts and automation. Use it when you need to process session data programmatically.
+Inspect stored sessions: list them, filter by tag or surface, view full detail for one session, or delete a session.
+
+### Syntax
+
+```
+python -m loreconvo.cli inspect [SESSION_ID] [options]
+```
+
+Without arguments, lists recent sessions. Provide a SESSION_ID to view full detail for that session.
+
+### Options
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--search` | text | none | Full-text search query |
+| `--tag` | text | none | Filter by tag substring (e.g. `agent:ron`) |
+| `--surface` | text | none | Filter by surface: `code`, `cowork`, or `chat` |
+| `--since` | text | none | Show sessions since a date in `YYYY-MM-DD` format |
+| `-n`, `--limit` | integer | 10 | Maximum sessions to show |
+| `--show-stats` | flag | off | Add aggregate counts to the listing |
+| `--delete` | text | none | Delete the session with this ID (prompts for confirmation) |
+
+### Example
+
+```
+$ python -m loreconvo.cli inspect --tag "agent:ron" --since 2026-09-01 -n 5
+  2026-09-14  code    ron-builder session 2026-09-14
+           id: 8b3e5a12-1234-5678-abcd-ef0987654321
+
+1 session(s)
+```
+
+---
+
+## `merge`
+
+Import sessions from a shared export file produced by `export --format shared`. LoreConvo Pro required. Duplicate sessions (by UUID or content hash) are skipped automatically.
+
+### Syntax
+
+```
+python -m loreconvo.cli merge FILE
+```
+
+`FILE` must be a JSON bundle created by `python -m loreconvo.cli export --format shared`.
+
+### Example
+
+```
+$ python -m loreconvo.cli merge teammate_sessions.json
+Imported 3 session(s). Skipped 1 duplicate(s).
+```
+
+---
+
+## `pin`
+
+Pin a session to exclude it from automated cleanup. Any existing expiry date is cleared when pinning. Use `--unpin` to remove the exclusion.
+
+### Syntax
+
+```
+python -m loreconvo.cli pin SESSION_ID [--unpin]
+```
+
+### Options
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--unpin` | flag | off | Remove the automated-cleanup exclusion instead of setting it |
+
+### Example
+
+```
+$ python -m loreconvo.cli pin 922b287f-6cd6-44b0-8701-ef778199966e
+Session pinned: 922b287f-6cd6-44b0-8701-ef778199966e
+
+$ python -m loreconvo.cli pin 922b287f-6cd6-44b0-8701-ef778199966e --unpin
+Session unpinned: 922b287f-6cd6-44b0-8701-ef778199966e
+```
+
+Exit codes: 0 = success, 1 = user error (bad ID or session not found), 2 = DB/system error.
+
+---
+
+## `rebuild-index`
+
+Rebuild the LanceDB semantic search index used by `search --semantic`. Pro tier required. Downloads the BGE-small-en-v1.5 embedding model (~130MB) on first run if it is not already cached. Run once after your first Pro activation, or to recover a corrupted index.
+
+### Syntax
+
+```
+python -m loreconvo.cli rebuild-index
+```
+
+### Example
+
+```
+$ python -m loreconvo.cli rebuild-index
+Rebuilding semantic index...
+Indexed 47 session(s).
+Done.
+```
+
+---
+
+## `license clear`
+
+Clear a LoreConvo Pro license from this machine. Use `--suite` to also clear the suite-wide Pro key from the sibling product (LoreDocs).
+
+### Syntax
+
+```
+python -m loreconvo.cli license clear [--suite]
+```
+
+### Options
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--suite` | flag | off | Also clear suite-wide Pro from the sibling LoreDocs product |
+
+### Example
+
+```
+$ python -m loreconvo.cli license clear
+LoreConvo Pro license cleared.
+```
 
 ---
 
