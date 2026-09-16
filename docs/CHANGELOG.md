@@ -4,7 +4,7 @@ What changed in each release, written for users (not developers).
 
 ---
 
-## Unreleased
+## v0.10.10 (2026-09-15)
 
 ### Fixed
 

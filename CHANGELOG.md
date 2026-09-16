@@ -1,20 +1,62 @@
 # LoreConvo Changelog
 
-## Unreleased
+## v0.10.10 (2026-09-15)
 
-### Fixed
+### Fixed: memory digests could resurface external or expired sessions (SH-101733)
 
-- Session JSON/JSONL exports preserve recall controls and metadata; imports
-  preserve omitted legacy fields on replacement and validate explicit controls.
-- Existing session updates remain available at the Free session cap. FTS tag
-  filtering occurs before LIMIT, and summary history retains the last distinct
-  summary across normal, async, hook, and import-replace updates.
-- Digest consolidation and recall validate source eligibility and provenance,
-  preventing external or expired sessions from reappearing through a digest.
-  Legacy digests require reconsolidation.
-- Opt-in post-turn capture is registered in the plugin and included in wheel
-  packages. The worker uses the real license gate, honors processed queue
-  markers, and serializes shared daily call reservations.
+`HeuristicConsolidator` now records `source_session_ids` on every digest at
+consolidation time (`consolidation.py`). `SessionDatabase._digest_sources_are_eligible()`
+rechecks source eligibility on retrieval and rejects digests with legacy (missing)
+provenance or a `safety_invalidated` flag. `_invalidate_memory_digests_for_session_scope()`
+invalidates both the matching surface digest and the project-wide digest whenever a
+source-affecting write occurs (exclusion toggle, expiry set/clear). Legacy digests
+require reconsolidation to become recallable again; the user-controlled `disabled`
+flag on a digest remains a separate, independent gate.
+
+### Fixed: session export/import silently dropped or reset recall-control fields (SH-101734)
+
+`export_sessions` now serializes the full set of recall-relevant fields (summary,
+decisions, artifacts, tags, external-tool-session flag, expiry, pin state) rather
+than a partial set. `import_session()` (`on_conflict=replace`) leaves omitted fields
+at their current database value instead of resetting them to defaults when replaying
+a legacy export that predates a field. Pinned imports clear expiry. New
+`normalize_expiry_timestamp()` rejects expiry values with no timezone info and
+normalizes timezone-aware values to UTC before they are stored. Scope note:
+`export_sessions` was never a full-store backup and still excludes session links and
+independently-saved memory items (`save_memory_item`); that boundary is unchanged,
+just now documented rather than implied.
+
+### Fixed: Free-tier session cap blocked updates to sessions the user already had (SH-101735)
+
+The Free-tier capacity check in the upsert path now distinguishes a new UUID (still
+rejected at the cap) from an update to an existing session UUID (now permitted
+regardless of cap). Normal upsert and limit behavior for genuinely new sessions is
+unchanged.
+
+### Fixed: FTS tag filter was applied after LIMIT, hiding matches on later pages (SH-101736)
+
+Tag-scoped full-text search now applies the tag predicate before the SQL `LIMIT`, so
+a tag match outside the first unfiltered page of results is no longer silently
+dropped. Ranking behavior for untagged queries is unchanged.
+
+### Fixed: an unchanged summary overwrote the previously-saved distinct summary (SH-101737)
+
+`previous_summary` is now only updated when a save actually changes the summary
+text, checked uniformly across the normal save, async (LLM) save, hook-triggered
+save, and import-with-replace paths. Saving the same summary twice in a row no
+longer clobbers the last genuinely different summary; single-slot history semantics
+are preserved.
+
+### Fixed: opt-in post-turn capture wasn't wired into the shipped plugin (SH-101738)
+
+`LORECONVO_POST_TURN_CAPTURE=1` now actually enables the bundled PostToolUse hook --
+`plugin.json` registers it under `hooks.PostToolUse` for both plugin and package
+installs, which prior 0.10.x versions did not do. The worker (`capture_worker.py`)
+now checks the real Pro license gate instead of a nonexistent `tier_manager`/bypass
+variable. Queue processed-marker handling is corrected so that two drains with no
+new queue entries perform exactly one capture and one API call rather than
+repeating work; shared daily call reservations are serialized against concurrent
+writers.
 
 ## v0.10.9 (2026-09-05)
 
