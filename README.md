@@ -1,4 +1,4 @@
-# LoreConvo v0.10.9
+# LoreConvo v0.10.10
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -414,48 +414,19 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.9 (2026-09-05)
+## v0.10.10 (2026-09-15)
 
-### Fixed: session auto-capture no longer overwrites a save you already made
+### Fixed
 
-If you (or an agent) explicitly saved a rich session summary, the
-background auto-capture that runs when a session ends or is compacted
-could, in rare timing cases, silently replace it with a shallow one --
-losing the detail you saved. Auto-capture now checks for an existing
-explicit save first and leaves it alone. A new diagnostic script is
-included to scan an existing database for sessions this may have already
-affected.
-
-### Added: the fallback script can now do semantic search, and follows a documented contract
-
-If the LoreConvo MCP server is unreachable, the fallback command-line
-script (`save_to_loreconvo.py`) can now run a semantic search (Pro),
-matching what the MCP tools already do. If you set `LORECONVO_DB` to point
-the fallback at a specific database and that path doesn't actually exist,
-the fallback now stops with a clear error instead of silently searching
-somewhere else. See `FALLBACK_CONTRACT.md` in the LoreConvo install for
-exactly what the fallback guarantees and how it's kept in sync with the
-MCP server.
-
-### Fixed: session chains no longer pull in unrelated sessions automatically
-
-Asking for a session's chain (`get_session_chain`) now follows only the
-links you explicitly made by default, instead of also following
-automatically-generated "related session" links -- so one deliberate link
-no longer returns a large chain of loosely-related sessions you never
-asked to connect. Pass `include_auto` if you want the old, broader
-behavior.
-
-### Changed: long session fields are now capped everywhere they're written
-
-Session summaries, decisions, and open questions saved directly through
-the MCP tools are now length-capped the same way they already are when a
-session ends normally, preventing unbounded growth from any write path.
-
-### Documentation: Pro license key issuance
-
-The README and install docs now set expectations for how you receive your
-Pro license key after checkout.
+- Session export/import preserves exclusions, pinning, expiry, and summary
+  history. Session exports do not include separate memory items or session links.
+- You can update existing sessions when the Free plan is full. Tag-filtered
+  search returns matching results beyond the first unfiltered page, and saving
+  an unchanged summary preserves the previous distinct summary.
+- Memory digests respect session exclusions and expiry. Older digests need to
+  be consolidated again before they can be recalled.
+- Opt-in post-turn capture now runs from both plugin and package installs,
+  recognizes Pro licenses, and avoids repeating successfully processed work.
 
 <!-- WHATS_NEW:END -->
 
