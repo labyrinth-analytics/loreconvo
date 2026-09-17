@@ -8,6 +8,9 @@ What changed in each release, written for users (not developers).
 
 ### Fixed
 
+- When a saved session field is longer than the storage limit, the stored
+  record now ends with a clear "[TRUNCATED: field exceeds N chars]" note
+  instead of stopping mid-sentence with no explanation.
 - Session export/import preserves exclusions, pinning, expiry, and summary
   history. Session exports do not include separate memory items or session links.
 - You can update existing sessions when the Free plan is full. Tag-filtered

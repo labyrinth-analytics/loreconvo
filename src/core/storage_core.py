@@ -481,6 +481,35 @@ def sanitize_fts_query(query: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Capture-time field caps -- one derivation shared by the SessionEnd hook
+# path (auto_save.py) and the direct-write MCP path (database.py).
+# ---------------------------------------------------------------------------
+
+# Ratified capture-time caps (SH-13531). The hook path enforces them in
+# auto_save.py; SH-101425 extended them to the direct-write save_session
+# path; SH-101877 makes both paths share this one truncation derivation so
+# a cut always carries a visible [TRUNCATED] marker.
+_MAX_SESSION_SUMMARY_LENGTH = 8000
+_MAX_SESSION_LIST_ITEM_LENGTH = 500
+
+
+def _truncate_if_needed(value, max_length, field_name):
+    """Truncate value to max_length chars, adding a [TRUNCATED] marker.
+
+    The marker is reserved INSIDE the cap (the content slice is shortened
+    by len(marker)) so the result never exceeds max_length including the
+    marker. Appending the marker after the slice was the SH-13718 overshoot
+    bug on the hook path -- do not reintroduce it. Returns the value
+    unchanged when it fits or is falsy.
+    """
+    if not value or len(value) <= max_length:
+        return value
+    marker = f" [TRUNCATED: {field_name} exceeds {max_length} chars]"
+    max_content_length = max(0, max_length - len(marker))
+    return value[:max_content_length] + marker
+
+
+# ---------------------------------------------------------------------------
 # Permission remediation (no SQLite connection -- os.stat + os.chmod only)
 # ---------------------------------------------------------------------------
 
