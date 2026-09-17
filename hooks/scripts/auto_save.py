@@ -29,19 +29,11 @@ except BootstrapError as exc:
 _open_conn = _storage._open_conn
 ensure_schema = _storage.ensure_schema
 upsert_session = _storage.upsert_session
-
-
-_MAX_DECISION_LENGTH = 500
-_MAX_SUMMARY_LENGTH = 8000
-
-
-def _truncate_if_needed(value, max_length, field_name):
-    """Truncate value to max_length chars, adding [TRUNCATED] marker if needed."""
-    if not value or len(value) <= max_length:
-        return value
-    marker = f" [TRUNCATED: {field_name} exceeds {max_length} chars]"
-    max_content_length = max(0, max_length - len(marker))
-    return value[:max_content_length] + marker
+# One derivation of truncate-with-marker (SH-101877): the hook path and the
+# direct-write path share storage_core's implementation and cap constants.
+_truncate_if_needed = _storage._truncate_if_needed
+_MAX_DECISION_LENGTH = _storage._MAX_SESSION_LIST_ITEM_LENGTH
+_MAX_SUMMARY_LENGTH = _storage._MAX_SESSION_SUMMARY_LENGTH
 
 
 def auto_save_tags():
