@@ -2,6 +2,16 @@
 
 ## v0.10.10 (2026-09-15)
 
+### Fixed: direct-write save_session truncation now marks the cut (SH-101877)
+
+`truncate_session_fields()` (the direct MCP `save_session` path) now shares
+the hook path's single truncation derivation (`_truncate_if_needed` in
+`core/storage_core.py`): a cut summary, reasoning_notes, decision, or open
+question carries a `[TRUNCATED: <field> exceeds <cap> chars]` marker, reserved
+inside the cap so the stored value never exceeds the ratified length including
+the marker. Previously the direct path sliced silently -- the stored record
+stopped mid-word with no signal on recall. Cap values are unchanged.
+
 ### Fixed: memory digests could resurface external or expired sessions (SH-101733)
 
 `HeuristicConsolidator` now records `source_session_ids` on every digest at

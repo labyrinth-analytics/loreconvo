@@ -31,6 +31,9 @@ from .storage_core import (
     ANTI_PATTERN_SCHEMA_SQL,
     _is_in_memory_db,
     _open_conn,
+    _truncate_if_needed,
+    _MAX_SESSION_SUMMARY_LENGTH,
+    _MAX_SESSION_LIST_ITEM_LENGTH,
     ensure_schema,
     upsert_session,
     remediate_permissions,
@@ -175,12 +178,6 @@ def _validate_memory_session_id(conn: sqlite3.Connection, session_id: Optional[s
 
 _MEMORY_ITEM_FIELD_CAP = 4096
 
-# Ratified capture-time caps (SH-13531), already enforced on the SessionEnd
-# hook path (hooks/scripts/auto_save.py). SH-101425 extends them to the
-# direct-write save_session path (MCP tool + this DB layer).
-_MAX_SESSION_SUMMARY_LENGTH = 8000
-_MAX_SESSION_LIST_ITEM_LENGTH = 500
-
 
 def _truncate_text(value):
     """Cap plain text at _MEMORY_ITEM_FIELD_CAP chars. Returns (value, truncated)."""
@@ -193,31 +190,40 @@ def truncate_session_fields(session: Session) -> bool:
     """Cap session.summary/reasoning_notes and each decisions/open_questions
     item at the ratified lengths (SH-13531), mutating session in place.
 
-    Mirrors the caps auto_save.py already enforces on the SessionEnd hook
-    path; this is the direct-write path's equivalent (SH-101425). Returns
-    True if any field was cut.
+    Mirrors the caps auto_save.py enforces on the SessionEnd hook path;
+    this is the direct-write path's equivalent (SH-101425). SH-101877 makes
+    both paths share one derivation (_truncate_if_needed in storage_core),
+    so a cut always carries the [TRUNCATED: <field> exceeds <cap> chars]
+    marker and the result never exceeds the cap INCLUDING the marker.
+    Returns True if any field was cut.
     """
     truncated = False
     if session.summary and len(session.summary) > _MAX_SESSION_SUMMARY_LENGTH:
-        session.summary = session.summary[:_MAX_SESSION_SUMMARY_LENGTH]
+        session.summary = _truncate_if_needed(
+            session.summary, _MAX_SESSION_SUMMARY_LENGTH, "summary"
+        )
         truncated = True
     if session.reasoning_notes and len(session.reasoning_notes) > _MAX_SESSION_SUMMARY_LENGTH:
-        session.reasoning_notes = session.reasoning_notes[:_MAX_SESSION_SUMMARY_LENGTH]
+        session.reasoning_notes = _truncate_if_needed(
+            session.reasoning_notes, _MAX_SESSION_SUMMARY_LENGTH, "reasoning_notes"
+        )
         truncated = True
 
-    def _cap_list(items):
+    def _cap_list(items, field_name):
         nonlocal truncated
         capped = []
         for item in items:
             if item and len(item) > _MAX_SESSION_LIST_ITEM_LENGTH:
-                capped.append(item[:_MAX_SESSION_LIST_ITEM_LENGTH])
+                capped.append(
+                    _truncate_if_needed(item, _MAX_SESSION_LIST_ITEM_LENGTH, field_name)
+                )
                 truncated = True
             else:
                 capped.append(item)
         return capped
 
-    session.decisions = _cap_list(session.decisions)
-    session.open_questions = _cap_list(session.open_questions)
+    session.decisions = _cap_list(session.decisions, "decision")
+    session.open_questions = _cap_list(session.open_questions, "open_question")
     return truncated
 
 
