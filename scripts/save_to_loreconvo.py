@@ -760,6 +760,109 @@ def cmd_anthropic_export(args):
         print(data)
 
 
+# -- Related sessions / consolidation / digest / context (SH-101929/101930) --
+
+
+def cmd_related(args):
+    """Related-session discovery (get_related_sessions, Pro only)."""
+    db = _session_database(args)
+    try:
+        result = db.related_sessions_payload(
+            session_id=args.related_session_id,
+            limit=args.related_limit,
+            min_shared_terms=args.min_shared_terms,
+        )
+    finally:
+        db.close()
+
+    if "error" in result:
+        print(f"ERROR: {result['error']}", file=sys.stderr)
+        sys.exit(1)
+
+    sessions = result.get("related", [])
+    if not sessions:
+        print(f"No related sessions found for {args.related_session_id}.")
+        return
+    print(
+        f"{result['related_count']} related session(s) for "
+        f"{args.related_session_id}:"
+    )
+    print()
+    for s in sessions:
+        print(f"[{s.get('start_date')}] ({s.get('surface', '')}) {s.get('title')}")
+        print(f"  ID: {s.get('session_id')}")
+        print(f"  link: {s.get('link_type')} (shared terms: {s.get('shared_term_count')})")
+        preview = s.get("summary_preview") or ""
+        if preview:
+            print(f"  {preview}")
+        print()
+
+
+def cmd_consolidate(args):
+    """Run memory consolidation for a project (consolidate_memories)."""
+    db = _session_database(args)
+    try:
+        result = db.consolidate_memories_payload(
+            project=args.project,
+            surface=getattr(args, "surface", None),
+            max_sessions=args.max_sessions,
+            dedup=args.dedup,
+        )
+    finally:
+        db.close()
+    print(json.dumps(result, indent=2))
+
+
+def cmd_digest(args):
+    """Print the current memory digest (get_memory_digest)."""
+    db = _session_database(args)
+    try:
+        disable = True if args.digest_disable else (False if args.digest_enable else None)
+        result = db.memory_digest_payload(
+            project=args.project,
+            surface=getattr(args, "surface", None),
+            disable=disable,
+            max_tokens=args.max_tokens,
+        )
+    finally:
+        db.close()
+    if result["status"] == "no_digest":
+        print(f"No memory digest for project '{args.project}' "
+              f"(surface {getattr(args, 'surface', None)}).", file=sys.stderr)
+        sys.exit(1)
+    print(result["digest_markdown"])
+
+
+def cmd_context_for(args):
+    """Print session context for a topic (get_context_for)."""
+    db = _session_database(args)
+    try:
+        results = db.context_for_payload(
+            topic=args.context_topic,
+            max_results=args.max_results,
+            include_external=args.include_external,
+            semantic=args.semantic,
+        )
+    finally:
+        db.close()
+
+    if not results:
+        print(f"No context found for topic '{args.context_topic}'.")
+        return
+    print(f"{len(results)} context result(s) for '{args.context_topic}':")
+    print()
+    for r in results:
+        print(f"[{r['date']}] {r['session_title']}")
+        print(f"  match: {r['match_score']:.2f}")
+        if r["summary"]:
+            print(f"  {r['summary']}")
+        for d in (r["decisions"] or []):
+            print(f"  decision: {d}")
+        for q in (r["open_questions"] or []):
+            print(f"  open: {q}")
+        print()
+
+
 # -- CLI --
 
 def main():
@@ -829,6 +932,44 @@ def main():
     parser.add_argument("--export-limit", type=int, dest="export_limit", default=1000,
                         help="With --export: max sessions (default 1000)")
 
+    # Related sessions / consolidation / digest / context flags (SH-101929/101930)
+    parser.add_argument("--related", action="store_true",
+                        help="Find sessions related to --related-session-id "
+                             "(get_related_sessions, Pro only)")
+    parser.add_argument("--related-session-id", type=str, dest="related_session_id",
+                        help="With --related: seed session UUID")
+    parser.add_argument("--related-limit", type=int, dest="related_limit", default=10,
+                        help="With --related: max results (default 10, max 50)")
+    parser.add_argument("--min-shared-terms", type=int, dest="min_shared_terms", default=3,
+                        help="With --related: minimum shared keywords (default 3)")
+    parser.add_argument("--consolidate", action="store_true",
+                        help="Run memory consolidation for --project (consolidate_memories)")
+    parser.add_argument("--max-sessions", type=int, dest="max_sessions", default=50,
+                        help="With --consolidate: max sessions to analyze (default 50)")
+    parser.add_argument("--dedup", type=str, dest="dedup", default=None,
+                        choices=["off", "conservative", "balanced"],
+                        help="With --consolidate: semantic dedup pass mode "
+                             "(off default, conservative, balanced)")
+    parser.add_argument("--digest", action="store_true",
+                        help="Print the current memory digest for --project "
+                             "(get_memory_digest)")
+    parser.add_argument("--digest-disable", action="store_true", dest="digest_disable",
+                        help="With --digest: set disabled=True on the digest")
+    parser.add_argument("--digest-enable", action="store_true", dest="digest_enable",
+                        help="With --digest: set disabled=False on the digest")
+    parser.add_argument("--max-tokens", type=int, dest="max_tokens", default=2000,
+                        help="With --digest: truncate markdown to this token "
+                             "estimate (default 2000)")
+    parser.add_argument("--context-for", action="store_true", dest="context_for",
+                        help="Print session context for --context-topic "
+                             "(get_context_for)")
+    parser.add_argument("--context-topic", type=str, dest="context_topic",
+                        help="With --context-for: the topic to find context for")
+    parser.add_argument("--include-external", action="store_true", dest="include_external",
+                        help="With --context-for: include external-tool sessions")
+    parser.add_argument("--max-results", type=int, dest="max_results", default=5,
+                        help="With --context-for: max excerpts (default 5)")
+
     # Save args
     parser.add_argument("--title", type=str, help="Session title")
     parser.add_argument("--surface", type=str,
@@ -872,6 +1013,22 @@ def main():
         cmd_import(args)
     elif args.anthropic_export:
         cmd_anthropic_export(args)
+    elif args.related:
+        if not args.related_session_id:
+            parser.error("--related requires --related-session-id")
+        cmd_related(args)
+    elif args.consolidate:
+        if not args.project:
+            parser.error("--consolidate requires --project")
+        cmd_consolidate(args)
+    elif args.digest:
+        if not args.project:
+            parser.error("--digest requires --project")
+        cmd_digest(args)
+    elif args.context_for:
+        if not args.context_topic:
+            parser.error("--context-for requires --context-topic")
+        cmd_context_for(args)
     elif args.read_id:
         read_session_by_id(args)
     elif args.search:
