@@ -18,12 +18,9 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 from core.models import Session
 from core.database import (
-    SessionDatabase, SessionLimitReachedError, _MAX_IMPORT_BYTES,
-    _MAX_SESSIONS_PER_FILE, _IMPORT_FIELD_CAPS,
+    SessionDatabase, SessionLimitReachedError,
     _pinning_enabled, parse_session_id, truncate_session_fields,
-    normalize_expiry_timestamp,
 )
-from core import graph
 from core.loredocs_bridge import (
     CROSS_LINK_EMBEDDING_MODEL,
     LoreDocsAccessError,
@@ -988,63 +985,9 @@ def graph_session_map(
     edge_kinds_included, edge_kinds_omitted -- or {"error": {...}} on a
     validation failure or an unavailable database.
     """
-    if bool(session_id) == bool(project):
-        return {"error": {
-            "code": "SEED_XOR", "field": None,
-            "message": "Exactly one of session_id or project is required.",
-        }}
-    try:
-        depth = int(depth)
-    except (TypeError, ValueError):
-        return {"error": {
-            "code": "INVALID_PARAM", "field": "depth",
-            "message": "depth must be an integer.",
-        }}
-    try:
-        max_nodes = int(max_nodes)
-    except (TypeError, ValueError):
-        return {"error": {
-            "code": "INVALID_PARAM", "field": "max_nodes",
-            "message": "max_nodes must be an integer.",
-        }}
-
-    neighborhood = _get_db().get_graph_neighborhood(
-        seed_session_id=session_id, seed_project=project, depth=depth, max_nodes=max_nodes,
+    return _get_db().build_graph_map_payload(
+        session_id=session_id, project=project, depth=depth, max_nodes=max_nodes
     )
-    if "error" in neighborhood:
-        return {"error": {
-            "code": "GRAPH_DB_UNAVAILABLE", "field": None,
-            "message": neighborhood["message"],
-        }}
-
-    for node in neighborhood["nodes"]:
-        node["label"] = graph.sanitize_label(node.pop("raw_label"))
-    mermaid = graph.build_mermaid(neighborhood)
-
-    nodes_dropped_by_kind = neighborhood["nodes_dropped_by_kind"]
-    edges_dropped_by_kind = neighborhood["edges_dropped_by_kind"]
-    nodes_available = len(neighborhood["nodes"]) + sum(nodes_dropped_by_kind.values())
-
-    return {
-        "version": 1,
-        "seed": {
-            "kind": "session" if session_id else "project",
-            "value": session_id or project,
-        },
-        "seed_found": neighborhood["seed_found"],
-        "mermaid": mermaid,
-        "nodes": neighborhood["nodes"],
-        "edges": neighborhood["edges"],
-        "truncated": bool(nodes_dropped_by_kind) or bool(edges_dropped_by_kind),
-        "nodes_emitted": len(neighborhood["nodes"]),
-        "nodes_available": nodes_available,
-        "edges_emitted": len(neighborhood["edges"]),
-        "nodes_dropped_by_kind": nodes_dropped_by_kind,
-        "edges_dropped_by_kind": edges_dropped_by_kind,
-        "frontier_session_ids": neighborhood["frontier_session_ids"],
-        "edge_kinds_included": neighborhood["edge_kinds_included"],
-        "edge_kinds_omitted": neighborhood["edge_kinds_omitted"],
-    }
 
 
 @mcp.tool(title="Rebuild Semantic Index")
@@ -1330,56 +1273,10 @@ def export_sessions(
         limit: Max sessions to export (default 1000).
         format: 'json' (array wrapped in metadata) or 'jsonl' (one session per line).
     """
-    sessions = _get_db().get_sessions_for_export(
-        project=project, tags=tags, days_back=days_back, limit=limit
+    payload = _get_db().export_payload(
+        project=project, tags=tags, days_back=days_back, limit=limit, fmt=format
     )
-
-    def _session_to_dict(s) -> dict:
-        return {
-            "export_version": "1.1",
-            "id": s.id,
-            "title": s.title,
-            "surface": s.surface,
-            "project": s.project,
-            "start_date": s.start_date,
-            "end_date": s.end_date,
-            "summary": s.summary,
-            "decisions": s.decisions,
-            "artifacts": s.artifacts,
-            "open_questions": s.open_questions,
-            "tags": s.tags,
-            "skills_used": s.skills_used,
-            "created_at": s.created_at,
-            "source": s.source,
-            "shared_by": s.shared_by,
-            "origin_machine": s.origin_machine,
-            "content_hash": s.content_hash,
-            "external_tool_session": s.external_tool_session,
-            "reasoning_notes": s.reasoning_notes,
-            "previous_summary": s.previous_summary,
-            "expires_at": s.expires_at,
-            "staleness_hint": s.staleness_hint,
-            "keep_forever": s.keep_forever,
-        }
-
-    session_dicts = [_session_to_dict(s) for s in sessions]
-
-    if format == "jsonl":
-        data_str = "\n".join(json.dumps(d) for d in session_dicts)
-    else:
-        export_obj = {
-            "loreconvo_export": {
-                "version": "1.1",
-                "session_count": len(session_dicts),
-                "filters": {
-                    "project": project,
-                    "tags": tags,
-                    "days_back": days_back,
-                },
-                "sessions": session_dicts,
-            }
-        }
-        data_str = json.dumps(export_obj, indent=2)
+    data_str = payload["data"]
 
     if output_path:
         resolved, err = _validate_export_path(output_path)
@@ -1389,13 +1286,13 @@ def export_sessions(
         return {
             "status": "exported",
             "path": str(resolved),
-            "session_count": len(sessions),
+            "session_count": payload["session_count"],
             "format": format,
         }
 
     return {
         "status": "exported",
-        "session_count": len(sessions),
+        "session_count": payload["session_count"],
         "format": format,
         "data": data_str,
     }
@@ -1424,54 +1321,13 @@ def export_for_anthropic(
         session_ids: List of specific session UUIDs to export. Overrides project filter.
         days_back: Limit to sessions from the last N days.
     """
-    from datetime import datetime, timedelta, timezone as _tz
-
-    status = get_license_status()
-    if not status["is_pro"]:
-        return {
-            "error": (
-                "Export to Anthropic format requires LoreConvo Pro. "
-                f"Get a license by upgrading at {LORECONVO_UPGRADE_URL}."
-            )
-        }
-
-    sessions = _get_db().get_sessions_for_shared_export(
-        project=project,
-        session_id_filter=session_ids,
-        export_all=(session_ids is None and project is None),
+    payload = _get_db().anthropic_export_payload(
+        project=project, session_ids=session_ids, days_back=days_back
     )
+    if "error" in payload:
+        return {"error": payload["error"]}
 
-    if days_back is not None:
-        cutoff = (datetime.now(_tz.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
-        sessions = [s for s in sessions if s.start_date >= cutoff]
-
-    entries = []
-    for s in sessions:
-        entries.append({
-            "id": s.id,
-            "content": s.summary or "",
-            "created_at": s.created_at,
-            "tags": s.tags or [],
-            "metadata": {
-                "title": s.title,
-                "surface": s.surface,
-                "project": s.project,
-            },
-        })
-
-    export_obj = {
-        "format": "anthropic-memory-v1",
-        "source": "loreconvo",
-        "exported_at": datetime.now(_tz.utc).isoformat().replace("+00:00", "Z"),
-        "schema_note": (
-            "Preliminary field mapping -- validate against Anthropic beta API "
-            "docs before submitting to Anthropic memory stores."
-        ),
-        "entry_count": len(entries),
-        "entries": entries,
-    }
-
-    data_str = json.dumps(export_obj, indent=2)
+    data_str = payload["data"]
 
     if output_path:
         resolved, err = _validate_export_path(output_path)
@@ -1482,13 +1338,13 @@ def export_for_anthropic(
             "status": "exported",
             "format": "anthropic-memory-v1",
             "path": str(resolved),
-            "entry_count": len(entries),
+            "entry_count": payload["entry_count"],
         }
 
     return {
         "status": "exported",
         "format": "anthropic-memory-v1",
-        "entry_count": len(entries),
+        "entry_count": payload["entry_count"],
         "data": data_str,
     }
 
@@ -1511,150 +1367,9 @@ def import_sessions(
                      'replace' -- overwrite with the imported version.
         dry_run: If True, parse and validate the file but make no DB changes.
     """
-    if on_conflict not in ("skip", "replace"):
-        return {"error": "on_conflict must be 'skip' or 'replace'"}
-
-    path = Path(file_path)
-    if not path.exists():
-        return {"error": f"File not found: {file_path}"}
-
-    if path.stat().st_size > _MAX_IMPORT_BYTES:
-        return {"error": "Import file too large. Max: 50 MB."}
-
-    raw = path.read_text(encoding="utf-8").strip()
-
-    raw_sessions: list[dict] = []
-    # Try JSON format with wrapper first
-    try:
-        wrapper = json.loads(raw)
-        if "loreconvo_export" in wrapper:
-            raw_sessions = wrapper["loreconvo_export"]["sessions"]
-        elif isinstance(wrapper, dict) and ("id" in wrapper or "title" in wrapper):
-            # Single-session JSONL: one JSON object that is valid JSON on its own
-            raw_sessions = [wrapper]
-        else:
-            return {"error": "Invalid export file: missing 'loreconvo_export' key"}
-    except json.JSONDecodeError:
-        # Fall back to JSONL -- one session per line
-        for line_num, line in enumerate(raw.splitlines(), 1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                raw_sessions.append(json.loads(line))
-            except json.JSONDecodeError as exc:
-                return {"error": f"Invalid JSON on line {line_num}: {exc}"}
-
-    if len(raw_sessions) > _MAX_SESSIONS_PER_FILE:
-        return {"error": "Import file contains too many sessions. Max: 10,000."}
-
-    imported = 0
-    replaced = 0
-    skipped = 0
-    limit_hit = False
-
-    for raw_s in raw_sessions:
-        for bool_field in ("external_tool_session", "keep_forever"):
-            if bool_field in raw_s and not isinstance(raw_s[bool_field], bool):
-                return {"error": f"{bool_field} must be a boolean"}
-        expires_at = raw_s.get("expires_at")
-        if expires_at is not None:
-            if not isinstance(expires_at, str):
-                return {"error": "expires_at must be an ISO 8601 timestamp or null"}
-            try:
-                expires_at = normalize_expiry_timestamp(expires_at)
-            except ValueError as exc:
-                return {"error": str(exc)}
-        if (
-            "source" in raw_s
-            and raw_s["source"] is not None
-            and not isinstance(raw_s["source"], str)
-        ):
-            return {"error": "source must be a string or null"}
-        title = str(raw_s.get("title", "") or "")[:_IMPORT_FIELD_CAPS["title"]]
-        summary = str(raw_s.get("summary", "") or "")[:_IMPORT_FIELD_CAPS["summary"]]
-        decisions = [str(d)[:_IMPORT_FIELD_CAPS["list_item"]] for d in (raw_s.get("decisions") or [])]
-        open_questions = [str(q)[:_IMPORT_FIELD_CAPS["list_item"]] for q in (raw_s.get("open_questions") or [])]
-        tags = [str(t)[:_IMPORT_FIELD_CAPS["list_item"]] for t in (raw_s.get("tags") or [])]
-        artifacts = [Path(str(a)).name for a in (raw_s.get("artifacts") or [])]
-        skills_used = [str(s)[:_IMPORT_FIELD_CAPS["list_item"]] for s in (raw_s.get("skills_used") or [])]
-        session = Session(
-            id=raw_s.get("id", ""),
-            title=title,
-            surface=raw_s.get("surface", ""),
-            project=raw_s.get("project"),
-            start_date=raw_s.get("start_date", ""),
-            end_date=raw_s.get("end_date"),
-            summary=summary,
-            decisions=decisions,
-            artifacts=artifacts,
-            open_questions=open_questions,
-            tags=tags,
-            skills_used=skills_used,
-            created_at=raw_s.get("created_at", ""),
-            source=raw_s.get("source", "session"),
-            shared_by=raw_s.get("shared_by"),
-            origin_machine=raw_s.get("origin_machine"),
-            content_hash=raw_s.get("content_hash"),
-            external_tool_session=raw_s.get("external_tool_session", False),
-            reasoning_notes=raw_s.get("reasoning_notes"),
-            previous_summary=raw_s.get("previous_summary"),
-            keep_forever=raw_s.get("keep_forever", False),
-            expires_at=expires_at,
-            staleness_hint=raw_s.get("staleness_hint"),
-        )
-        if session.keep_forever:
-            session.expires_at = None
-        if not session.id:
-            skipped += 1
-            continue
-
-        if dry_run:
-            if _get_db().session_exists(session.id):
-                if on_conflict == "replace":
-                    replaced += 1
-                else:
-                    skipped += 1
-            else:
-                imported += 1
-            continue
-
-        try:
-            result = _get_db().import_session(
-                session,
-                replace=(on_conflict == "replace"),
-                fields_present=set(raw_s),
-            )
-        except SessionLimitReachedError:
-            limit_hit = True
-            break
-
-        if result == "imported":
-            imported += 1
-        elif result == "replaced":
-            replaced += 1
-        else:
-            skipped += 1
-
-    summary = {
-        "status": "dry_run" if dry_run else "done",
-        "total_in_file": len(raw_sessions),
-        "imported": imported,
-        "replaced": replaced,
-        "skipped": skipped,
-    }
-    if dry_run:
-        summary["note"] = (
-            f"Dry run preview: {imported} would-import, {replaced} would-replace, "
-            f"{skipped} would-skip. No changes made."
-        )
-    if limit_hit:
-        summary["warning"] = (
-            "Free tier limit reached. Some sessions were not imported. "
-            "Upgrade to Pro for unlimited sessions."
-        )
-        summary["upgrade_url"] = LORECONVO_UPGRADE_URL
-    return summary
+    return _get_db().import_export_file(
+        file_path=file_path, on_conflict=on_conflict, dry_run=dry_run
+    )
 
 
 @mcp.tool(title="Inspect Sessions")
@@ -1733,11 +1448,7 @@ def get_stats() -> dict:
     Provides visibility into your memory usage -- who saved what, how much is stored,
     and what's been captured most recently. Includes hook_saves_failing status.
     """
-    result = _get_db().get_usage_stats()
-    data_dir = Path(_get_db().config.db_path).parent
-    breadcrumb_path = data_dir / "hook_failure.json"
-    result["hook_saves_failing"] = breadcrumb_path.exists()
-    return result
+    return _get_db().usage_stats_with_hook_status()
 
 
 @mcp.tool(title="Consolidate Memories")
@@ -1892,34 +1603,9 @@ def get_dream_log(
         surface: Filter by surface (or None for all)
         limit: Maximum number of entries to return (default 10, newest first)
     """
-    import pathlib
-    lore_dir = pathlib.Path(_get_db().config.db_path).parent
-    log_path = str(lore_dir / "consolidation.log")
-    entries = _get_db().get_consolidation_log_entries(
-        project=project,
-        surface=surface,
-        limit=limit,
-        log_path=log_path,
+    entries, digest = _get_db().get_dream_log_entries(
+        project=project, surface=surface, limit=limit
     )
-    digest = None
-    if project:
-        raw = _get_db().get_memory_digest(project, surface)
-        if raw:
-            inject_env = os.environ.get("LORECONVO_DREAM_INJECT", "true").lower()
-            inject_active = inject_env != "false" and not bool(raw.get("disabled", 0))
-            digest = {
-                "updated_at": raw.get("updated_at", ""),
-                "mode": raw.get("mode", "heuristic"),
-                "source_count": raw.get("source_count", 0),
-                "disabled": bool(raw.get("disabled", 0)),
-                "api_key_found": bool(raw.get("api_key_found", 1)),
-                "injection_active": inject_active,
-                "injection_reason": (
-                    "active" if inject_active
-                    else ("LORECONVO_DREAM_INJECT=false" if inject_env == "false"
-                          else "digest.disabled=1 -- manually suppressed")
-                ),
-            }
     return {
         "status": "ok",
         "project": project,

@@ -565,6 +565,201 @@ def search_sessions(args):
         print()
 
 
+# -- Skill history / inspect / stats / graph / dream-log / export (SH-101927/101928) --
+
+def _session_database(args):
+    """Open a SessionDatabase for shared-core operations.
+
+    The fallback is a second caller of the MCP server's own
+    SessionDatabase methods -- never a second implementation. Mirrors the
+    optional-import pattern _cmd_search_semantic uses.
+    """
+    try:
+        from loreconvo.core.database import SessionDatabase
+        from loreconvo.core.config import Config
+    except ImportError:
+        print(
+            "ERROR: the loreconvo package is not importable; "
+            "install it (pip install loreconvo) to use this operation.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    db_path = args.db_path or _find_loreconvo_db()
+    if not db_path:
+        print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
+        sys.exit(1)
+
+    return SessionDatabase(Config(db_path=db_path))
+
+
+def skill_history(args):
+    """List sessions that used a specific skill (get_skill_history)."""
+    db = _session_database(args)
+    try:
+        sessions = db.get_skill_history(args.skill_name, args.days)
+    finally:
+        db.close()
+
+    if not sessions:
+        print(f'No sessions found using skill "{args.skill_name}"')
+        return
+    for s in sessions:
+        print(f"  {s.start_date[:10]}  {s.surface:6s}  {s.title}")
+    print(f"\n{len(sessions)} session(s) used '{args.skill_name}'")
+
+
+def cmd_inspect(args):
+    """List stored sessions with optional filters (inspect_sessions)."""
+    db = _session_database(args)
+    try:
+        sessions = db.inspect_sessions(
+            search=getattr(args, "search", None),
+            tag=getattr(args, "tag_filter", None),
+            surface=getattr(args, "surface", None),
+            since=getattr(args, "since", None),
+            limit=args.limit,
+        )
+        stats = db.get_inspect_stats() if getattr(args, "show_stats", False) else None
+    finally:
+        db.close()
+
+    if stats:
+        print(json.dumps(stats, indent=2))
+    for s in sessions:
+        print(f"  {s.start_date[:10]}  {s.surface:6s}  {s.title}")
+    print(f"\n{len(sessions)} session(s)")
+
+
+def cmd_stats(args):
+    """Usage dashboard (get_stats): counts, storage, hook failure status."""
+    db = _session_database(args)
+    try:
+        stats = db.usage_stats_with_hook_status()
+    finally:
+        db.close()
+    print(json.dumps(stats, indent=2))
+
+
+def cmd_graph(args):
+    """Mermaid knowledge-graph around a session or project (graph_session_map)."""
+    db = _session_database(args)
+    try:
+        result = db.build_graph_map_payload(
+            session_id=args.graph_session_id,
+            project=args.graph_project,
+            depth=args.depth,
+            max_nodes=args.max_nodes,
+        )
+    finally:
+        db.close()
+
+    if "error" in result:
+        err = result["error"]
+        print(
+            f"ERROR: {err.get('code')}: {err.get('message')}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    print(result["mermaid"])
+
+
+def cmd_dream_log(args):
+    """Consolidation log entries with digest status (get_dream_log)."""
+    db = _session_database(args)
+    try:
+        entries, digest = db.get_dream_log_entries(
+            project=getattr(args, "project", None),
+            surface=getattr(args, "surface", None),
+            limit=args.limit,
+        )
+    finally:
+        db.close()
+    print(json.dumps({
+        "status": "ok",
+        "project": getattr(args, "project", None),
+        "surface": getattr(args, "surface", None),
+        "entries": entries,
+        "digest_status": digest,
+    }, indent=2))
+
+
+def cmd_export(args):
+    """Export sessions as JSON/JSONL (export_sessions)."""
+    raw_tags = getattr(args, "tags", None)
+    if isinstance(raw_tags, str):
+        try:
+            raw_tags = json.loads(raw_tags)
+        except json.JSONDecodeError:
+            raw_tags = [raw_tags]
+
+    db = _session_database(args)
+    try:
+        payload = db.export_payload(
+            project=getattr(args, "project", None),
+            tags=raw_tags,
+            days_back=args.days_back,
+            limit=args.export_limit,
+            fmt=args.format,
+        )
+    finally:
+        db.close()
+
+    data = payload["data"]
+    if args.output:
+        Path(args.output).expanduser().write_text(data, encoding="utf-8")
+        print(
+            f"Exported {payload['session_count']} session(s) to "
+            f"{args.output} ({args.format})"
+        )
+    else:
+        print(data)
+
+
+def cmd_import(args):
+    """Import sessions from an export file (import_sessions)."""
+    db = _session_database(args)
+    try:
+        result = db.import_export_file(
+            file_path=args.import_file,
+            on_conflict=args.on_conflict,
+            dry_run=args.dry_run,
+        )
+    finally:
+        db.close()
+
+    if "error" in result:
+        print(f"ERROR: {result['error']}", file=sys.stderr)
+        sys.exit(1)
+    print(json.dumps(result, indent=2))
+
+
+def cmd_anthropic_export(args):
+    """Export to Anthropic managed-agents format (export_for_anthropic, Pro)."""
+    db = _session_database(args)
+    try:
+        payload = db.anthropic_export_payload(
+            project=getattr(args, "project", None),
+            days_back=args.days_back,
+        )
+    finally:
+        db.close()
+
+    if "error" in payload:
+        print(f"ERROR: {payload['error']}", file=sys.stderr)
+        sys.exit(1)
+
+    data = payload["data"]
+    if args.output:
+        Path(args.output).expanduser().write_text(data, encoding="utf-8")
+        print(
+            f"Exported {payload['entry_count']} session(s) to "
+            f"{args.output} (anthropic-memory-v1)"
+        )
+    else:
+        print(data)
+
+
 # -- CLI --
 
 def main():
@@ -581,6 +776,58 @@ def main():
     parser.add_argument("--semantic", action="store_true",
                         help="Use semantic (hybrid vector+keyword) search with --search. "
                              "Pro tier only; degrades to keyword search if unavailable.")
+
+    # Observability mode flags (SH-101927)
+    parser.add_argument("--skill-history", action="store_true",
+                        help="List sessions that used --skill-name (get_skill_history)")
+    parser.add_argument("--skill-name", type=str, dest="skill_name",
+                        help="Skill name for --skill-history (e.g. 'hermes-agent')")
+    parser.add_argument("--inspect", action="store_true",
+                        help="List stored sessions with optional filters (inspect_sessions)")
+    parser.add_argument("--since", type=str, dest="since",
+                        help="With --inspect: only sessions on/after this date (YYYY-MM-DD)")
+    parser.add_argument("--show-stats", action="store_true", dest="show_stats",
+                        help="With --inspect: include aggregate counts")
+    parser.add_argument("--stats", action="store_true",
+                        help="Print the usage dashboard (get_stats)")
+    parser.add_argument("--graph", action="store_true",
+                        help="Print a Mermaid knowledge-graph (graph_session_map)")
+    parser.add_argument("--graph-session-id", type=str, dest="graph_session_id",
+                        help="With --graph: seed session UUID")
+    parser.add_argument("--graph-project", type=str, dest="graph_project",
+                        help="With --graph: seed project name")
+    parser.add_argument("--depth", type=int, default=1,
+                        help="With --graph: BFS depth (clamped 0-3, default 1)")
+    parser.add_argument("--max-nodes", type=int, dest="max_nodes", default=60,
+                        help="With --graph: node budget (clamped 1-200, default 60)")
+    parser.add_argument("--dream-log", action="store_true",
+                        help="Print consolidation log entries (get_dream_log)")
+    parser.add_argument("--days", type=int, default=90,
+                        help="With --skill-history: look-back window in days (default 90)")
+
+    # Export/import mode flags (SH-101928)
+    parser.add_argument("--export", action="store_true",
+                        help="Export sessions as JSON/JSONL (export_sessions)")
+    parser.add_argument("--import-file", type=str, dest="import_file",
+                        help="Import sessions from an export file (import_sessions)")
+    parser.add_argument("--on-conflict", type=str, dest="on_conflict",
+                        choices=["skip", "replace"], default="skip",
+                        help="With --import-file: 'skip' (default) or 'replace'")
+    parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                        help="With --import-file: validate without DB changes")
+    parser.add_argument("--anthropic-export", action="store_true",
+                        help="Export to Anthropic managed-agents format, Pro only "
+                             "(export_for_anthropic)")
+    parser.add_argument("--output", type=str, dest="output",
+                        help="With --export/--anthropic-export: write to this file "
+                             "instead of stdout")
+    parser.add_argument("--format", type=str, dest="format",
+                        choices=["json", "jsonl"], default="json",
+                        help="With --export: output format (default json)")
+    parser.add_argument("--days-back", type=int, dest="days_back", default=None,
+                        help="With --export/--anthropic-export: limit to last N days")
+    parser.add_argument("--export-limit", type=int, dest="export_limit", default=1000,
+                        help="With --export: max sessions (default 1000)")
 
     # Save args
     parser.add_argument("--title", type=str, help="Session title")
@@ -607,7 +854,25 @@ def main():
 
     args = parser.parse_args()
 
-    if args.read_id:
+    if args.skill_history:
+        if not args.skill_name:
+            parser.error("--skill-history requires --skill-name")
+        skill_history(args)
+    elif args.inspect:
+        cmd_inspect(args)
+    elif args.stats:
+        cmd_stats(args)
+    elif args.graph:
+        cmd_graph(args)
+    elif args.dream_log:
+        cmd_dream_log(args)
+    elif args.export:
+        cmd_export(args)
+    elif args.import_file:
+        cmd_import(args)
+    elif args.anthropic_export:
+        cmd_anthropic_export(args)
+    elif args.read_id:
         read_session_by_id(args)
     elif args.search:
         search_sessions(args)
