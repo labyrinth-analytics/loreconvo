@@ -18,7 +18,7 @@ from typing import List, Optional
 
 from .config import Config
 from .hybrid_search import SEARCH_HALF_LIFE_DAYS, AUTOLOAD_HALF_LIFE_DAYS
-from .license import LORECONVO_UPGRADE_URL
+from .license import LORECONVO_UPGRADE_URL, get_license_status
 from .models import (
     PersonaTag, Project, SearchResult, Session, SessionLink, SkillUsage
 )
@@ -2125,8 +2125,10 @@ class SessionDatabase:
         `frontier_session_ids`, `edge_kinds_included`, `edge_kinds_omitted`.
         Node dicts carry `raw_label` (unsanitized domain text) rather than a
         sanitized `label` -- sanitization is `core.graph.sanitize_label`'s
-        job, and this module does not import `core.graph` (server.py is the
-        one static import site for that module).
+        job. This module references `core.graph` only through the function-
+        local static import in `build_graph_map_payload()` (added for the
+        SH-101927 three-surface parity work); the KG tool proposal's
+        no-dynamic-import constraint still holds -- the import is static.
 
         See the architecture proposal for the full design and invariant list:
         docs/agent-reports/architecture/proposals/loreconvo_kg_mermaid_graph_tool_20260804.md
@@ -4332,6 +4334,411 @@ class SessionDatabase:
                 )
         self.conn.commit()
         return "replaced" if existing else "imported"
+
+    # -- Portable export / import payloads (shared core, SH-101928) --
+
+    @staticmethod
+    def _session_export_dict(session: Session) -> dict:
+        """Serialize one session for a portable export (format 1.1).
+
+        Moved out of server.py so the fallback script and loreconvo-cli are
+        second callers of the same serialization -- never a second
+        implementation. Field set mirrors the MCP export_sessions tool
+        exactly.
+        """
+        return {
+            "export_version": "1.1",
+            "id": session.id,
+            "title": session.title,
+            "surface": session.surface,
+            "project": session.project,
+            "start_date": session.start_date,
+            "end_date": session.end_date,
+            "summary": session.summary,
+            "decisions": session.decisions,
+            "artifacts": session.artifacts,
+            "open_questions": session.open_questions,
+            "tags": session.tags,
+            "skills_used": session.skills_used,
+            "created_at": session.created_at,
+            "source": session.source,
+            "shared_by": session.shared_by,
+            "origin_machine": session.origin_machine,
+            "content_hash": session.content_hash,
+            "external_tool_session": session.external_tool_session,
+            "reasoning_notes": session.reasoning_notes,
+            "previous_summary": session.previous_summary,
+            "expires_at": session.expires_at,
+            "staleness_hint": session.staleness_hint,
+            "keep_forever": session.keep_forever,
+        }
+
+    def export_payload(
+        self,
+        project: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        days_back: Optional[int] = None,
+        limit: int = 1000,
+        fmt: str = "json",
+    ) -> dict:
+        """Build the portable export payload for the export_sessions tool.
+
+        Shared core version of server.py's export_sessions serialization.
+        Returns {"format": str, "data": str, "session_count": int}; callers
+        with an output path write the file themselves. Format must be 'json'
+        (loreconvo_export envelope) or 'jsonl' (one session per line).
+        """
+        sessions = self.get_sessions_for_export(
+            project=project, tags=tags, days_back=days_back, limit=limit
+        )
+        session_dicts = [self._session_export_dict(s) for s in sessions]
+        if fmt == "jsonl":
+            data_str = "\n".join(json.dumps(d) for d in session_dicts)
+        else:
+            export_obj = {
+                "loreconvo_export": {
+                    "version": "1.1",
+                    "session_count": len(session_dicts),
+                    "filters": {
+                        "project": project,
+                        "tags": tags,
+                        "days_back": days_back,
+                    },
+                    "sessions": session_dicts,
+                }
+            }
+            data_str = json.dumps(export_obj, indent=2)
+        return {
+            "format": fmt,
+            "session_count": len(sessions),
+            "data": data_str,
+        }
+
+    def import_export_file(
+        self,
+        file_path: str,
+        on_conflict: str = "skip",
+        dry_run: bool = False,
+    ) -> dict:
+        """Import sessions from an export file (JSON or JSONL).
+
+        Shared core version of server.py's import_sessions: parsing,
+        validation, field caps, and the import loop. server.py delegates to
+        this so the fallback script and CLI are second callers, not second
+        implementations.
+        """
+        if on_conflict not in ("skip", "replace"):
+            return {"error": "on_conflict must be 'skip' or 'replace'"}
+
+        path = Path(file_path)
+        if not path.exists():
+            return {"error": f"File not found: {file_path}"}
+
+        if path.stat().st_size > _MAX_IMPORT_BYTES:
+            return {"error": "Import file too large. Max: 50 MB."}
+
+        raw = path.read_text(encoding="utf-8").strip()
+
+        raw_sessions: list = []
+        try:
+            wrapper = json.loads(raw)
+            if "loreconvo_export" in wrapper:
+                raw_sessions = wrapper["loreconvo_export"]["sessions"]
+            elif isinstance(wrapper, dict) and ("id" in wrapper or "title" in wrapper):
+                raw_sessions = [wrapper]
+            else:
+                return {"error": "Invalid export file: missing 'loreconvo_export' key"}
+        except json.JSONDecodeError:
+            for line_num, line in enumerate(raw.splitlines(), 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    raw_sessions.append(json.loads(line))
+                except json.JSONDecodeError as exc:
+                    return {"error": f"Invalid JSON on line {line_num}: {exc}"}
+
+        if len(raw_sessions) > _MAX_SESSIONS_PER_FILE:
+            return {"error": "Import file contains too many sessions. Max: 10,000."}
+
+        imported = 0
+        replaced = 0
+        skipped = 0
+        limit_hit = False
+
+        for raw_s in raw_sessions:
+            for bool_field in ("external_tool_session", "keep_forever"):
+                if bool_field in raw_s and not isinstance(raw_s[bool_field], bool):
+                    return {"error": f"{bool_field} must be a boolean"}
+            expires_at = raw_s.get("expires_at")
+            if expires_at is not None:
+                if not isinstance(expires_at, str):
+                    return {"error": "expires_at must be an ISO 8601 timestamp or null"}
+                try:
+                    expires_at = normalize_expiry_timestamp(expires_at)
+                except ValueError as exc:
+                    return {"error": str(exc)}
+            if (
+                "source" in raw_s
+                and raw_s["source"] is not None
+                and not isinstance(raw_s["source"], str)
+            ):
+                return {"error": "source must be a string or null"}
+            title = str(raw_s.get("title", "") or "")[:_IMPORT_FIELD_CAPS["title"]]
+            summary = str(raw_s.get("summary", "") or "")[:_IMPORT_FIELD_CAPS["summary"]]
+            decisions = [str(d)[:_IMPORT_FIELD_CAPS["list_item"]] for d in (raw_s.get("decisions") or [])]
+            open_questions = [str(q)[:_IMPORT_FIELD_CAPS["list_item"]] for q in (raw_s.get("open_questions") or [])]
+            tags = [str(t)[:_IMPORT_FIELD_CAPS["list_item"]] for t in (raw_s.get("tags") or [])]
+            artifacts = [Path(str(a)).name for a in (raw_s.get("artifacts") or [])]
+            skills_used = [str(s)[:_IMPORT_FIELD_CAPS["list_item"]] for s in (raw_s.get("skills_used") or [])]
+            session = Session(
+                id=raw_s.get("id", ""),
+                title=title,
+                surface=raw_s.get("surface", ""),
+                project=raw_s.get("project"),
+                start_date=raw_s.get("start_date", ""),
+                end_date=raw_s.get("end_date"),
+                summary=summary,
+                decisions=decisions,
+                artifacts=artifacts,
+                open_questions=open_questions,
+                tags=tags,
+                skills_used=skills_used,
+                created_at=raw_s.get("created_at", ""),
+                source=raw_s.get("source", "session"),
+                shared_by=raw_s.get("shared_by"),
+                origin_machine=raw_s.get("origin_machine"),
+                content_hash=raw_s.get("content_hash"),
+                external_tool_session=raw_s.get("external_tool_session", False),
+                reasoning_notes=raw_s.get("reasoning_notes"),
+                previous_summary=raw_s.get("previous_summary"),
+                keep_forever=raw_s.get("keep_forever", False),
+                expires_at=expires_at,
+                staleness_hint=raw_s.get("staleness_hint"),
+            )
+            if session.keep_forever:
+                session.expires_at = None
+            if not session.id:
+                skipped += 1
+                continue
+
+            if dry_run:
+                if self.session_exists(session.id):
+                    if on_conflict == "replace":
+                        replaced += 1
+                    else:
+                        skipped += 1
+                else:
+                    imported += 1
+                continue
+
+            try:
+                result = self.import_session(
+                    session,
+                    replace=(on_conflict == "replace"),
+                    fields_present=set(raw_s),
+                )
+            except SessionLimitReachedError:
+                limit_hit = True
+                break
+
+            if result == "imported":
+                imported += 1
+            elif result == "replaced":
+                replaced += 1
+            else:
+                skipped += 1
+
+        summary = {
+            "status": "dry_run" if dry_run else "done",
+            "total_in_file": len(raw_sessions),
+            "imported": imported,
+            "replaced": replaced,
+            "skipped": skipped,
+        }
+        if dry_run:
+            summary["note"] = (
+                f"Dry run preview: {imported} would-import, {replaced} would-replace, "
+                f"{skipped} would-skip. No changes made."
+            )
+        if limit_hit:
+            summary["warning"] = (
+                "Free tier limit reached. Some sessions were not imported. "
+                "Upgrade to Pro for unlimited sessions."
+            )
+            summary["upgrade_url"] = LORECONVO_UPGRADE_URL
+        return summary
+
+    def anthropic_export_payload(
+        self,
+        project: Optional[str] = None,
+        session_ids: Optional[List[str]] = None,
+        days_back: Optional[int] = None,
+    ) -> dict:
+        """Build the anthropic-memory-v1 export payload for export_for_anthropic.
+
+        Shared core version of server.py's export_for_anthropic
+        serialization (excluding the output_path handling, which stays with
+        the callers). Returns {"error": str} on the free tier; otherwise
+        {"data": str, "entry_count": int}.
+        """
+        status = get_license_status()
+        if not status["is_pro"]:
+            return {
+                "error": (
+                    "Export to Anthropic format requires LoreConvo Pro. "
+                    f"Get a license by upgrading at {LORECONVO_UPGRADE_URL}."
+                )
+            }
+
+        sessions = self.get_sessions_for_shared_export(
+            project=project,
+            session_id_filter=session_ids,
+            export_all=(session_ids is None and project is None),
+        )
+
+        if days_back is not None:
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
+            sessions = [s for s in sessions if s.start_date >= cutoff]
+
+        entries = []
+        for s in sessions:
+            entries.append({
+                "id": s.id,
+                "content": s.summary or "",
+                "created_at": s.created_at,
+                "tags": s.tags or [],
+                "metadata": {
+                    "title": s.title,
+                    "surface": s.surface,
+                    "project": s.project,
+                },
+            })
+
+        export_obj = {
+            "format": "anthropic-memory-v1",
+            "source": "loreconvo",
+            "exported_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "schema_note": (
+                "Preliminary field mapping -- validate against Anthropic beta API "
+                "docs before submitting to Anthropic memory stores."
+            ),
+            "entry_count": len(entries),
+            "entries": entries,
+        }
+        return {
+            "entry_count": len(entries),
+            "data": json.dumps(export_obj, indent=2),
+        }
+
+    # -- Observability shared core (SH-101927) --
+
+    def usage_stats_with_hook_status(self) -> dict:
+        """Return the get_stats payload: usage stats plus hook-failure status.
+
+        Shared core version of server.py's get_stats assembly. The
+        hook_saves_failing flag is the one piece the MCP tool derived from a
+        sidecar file -- folded in here so fallback and CLI report the same
+        value from the same data_dir.
+        """
+        result = self.get_usage_stats()
+        data_dir = Path(self.config.db_path).parent
+        breadcrumb_path = data_dir / "hook_failure.json"
+        result["hook_saves_failing"] = breadcrumb_path.exists()
+        return result
+
+    def get_dream_log_entries(
+        self,
+        project: Optional[str] = None,
+        surface: Optional[str] = None,
+        limit: int = 10,
+    ) -> tuple:
+        """Return consolidation log entries with the digest status the MCP
+        get_dream_log tool attaches (digest_status)."""
+        lore_dir = Path(self.config.db_path).parent
+        log_path = str(lore_dir / "consolidation.log")
+        entries = self.get_consolidation_log_entries(
+            project=project,
+            surface=surface,
+            limit=limit,
+            log_path=log_path,
+        )
+        digest = None
+        if project:
+            raw = self.get_memory_digest(project, surface)
+            if raw:
+                inject_env = os.environ.get("LORECONVO_DREAM_INJECT", "true").lower()
+                inject_active = inject_env != "false" and not bool(raw.get("disabled", 0))
+                digest = {
+                    "updated_at": raw.get("updated_at", ""),
+                    "mode": raw.get("mode", "heuristic"),
+                    "source_count": raw.get("source_count", 0),
+                    "disabled": bool(raw.get("disabled", 0)),
+                    "api_key_found": bool(raw.get("api_key_found", 1)),
+                    "injection_active": inject_active,
+                    "injection_reason": (
+                        "active" if inject_active
+                        else ("LORECONVO_DREAM_INJECT=false" if inject_env == "false"
+                              else "digest.disabled=1 -- manually suppressed")
+                    ),
+                }
+        return entries, digest
+
+    def build_graph_map_payload(
+        self,
+        session_id: Optional[str] = None,
+        project: Optional[str] = None,
+        depth: int = 1,
+        max_nodes: int = 60,
+    ) -> dict:
+        """Traverse the graph neighborhood and assemble the graph_session_map
+        response payload via core.graph.build_session_map_payload.
+
+        Shared core version of the MCP tool body (SH-101927). The traversal
+        itself lives in get_graph_neighborhood(); core.graph stays the single
+        import site per the KG tool proposal's import-site constraint (the
+        database module imports it here; server.py imports the module for
+        its own module-level reference, which it already does).
+        """
+        if bool(session_id) == bool(project):
+            return {"error": {
+                "code": "SEED_XOR", "field": None,
+                "message": "Exactly one of session_id or project is required.",
+            }}
+        try:
+            depth = int(depth)
+        except (TypeError, ValueError):
+            return {"error": {
+                "code": "INVALID_PARAM", "field": "depth",
+                "message": "depth must be an integer.",
+            }}
+        try:
+            max_nodes = int(max_nodes)
+        except (TypeError, ValueError):
+            return {"error": {
+                "code": "INVALID_PARAM", "field": "max_nodes",
+                "message": "max_nodes must be an integer.",
+            }}
+
+        neighborhood = self.get_graph_neighborhood(
+            seed_session_id=session_id,
+            seed_project=project,
+            depth=depth,
+            max_nodes=max_nodes,
+        )
+        if "error" in neighborhood:
+            return {"error": {
+                "code": "GRAPH_DB_UNAVAILABLE", "field": None,
+                "message": neighborhood["message"],
+            }}
+
+        from .graph import build_session_map_payload
+
+        return build_session_map_payload(
+            neighborhood,
+            seed_kind="session" if session_id else "project",
+            seed_value=str(session_id or project or ""),
+        )
 
     # -- Memory items: structured decisions/questions/artifacts (SH-12768) --
 

@@ -52,3 +52,54 @@ def build_mermaid(neighborhood: dict) -> str:
         edge_label = sanitize_label(edge.get("link_type") or edge.get("kind") or "")
         lines.append(f'    {edge["from"]} -->|{edge_label}| {edge["to"]}')
     return "\n".join(lines)
+
+
+def build_session_map_payload(
+    neighborhood: dict,
+    seed_kind: str,
+    seed_value: str,
+) -> dict:
+    """Assemble the graph_session_map response payload from a neighborhood.
+
+    Shared assembly for the MCP tool, the fallback script, and
+    loreconvo-cli (SH-101927): label sanitization, mermaid rendering, and
+    the full response dict in one place, so the three surfaces are second
+    callers of one implementation instead of three copies.
+
+    Remains a pure dict-in/dict-out formatter: no DB connection, no file
+    path, no import of database/server modules -- the same constraint the
+    rest of this module holds (see the KG tool proposal).
+    """
+    nodes = []
+    for node in neighborhood.get("nodes") or []:
+        copy = dict(node)
+        copy["label"] = sanitize_label(copy.pop("raw_label"))
+        nodes.append(copy)
+    neighborhood_render = dict(neighborhood)
+    neighborhood_render["nodes"] = nodes
+    mermaid = build_mermaid(neighborhood_render)
+
+    nodes_dropped_by_kind = neighborhood.get("nodes_dropped_by_kind") or {}
+    edges_dropped_by_kind = neighborhood.get("edges_dropped_by_kind") or {}
+    nodes_available = len(nodes) + sum(nodes_dropped_by_kind.values())
+
+    return {
+        "version": 1,
+        "seed": {
+            "kind": seed_kind,
+            "value": seed_value,
+        },
+        "seed_found": neighborhood.get("seed_found"),
+        "mermaid": mermaid,
+        "nodes": nodes,
+        "edges": neighborhood.get("edges") or [],
+        "truncated": bool(nodes_dropped_by_kind) or bool(edges_dropped_by_kind),
+        "nodes_emitted": len(nodes),
+        "nodes_available": nodes_available,
+        "edges_emitted": len(neighborhood.get("edges") or []),
+        "nodes_dropped_by_kind": nodes_dropped_by_kind,
+        "edges_dropped_by_kind": edges_dropped_by_kind,
+        "frontier_session_ids": neighborhood.get("frontier_session_ids") or [],
+        "edge_kinds_included": neighborhood.get("edge_kinds_included") or [],
+        "edge_kinds_omitted": neighborhood.get("edge_kinds_omitted") or [],
+    }
