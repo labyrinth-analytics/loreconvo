@@ -22,6 +22,7 @@ from .license import LORECONVO_UPGRADE_URL, get_license_status
 from .models import (
     PersonaTag, Project, SearchResult, Session, SessionLink, SkillUsage
 )
+from . import trust_framing
 from .storage_core import (
     SCHEMA_REVISION,
     SCHEMA_SQL,
@@ -2095,6 +2096,151 @@ class SessionDatabase:
             reverse=True,
         )
         return {"version": 2, "sessions": sessions}
+
+    def related_sessions_payload(
+        self,
+        session_id: str,
+        limit: int = 10,
+        min_shared_terms: int = 3,
+    ) -> dict:
+        """Assemble the get_related_sessions MCP response envelope (SH-101929).
+
+        Shared core version of the server.py tool body: the Pro gate, the
+        limit clamp, and the v2 envelope live in ONE place; the fallback
+        script and loreconvo-cli are second callers.
+        """
+        status = get_license_status()
+        if not status["is_pro"]:
+            return {
+                "error": (
+                    "get_related_sessions requires LoreConvo Pro. "
+                    f"Upgrade at {LORECONVO_UPGRADE_URL}, then set your "
+                    "LORECONVO_PRO license key."
+                )
+            }
+        limit = max(1, min(limit, 50))
+        result = self.get_related_sessions(session_id, limit, min_shared_terms)
+        sessions = result.get("sessions", [])
+        return {
+            "version": result.get("version", 2),
+            "session_id": session_id,
+            "related_count": len(sessions),
+            "related": sessions,
+        }
+
+    # -- Consolidation / digest / context payloads (SH-101929/101930) --
+
+    def consolidate_memories_payload(
+        self,
+        project: str,
+        surface: Optional[str] = None,
+        max_sessions: int = 50,
+        mode: str = "heuristic",
+        dedup: Optional[str] = None,
+    ) -> dict:
+        """Run memory consolidation for (project, surface) (SH-101930).
+
+        Shared core version of the consolidate_memories tool body: the
+        HeuristicConsolidator wiring, lore_dir resolution, and the
+        on-demand trigger live in ONE place; the fallback script and
+        loreconvo-cli are second callers of this method. `mode` is
+        accepted for MCP signature parity but forced to heuristic --
+        LLM mode is deferred to v0.6.1 exactly as the MCP tool behaves.
+        """
+        from .consolidation import HeuristicConsolidator
+
+        lore_dir = str(Path(self.config.db_path).parent)
+        consolidator = HeuristicConsolidator(lore_dir=lore_dir)
+        return consolidator.consolidate(
+            project=project,
+            surface=surface,
+            db=self,
+            max_sessions=max_sessions,
+            mode="heuristic",  # LLM mode deferred to v0.6.1
+            is_pro=self.config.is_pro,
+            trigger="on-demand",
+            dedup=dedup,
+        )
+
+    def memory_digest_payload(
+        self,
+        project: str,
+        surface: Optional[str],
+        disable: Optional[bool] = None,
+        max_tokens: int = 2000,
+    ) -> dict:
+        """Assemble the get_memory_digest MCP response envelope (SH-101930).
+
+        Shared core version of the server.py tool body: the optional
+        disable write, the no_digest envelope, and the max_tokens
+        truncation live in ONE place; the fallback script and
+        loreconvo-cli are second callers of this method.
+        """
+        if disable is not None:
+            self.update_digest_disabled(project, surface, disabled=disable)
+        digest = self.get_memory_digest(project, surface)
+        if digest is None:
+            return {
+                "status": "no_digest",
+                "message": "No memory digest found. Run consolidate_memories to generate one.",
+                "project": project,
+                "surface": surface,
+            }
+        digest_md = digest.get("digest_markdown", "")
+        if digest_md and max_tokens > 0:
+            estimated_tokens = len(digest_md) // 4
+            if estimated_tokens > max_tokens:
+                # Truncate at estimated token boundary (max_tokens * 4 chars)
+                truncate_at = max_tokens * 4
+                digest_md = digest_md[:truncate_at] + (
+                    "\n\n[TRUNCATED -- request smaller max_tokens or "
+                    "run consolidation with fewer sources]"
+                )
+        return {
+            "status": "ok",
+            "project": digest["project"],
+            "surface": digest["surface"],
+            "mode": digest.get("mode", "heuristic"),
+            "source_count": digest.get("source_count", 0),
+            "updated_at": digest.get("updated_at", ""),
+            "disabled": bool(digest.get("disabled", 0)),
+            "digest_markdown": digest_md,
+            "decisions": digest.get("decisions"),
+            "open_questions": digest.get("open_questions"),
+            "known_stack": digest.get("known_stack"),
+        }
+
+    def context_for_payload(
+        self,
+        topic: str,
+        max_results: int = 5,
+        include_external: bool = False,
+        semantic: bool = False,
+    ) -> List[dict]:
+        """Assemble the get_context_for MCP response (SH-101930).
+
+        Retrieves via get_context_for() and applies the SH-13436 trust
+        framing in one place -- the fallback script and loreconvo-cli get
+        the same untrusted-session-content boundary as the MCP tool.
+        """
+        results = self.get_context_for(
+            topic, max_results, include_external=include_external, semantic=semantic
+        )
+        out = []
+        for r in results:
+            s = r.session
+            # SH-13436: wrap content-bearing fields in the untrusted-session-content
+            # delimiter. session_title/date/match_score stay raw (not recalled
+            # content -- metadata only). Only non-empty strings are wrapped.
+            out.append({
+                "session_title": s.title,
+                "date": s.start_date,
+                "summary": trust_framing.wrap_untrusted(s.summary) if s.summary else s.summary,
+                "decisions": [trust_framing.wrap_untrusted(d) if d else d for d in s.decisions] if s.decisions else s.decisions,
+                "open_questions": [trust_framing.wrap_untrusted(q) if q else q for q in s.open_questions] if s.open_questions else s.open_questions,
+                "match_score": r.match_score,
+            })
+        return out
 
     # -- Knowledge-graph traversal (SH-100263, graph_session_map) --
 
