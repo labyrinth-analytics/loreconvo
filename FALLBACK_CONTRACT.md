@@ -22,10 +22,14 @@ while the MCP server is down:
 | `get_stats` | `--stats` | Usage dashboard incl. hook_saves_failing. |
 | `graph_session_map` | `--graph --graph-session-id ID \| --graph-project NAME` | Mermaid graph; mermaid on stdout, errors on stderr. |
 | `get_dream_log` | `--dream-log [--project P] [--surface S]` | Consolidation log entries + digest status. |
+| `get_related_sessions` | `--related --related-session-id ID` | Pro only; free tier exits 1 with an upgrade message. |
+| `get_memory_digest` | `--digest --project P [--surface S]` | Prints the digest markdown; no_digest exits 1. |
+| `get_context_for` | `--context-for --context-topic TOPIC` | Trust-framed excerpts (SH-13436 boundary), same as MCP. |
 
 Keyword search and `--read-id` predate this contract; `--semantic` and the
 `LORECONVO_DB` env-var precedence fix are what this contract adds. The
-observability read ops (SH-101927) extend it. Every op delegates to the
+observability read ops (SH-101927) and the Pro-search / digest / context
+read ops (SH-101929/101930) extend it. Every op delegates to the
 same `SessionDatabase` methods the MCP server uses -- the fallback is a
 second caller of that logic, never a second implementation of it.
 
@@ -39,6 +43,7 @@ The export/import ops (SH-101928) are second callers of the shared-core
 | `export_sessions` | `--export [--format json\|jsonl] [--output FILE]` | Writes a file or prints the payload. |
 | `import_sessions` | `--import-file FILE [--on-conflict skip\|replace] [--dry-run]` | DB write; error summary on stderr. |
 | `export_for_anthropic` | `--anthropic-export [--output FILE]` | Pro only; free tier exits 1 with an upgrade message. |
+| `consolidate_memories` | `--consolidate --project P [--surface S]` | DB write; result JSON on stdout. |
 
 ## Guaranteed invariants
 

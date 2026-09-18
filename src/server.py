@@ -480,22 +480,9 @@ def get_context_for(
         semantic: If True, use LanceDB hybrid search (Pro only). Falls back to FTS5
             if index not yet built.
     """
-    results = _get_db().get_context_for(topic, max_results, include_external=include_external, semantic=semantic)
-    out = []
-    for r in results:
-        s = r.session
-        # SH-13436: wrap content-bearing fields in the untrusted-session-content
-        # delimiter. session_title/date/match_score stay raw (not recalled
-        # content -- metadata only). Only non-empty strings are wrapped.
-        out.append({
-            "session_title": s.title,
-            "date": s.start_date,
-            "summary": trust_framing.wrap_untrusted(s.summary) if s.summary else s.summary,
-            "decisions": [trust_framing.wrap_untrusted(d) if d else d for d in s.decisions] if s.decisions else s.decisions,
-            "open_questions": [trust_framing.wrap_untrusted(q) if q else q for q in s.open_questions] if s.open_questions else s.open_questions,
-            "match_score": r.match_score,
-        })
-    return out
+    return _get_db().context_for_payload(
+        topic, max_results, include_external=include_external, semantic=semantic
+    )
 
 
 # -- Agent context injection (SH-12766) --
@@ -935,25 +922,9 @@ def get_related_sessions(
         limit: Max results to return (default 10, max 50)
         min_shared_terms: Minimum shared keywords required (default 3)
     """
-    status = get_license_status()
-    if not status["is_pro"]:
-        return {
-            "error": (
-                "get_related_sessions requires LoreConvo Pro. "
-                f"Upgrade at {LORECONVO_UPGRADE_URL}, then set your "
-                "LORECONVO_PRO license key."
-            )
-        }
-    limit = max(1, min(limit, 50))
-    result = _get_db().get_related_sessions(session_id, limit, min_shared_terms)
-    # v2 envelope: result is {"version": 2, "sessions": [...]}
-    sessions = result.get("sessions", [])
-    return {
-        "version": result.get("version", 2),
-        "session_id": session_id,
-        "related_count": len(sessions),
-        "related": sessions,
-    }
+    return _get_db().related_sessions_payload(
+        session_id, limit=limit, min_shared_terms=min_shared_terms
+    )
 
 
 @mcp.tool(title="Graph Session Map")
@@ -1483,21 +1454,13 @@ def consolidate_memories(
             LORECONVO_CONSOLIDATION_DEDUP environment variable; an explicit
             argument always overrides the env var.
     """
-    from core.consolidation import HeuristicConsolidator
-    import pathlib
-    lore_dir = str(pathlib.Path(_get_db().config.db_path).parent)
-    consolidator = HeuristicConsolidator(lore_dir=lore_dir)
-    result = consolidator.consolidate(
+    return _get_db().consolidate_memories_payload(
         project=project,
         surface=surface,
-        db=_get_db(),
         max_sessions=max_sessions,
-        mode="heuristic",  # LLM mode deferred to v0.6.1
-        is_pro=_get_db().config.is_pro,
-        trigger="on-demand",
+        mode=mode,
         dedup=dedup,
     )
-    return result
 
 
 @mcp.tool(title="Get Memory Digest")
@@ -1521,39 +1484,9 @@ def get_memory_digest(
         max_tokens: Truncate digest_markdown to this estimated token limit (len // 4).
                     Default 2000. If truncated, appends [TRUNCATED] marker.
     """
-    if disable is not None:
-        _get_db().update_digest_disabled(project, surface, disabled=disable)
-    digest = _get_db().get_memory_digest(project, surface)
-    if digest is None:
-        return {
-            "status": "no_digest",
-            "message": "No memory digest found. Run consolidate_memories to generate one.",
-            "project": project,
-            "surface": surface,
-        }
-    digest_md = digest.get("digest_markdown", "")
-    if digest_md and max_tokens > 0:
-        estimated_tokens = len(digest_md) // 4
-        if estimated_tokens > max_tokens:
-            # Truncate at estimated token boundary (max_tokens * 4 chars)
-            truncate_at = max_tokens * 4
-            digest_md = digest_md[:truncate_at] + (
-                "\n\n[TRUNCATED -- request smaller max_tokens or "
-                "run consolidation with fewer sources]"
-            )
-    return {
-        "status": "ok",
-        "project": digest["project"],
-        "surface": digest["surface"],
-        "mode": digest.get("mode", "heuristic"),
-        "source_count": digest.get("source_count", 0),
-        "updated_at": digest.get("updated_at", ""),
-        "disabled": bool(digest.get("disabled", 0)),
-        "digest_markdown": digest_md,
-        "decisions": digest.get("decisions"),
-        "open_questions": digest.get("open_questions"),
-        "known_stack": digest.get("known_stack"),
-    }
+    return _get_db().memory_digest_payload(
+        project, surface, disable=disable, max_tokens=max_tokens
+    )
 
 
 @mcp.tool(title="Set Session Expiry")
