@@ -17,12 +17,28 @@ while the MCP server is down:
 | `get_session` | `--read-id SESSION_ID` | One session's full metadata + content. |
 | `search_sessions` (keyword) | `--search QUERY` | FTS5, same as MCP. |
 | `search_sessions` (semantic) | `--search QUERY --semantic` | Pro tier only. |
+| `get_skill_history` | `--skill-history --skill-name NAME` | Sessions that used a skill. |
+| `inspect_sessions` | `--inspect [--search|--tag-filter|--surface|--since] [--show-stats]` | Stored-session listing with filters. |
+| `get_stats` | `--stats` | Usage dashboard incl. hook_saves_failing. |
+| `graph_session_map` | `--graph --graph-session-id ID \| --graph-project NAME` | Mermaid graph; mermaid on stdout, errors on stderr. |
+| `get_dream_log` | `--dream-log [--project P] [--surface S]` | Consolidation log entries + digest status. |
 
 Keyword search and `--read-id` predate this contract; `--semantic` and the
-`LORECONVO_DB` env-var precedence fix are what this contract adds. Both
-delegate to the same `SessionDatabase.search_sessions()` call the MCP server
-uses -- the fallback is a second caller of that logic, never a second
-implementation of it.
+`LORECONVO_DB` env-var precedence fix are what this contract adds. The
+observability read ops (SH-101927) extend it. Every op delegates to the
+same `SessionDatabase` methods the MCP server uses -- the fallback is a
+second caller of that logic, never a second implementation of it.
+
+## Write-side operations (out of the emergency read path)
+
+The export/import ops (SH-101928) are second callers of the shared-core
+`SessionDatabase` payload methods, not part of the tier-(a) read path:
+
+| MCP tool | Fallback | Notes |
+|---|---|---|
+| `export_sessions` | `--export [--format json\|jsonl] [--output FILE]` | Writes a file or prints the payload. |
+| `import_sessions` | `--import-file FILE [--on-conflict skip\|replace] [--dry-run]` | DB write; error summary on stderr. |
+| `export_for_anthropic` | `--anthropic-export [--output FILE]` | Pro only; free tier exits 1 with an upgrade message. |
 
 ## Guaranteed invariants
 
@@ -52,6 +68,9 @@ invariants above. Run per-product:
 
 ## Out of scope
 
-Session-save (`save_to_loreconvo.py` with no `--read`/`--read-id`/`--search`
-flag) and all write-side flags are not part of this contract -- they predate
-it and are not covered by the parity guard.
+Session-save (`save_to_loreconvo.py` with no mode flag) and the write-side
+ops named in the section above are not part of this contract's parity
+guard -- they predate it or landed as write-side extensions and are not
+covered by the tier-(a) drift guard. The tier-(a) observability read ops
+added by SH-101927 ARE covered: test_fallback_mcp_parity.py exercises them
+against the same corpus the MCP server writes.
