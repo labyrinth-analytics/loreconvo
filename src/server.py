@@ -199,12 +199,12 @@ def save_session(
         title: Short descriptive title for the session
         surface: Where this session ran - 'cowork', 'code', or 'chat'
         summary: 2-3 paragraph narrative summary of what happened. Capped at
-            8000 chars.
+            15000 chars.
         decisions: List of key decisions made during the session. Each item
-            capped at 500 chars.
+            capped at 2000 chars.
         artifacts: List of files created or modified
         open_questions: Unresolved questions to carry forward. Each item
-            capped at 500 chars.
+            capped at 2000 chars.
         tags: Freeform tags for categorization
         skills_used: Skills that were invoked during this session
         project: Project name if part of a defined project
@@ -223,7 +223,7 @@ def save_session(
             or set LORECONVO_EXTERNAL_TOOL_EXCLUSION=0 to disable globally.
         reasoning_notes: Optional free-form text capturing the reasoning chain
             or thought process behind decisions. Blank or None leaves the
-            field empty. Capped at 8000 chars.
+            field empty. Capped at 15000 chars.
         summarize: If True and ANTHROPIC_API_KEY is set, send the summary to
             Claude API (Haiku) for compression before saving. Opt-in only;
             defaults to False. Falls back to the raw summary on any API error

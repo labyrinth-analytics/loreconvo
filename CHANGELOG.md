@@ -1,5 +1,21 @@
 # LoreConvo Changelog
 
+## Unreleased
+
+### Changed: direct-path save_session caps raised to 2000/15000 (SH-101938)
+
+`_MAX_DIRECT_SUMMARY_LENGTH` (summary + reasoning_notes) and
+`_MAX_DIRECT_LIST_ITEM_LENGTH` (decisions + open_questions items) are new
+direct-path constants in `core/storage_core.py`, set to 15000 and 2000.
+`truncate_session_fields()` in `core/database.py` (the MCP `save_session`
+write path) now enforces those, while the SessionEnd hook path
+(`hooks/scripts/auto_save.py`) keeps its own 500/8000 pair -- the two
+paths deliberately diverge per the ratified decision (hook caps defend
+unbounded machine-generated transcript text; the direct path holds
+deliberate, authored content). The shared `_truncate_if_needed` derivation
+(SH-101877) is unchanged, so the direct path still marks every cut with
+`[TRUNCATED: <field> exceeds <cap> chars]` inside the cap.
+
 ## v0.10.10 (2026-09-15)
 
 ### Fixed: direct-write save_session truncation now marks the cut (SH-101877)
