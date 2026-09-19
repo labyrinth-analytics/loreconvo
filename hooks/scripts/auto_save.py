@@ -30,7 +30,10 @@ _open_conn = _storage._open_conn
 ensure_schema = _storage.ensure_schema
 upsert_session = _storage.upsert_session
 # One derivation of truncate-with-marker (SH-101877): the hook path and the
-# direct-write path share storage_core's implementation and cap constants.
+# direct-write path share storage_core's implementation. CAP VALUES now
+# deliberately diverge (SH-101938): the hook path keeps 500/8000, the direct
+# save_session path allows 2000/15000 -- see _MAX_DIRECT_* in storage_core.
+# Do NOT re-unify; the divergence is ratified, not drift.
 _truncate_if_needed = _storage._truncate_if_needed
 _MAX_DECISION_LENGTH = _storage._MAX_SESSION_LIST_ITEM_LENGTH
 _MAX_SUMMARY_LENGTH = _storage._MAX_SESSION_SUMMARY_LENGTH
