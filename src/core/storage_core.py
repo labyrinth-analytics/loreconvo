@@ -489,8 +489,16 @@ def sanitize_fts_query(query: str) -> str:
 # auto_save.py; SH-101425 extended them to the direct-write save_session
 # path; SH-101877 makes both paths share this one truncation derivation so
 # a cut always carries a visible [TRUNCATED] marker.
-_MAX_SESSION_SUMMARY_LENGTH = 8000
-_MAX_SESSION_LIST_ITEM_LENGTH = 500
+#
+# SH-101938 (ratified divergence): the direct-write path now deliberately
+# allows MORE than the hook path. The hook caps defend against unbounded
+# machine-generated transcript text with no human in the loop; the direct
+# path holds deliberate, bounded, authored content. Do NOT re-unify these
+# two pairs, and do NOT change the hook pair without a new ratification.
+_MAX_SESSION_SUMMARY_LENGTH = 8000        # hook path (auto_save.py)
+_MAX_SESSION_LIST_ITEM_LENGTH = 500       # hook path (auto_save.py)
+_MAX_DIRECT_SUMMARY_LENGTH = 15000        # direct save_session path
+_MAX_DIRECT_LIST_ITEM_LENGTH = 2000       # direct save_session path
 
 
 def _truncate_if_needed(value, max_length, field_name):
