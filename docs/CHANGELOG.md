@@ -4,6 +4,18 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## Unreleased
+
+### Changed
+
+- Session summaries and reasoning notes saved directly through the
+  `save_session` tool can now be up to 15,000 characters, and each
+  decision or open question up to 2,000 characters, before being
+  shortened. Oversized fields still end with a clear
+  "[TRUNCATED: field exceeds N chars]" note instead of stopping
+  mid-sentence. Automatic session-capture hooks keep their previous,
+  tighter limits.
+
 ## v0.10.10 (2026-09-15)
 
 ### Fixed
