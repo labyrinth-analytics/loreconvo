@@ -271,7 +271,7 @@ Without arguments, lists recent sessions. Provide a SESSION_ID to view full deta
 | `--tag` | text | none | Filter by tag substring (e.g. `agent:ron`) |
 | `--surface` | text | none | Filter by surface: `code`, `cowork`, or `chat` |
 | `--since` | text | none | Show sessions since a date in `YYYY-MM-DD` format |
-| `-n`, `--limit` | integer | 10 | Maximum sessions to show |
+| `-n`, `--limit` | integer | 20 | Maximum sessions to show |
 | `--show-stats` | flag | off | Add aggregate counts to the listing |
 | `--delete` | text | none | Delete the session with this ID (prompts for confirmation) |
 
@@ -303,7 +303,7 @@ python -m loreconvo.cli merge FILE
 
 ```
 $ python -m loreconvo.cli merge teammate_sessions.json
-Imported 3 session(s). Skipped 1 duplicate(s).
+Imported 3 new session(s), skipped 1 duplicate(s).
 ```
 
 ---
@@ -352,9 +352,8 @@ python -m loreconvo.cli rebuild-index
 
 ```
 $ python -m loreconvo.cli rebuild-index
-Rebuilding semantic index...
-Indexed 47 session(s).
-Done.
+Rebuilding semantic search index (may take 1-2 minutes on first run)...
+[OK] Index built: 47 session(s) indexed (of 50 total in database).
 ```
 
 ---
