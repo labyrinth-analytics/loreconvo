@@ -98,7 +98,7 @@ Saved session: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 ### Field length limits
 
-`summary` is capped at 8,000 characters. Each individual `-d`/`--decisions` entry is capped at 500 characters. Content that exceeds the cap is stored truncated without an ellipsis; the command output shows `truncated: true` when any cap fires but does not say which field was cut.
+`summary` is capped at 15,000 characters. Each individual `-d`/`--decisions` entry is capped at 2,000 characters. Content that exceeds the cap is stored truncated and ends with a `[TRUNCATED: <field> exceeds <cap> chars]` marker, so a cut is always visible on recall; the command output also shows `truncated: true` when any cap fires but does not say which field was cut.
 
 Keep each decision entry to a short, self-contained claim. Use `--summary` for narrative detail.
 
