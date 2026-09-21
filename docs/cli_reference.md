@@ -16,10 +16,12 @@ Check that it is working and see the installed version:
 
 ```
 $ python -m loreconvo.cli --version
-loreconvo, version 0.10.8
+loreconvo, version X.Y.Z
 ```
 
-(The version you see will reflect your installed version, which may differ from the example above.)
+`X.Y.Z` is whatever version you have installed. If it does not match the version
+you expect, the install metadata may be stale rather than the code: reinstall the
+package to resync it.
 
 ---
 
