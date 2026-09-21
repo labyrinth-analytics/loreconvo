@@ -36,10 +36,12 @@ Save a session summary to persistent memory. Claude calls this at the end of a s
 
 **Field length limits:** `save_session` enforces two caps on the stored content:
 
-- `summary` and `reasoning_notes`: each limited to 8,000 characters.
-- Each individual item in `decisions`, `artifacts`, and `open_questions`: limited to 500 characters per item. This is a per-item cap, not a per-list cap -- a list with 20 items can store up to 20 x 500 = 10,000 characters across the list, but any single item longer than 500 characters is cut at that point.
+- `summary` and `reasoning_notes`: each limited to 15,000 characters.
+- Each individual item in `decisions` and `open_questions`: limited to 2,000 characters per item. This is a per-item cap, not a per-list cap -- a list with 20 items can store up to 20 x 2,000 = 40,000 characters across the list, but any single item longer than 2,000 characters is cut at that point. Items in `artifacts` are not capped.
 
-If a value exceeds its cap, it is stored truncated without an ellipsis. The response includes `"truncated": true` when any cap fired, but does not identify which field or item was affected. To avoid silent truncation: keep each `decisions`, `artifacts`, and `open_questions` entry to a short, self-contained claim (one sentence is usually enough). Use `summary` for narrative detail -- its 8,000-character budget is large enough for several paragraphs.
+These are the caps for `save_session`, the direct save path. Sessions written by the optional automatic capture hook use tighter caps (8,000 and 500), because that path stores machine-generated transcript text rather than authored content.
+
+If a value exceeds its cap, it is stored truncated and ends with a `[TRUNCATED: <field> exceeds <cap> chars]` marker, so a cut is always visible on recall. The marker is reserved inside the cap, so a stored value never exceeds the stated limit. The response also includes `"truncated": true` when any cap fired, but does not identify which field or item was affected. To keep entries within their caps: keep each `decisions` and `open_questions` entry to a short, self-contained claim (one sentence is usually enough). Use `summary` for narrative detail -- its 15,000-character budget is large enough for several paragraphs.
 
 **Returns:** The new session ID and a confirmation.
 
