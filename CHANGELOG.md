@@ -1,6 +1,52 @@
 # LoreConvo Changelog
 
-## Unreleased
+## v0.10.11 (2026-09-21)
+
+### Added: observability, export/import, and Pro search/digest ops on shared core (SH-101927, SH-101928, SH-101929, SH-101930)
+
+Export/import logic moved out of `server.py` into `SessionDatabase`
+(`export_payload`, `import_export_file`, `anthropic_export_payload`).
+Observability added `usage_stats_with_hook_status`, `get_dream_log_entries`,
+and `session_map_payload` (via `core/graph.build_session_map_payload`). Pro
+search and consolidation added `related_sessions_payload`,
+`consolidate_memories_payload`, `memory_digest_payload`, and
+`context_for_payload` (carrying the SH-13436 trust framing). `server.py` tools
+are now thin delegators over those methods.
+
+The fallback script (`scripts/save_to_loreconvo.py`) gains 12 ops as a second
+CALLER of the same `SessionDatabase` methods: no raw SQL, no second
+implementation. Pro gating moved with the logic -- `get_related_sessions` and
+`export_for_anthropic` are gated in shared core with the messages `server.py`
+previously used, so free tier still hard-fails with an upgrade message on both
+surfaces. `surface_coverage.FEATURE_SURFACES` and the `FALLBACK_CONTRACT.md`
+tier-(a) table updated; parity gate green.
+
+### Fixed: direct-write save_session truncation now marks the cut (SH-101877)
+
+`truncate_session_fields()` (the direct MCP `save_session` path) now shares
+the hook path's single truncation derivation (`_truncate_if_needed` in
+`core/storage_core.py`): a cut summary, reasoning_notes, decision, or open
+question carries a `[TRUNCATED: <field> exceeds <cap> chars]` marker, reserved
+inside the cap so the stored value never exceeds the ratified length including
+the marker. Previously the direct path sliced silently -- the stored record
+stopped mid-word with no signal on recall. Cap values are unchanged.
+
+### Fixed: shipped docs restated the superseded save caps (SH-102317 QA, SH-102277 QA)
+
+`skills/loreconvo/SKILL.md`, `docs/mcp_tool_catalog.md`, `docs/cli_reference.md`
+and the internal `docs/reference/DATA_DICTIONARY.md` all still stated 8000/500
+for the direct path after SH-101938 raised it to 15000/2000. SKILL.md is the
+consequential one: it ships into user context, so the stale 500 was steering
+callers to compress decisions below the ratified cap. The same paragraphs also
+still described truncation as silent, superseded by the SH-101877 marker, and
+claimed a per-item cap on `artifacts` that `_cap_list` never applied
+(`core/database.py` caps `decisions` and `open_questions` only).
+
+`FALLBACK_CONTRACT.md` claimed the SH-101927 observability ops were covered by
+`test_fallback_mcp_parity.py`; that file does not exercise them. Replaced with
+an accurate statement of what `test_fallback_t3_surfaces.py` does and does not
+guarantee. The `cli_reference.md` version example no longer pins a literal
+version string.
 
 ### Changed: direct-path save_session caps raised to 2000/15000 (SH-101938)
 
@@ -17,16 +63,6 @@ deliberate, authored content). The shared `_truncate_if_needed` derivation
 `[TRUNCATED: <field> exceeds <cap> chars]` inside the cap.
 
 ## v0.10.10 (2026-09-15)
-
-### Fixed: direct-write save_session truncation now marks the cut (SH-101877)
-
-`truncate_session_fields()` (the direct MCP `save_session` path) now shares
-the hook path's single truncation derivation (`_truncate_if_needed` in
-`core/storage_core.py`): a cut summary, reasoning_notes, decision, or open
-question carries a `[TRUNCATED: <field> exceeds <cap> chars]` marker, reserved
-inside the cap so the stored value never exceeds the ratified length including
-the marker. Previously the direct path sliced silently -- the stored record
-stopped mid-word with no signal on recall. Cap values are unchanged.
 
 ### Fixed: memory digests could resurface external or expired sessions (SH-101733)
 
