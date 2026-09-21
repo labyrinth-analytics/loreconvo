@@ -77,5 +77,7 @@ Session-save (`save_to_loreconvo.py` with no mode flag) and the write-side
 ops named in the section above are not part of this contract's parity
 guard -- they predate it or landed as write-side extensions and are not
 covered by the tier-(a) drift guard. The tier-(a) observability read ops
-added by SH-101927 ARE covered: test_fallback_mcp_parity.py exercises them
-against the same corpus the MCP server writes.
+added by SH-101927 are exercised by test_fallback_t3_surfaces.py, which
+asserts each op against a shared database. That is not the same thing as a
+cross-surface agreement guard: test_fallback_mcp_parity.py compares fallback
+output to MCP tool output, and it does not yet cover these ops.
