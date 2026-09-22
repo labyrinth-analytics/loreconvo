@@ -14,7 +14,7 @@ while the MCP server is down:
 | MCP tool | Fallback | Notes |
 |---|---|---|
 | `get_recent_sessions` | `--read` | Lists recent sessions. |
-| `get_session` | `--read-id SESSION_ID` | One session's full metadata + content. |
+| `get_session` | `--read-id SESSION_ID` | One session's full metadata + content, including `previous_summary` when set. |
 | `search_sessions` (keyword) | `--search QUERY` | FTS5, same as MCP. |
 | `search_sessions` (semantic) | `--search QUERY --semantic` | Pro tier only. |
 | `get_skill_history` | `--skill-history --skill-name NAME` | Sessions that used a skill. |
@@ -25,11 +25,13 @@ while the MCP server is down:
 | `get_related_sessions` | `--related --related-session-id ID` | Pro only; free tier exits 1 with an upgrade message. |
 | `get_memory_digest` | `--digest --project P [--surface S]` | Prints the digest markdown; no_digest exits 1. |
 | `get_context_for` | `--context-for --context-topic TOPIC` | Trust-framed excerpts (SH-13436 boundary), same as MCP. |
+| `query_memory_items` | `--query-memory-items [--memory-item-type T] [--project P] [--memory-item-status S] [--memory-item-artifact-type A] [--memory-item-days N] [--memory-item-limit N]` | Structured decisions/questions/artifacts; result JSON on stdout. |
 
 Keyword search and `--read-id` predate this contract; `--semantic` and the
 `LORECONVO_DB` env-var precedence fix are what this contract adds. The
 observability read ops (SH-101927) and the Pro-search / digest / context
-read ops (SH-101929/101930) extend it. Every op delegates to the
+read ops (SH-101929/101930) extend it. `query_memory_items` (SH-102285)
+extends it further. Every op delegates to the
 same `SessionDatabase` methods the MCP server uses -- the fallback is a
 second caller of that logic, never a second implementation of it.
 
@@ -44,6 +46,9 @@ The export/import ops (SH-101928) are second callers of the shared-core
 | `import_sessions` | `--import-file FILE [--on-conflict skip\|replace] [--dry-run]` | DB write; error summary on stderr. |
 | `export_for_anthropic` | `--anthropic-export [--output FILE]` | Pro only; free tier exits 1 with an upgrade message. |
 | `consolidate_memories` | `--consolidate --project P [--surface S]` | DB write; result JSON on stdout. |
+| `save_memory_item` | `--save-memory-item --memory-item-type T --memory-item-title TITLE [--memory-item-body B] [--session-id ID] [--project P] [--memory-item-tags JSON] [--memory-item-metadata JSON] [--memory-item-external-id ID] [--memory-item-artifact-type A]` | DB write; result JSON on stdout. |
+| `transition_memory_item` | `--transition-memory-item --memory-item-id ID --memory-item-transition T [--memory-item-reason R] [--closing-session-id ID]` | DB write; result JSON on stdout. |
+| `update_memory_item` | `--update-memory-item --memory-item-id ID [--memory-item-title T] [--memory-item-body B] [--memory-item-tags JSON] [--memory-item-metadata JSON] [--new-project P --allow-project-change]` | DB write; result JSON on stdout. |
 
 ## Guaranteed invariants
 

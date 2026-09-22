@@ -403,8 +403,8 @@ def read_session_by_id(args):
     conn, db_path = _connect(args.db_path)
 
     row = conn.execute(
-        """SELECT id, surface, project, title, summary, decisions, artifacts,
-                  open_questions, tags, datetime(created_at) as created
+        """SELECT id, surface, project, title, summary, previous_summary, decisions,
+                  artifacts, open_questions, tags, datetime(created_at) as created
            FROM sessions WHERE id = ?""",
         (args.read_id,)
     ).fetchone()
@@ -422,6 +422,11 @@ def read_session_by_id(args):
     print("Summary:")
     print(row['summary'])
     print()
+
+    if row['previous_summary']:
+        print("Previous Summary:")
+        print(row['previous_summary'])
+        print()
 
     for field in ("decisions", "artifacts", "open_questions", "tags"):
         raw = row[field]
@@ -863,6 +868,111 @@ def cmd_context_for(args):
         print()
 
 
+# -- Structured memory items: decisions/questions/artifacts (SH-102285) --
+
+def _parse_json_arg(raw, expected_type, flag_name):
+    """Parse a JSON CLI argument, exiting with a clear error on failure.
+
+    Returns None when raw is None (flag omitted) so callers can pass the
+    result straight through to a SessionDatabase method's Optional param.
+    """
+    if raw is None:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        print(f"ERROR: {flag_name} value is not valid JSON.", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(parsed, expected_type):
+        print(f"ERROR: {flag_name} must be a JSON {expected_type.__name__}.", file=sys.stderr)
+        sys.exit(1)
+    return parsed
+
+
+def _print_memory_item_result(result):
+    """Print a memory-item op's dict result, hard-failing on ok=False."""
+    if not result.get("ok", False):
+        print(f"ERROR: {result.get('code')}: {result.get('message')}", file=sys.stderr)
+        sys.exit(1)
+    print(json.dumps(result, indent=2))
+
+
+def cmd_save_memory_item(args):
+    """Save a structured memory item: decision, open_question, or artifact (save_memory_item)."""
+    tags = _parse_json_arg(args.memory_item_tags, list, "--memory-item-tags")
+    metadata = _parse_json_arg(args.memory_item_metadata, dict, "--memory-item-metadata")
+
+    db = _session_database(args)
+    try:
+        result = db.save_memory_item(
+            item_type=args.memory_item_type,
+            title=args.memory_item_title,
+            body=args.memory_item_body,
+            session_id=getattr(args, "session_id", None),
+            project=args.project or "unspecified",
+            tags=tags,
+            metadata=metadata,
+            external_id=args.memory_item_external_id,
+            artifact_type=args.memory_item_artifact_type,
+        )
+    finally:
+        db.close()
+    _print_memory_item_result(result)
+
+
+def cmd_query_memory_items(args):
+    """Query structured memory items by type, project, status, and recency (query_memory_items)."""
+    db = _session_database(args)
+    try:
+        result = db.query_memory_items(
+            item_type=args.memory_item_type,
+            project=args.project,
+            status=args.memory_item_status,
+            artifact_type=args.memory_item_artifact_type,
+            days=args.memory_item_days,
+            limit=args.memory_item_limit,
+        )
+    finally:
+        db.close()
+    _print_memory_item_result(result)
+
+
+def cmd_transition_memory_item(args):
+    """Move a memory item through its lifecycle (transition_memory_item)."""
+    db = _session_database(args)
+    try:
+        result = db.transition_memory_item(
+            item_id=args.memory_item_id,
+            transition=args.memory_item_transition,
+            reason=args.memory_item_reason,
+            closing_session_id=args.closing_session_id,
+        )
+    finally:
+        db.close()
+    _print_memory_item_result(result)
+
+
+def cmd_update_memory_item(args):
+    """Correct a memory item's fields, or move it between projects (update_memory_item)."""
+    tags = _parse_json_arg(args.memory_item_tags, list, "--memory-item-tags")
+    metadata = _parse_json_arg(args.memory_item_metadata, dict, "--memory-item-metadata")
+
+    db = _session_database(args)
+    try:
+        result = db.update_memory_item(
+            item_id=args.memory_item_id,
+            title=args.memory_item_title,
+            body=args.memory_item_body,
+            tags=tags,
+            metadata=metadata,
+            new_project=args.new_project,
+            allow_project_change=args.allow_project_change,
+        )
+    finally:
+        db.close()
+    _print_memory_item_result(result)
+
+
 # -- CLI --
 
 def main():
@@ -970,6 +1080,52 @@ def main():
     parser.add_argument("--max-results", type=int, dest="max_results", default=5,
                         help="With --context-for: max excerpts (default 5)")
 
+    # Structured memory item flags (SH-102285)
+    parser.add_argument("--save-memory-item", action="store_true", dest="save_memory_item",
+                        help="Save a decision/open_question/artifact (save_memory_item)")
+    parser.add_argument("--query-memory-items", action="store_true", dest="query_memory_items",
+                        help="Query structured memory items (query_memory_items)")
+    parser.add_argument("--transition-memory-item", action="store_true", dest="transition_memory_item",
+                        help="Move a memory item through its lifecycle (transition_memory_item)")
+    parser.add_argument("--update-memory-item", action="store_true", dest="update_memory_item",
+                        help="Correct a memory item's fields or move project (update_memory_item)")
+    parser.add_argument("--memory-item-type", type=str, dest="memory_item_type",
+                        choices=["decision", "open_question", "artifact"],
+                        help="Item type for --save-memory-item/--query-memory-items")
+    parser.add_argument("--memory-item-id", type=str, dest="memory_item_id",
+                        help="Item id for --transition-memory-item/--update-memory-item")
+    parser.add_argument("--memory-item-title", type=str, dest="memory_item_title",
+                        help="Title for --save-memory-item/--update-memory-item")
+    parser.add_argument("--memory-item-body", type=str, dest="memory_item_body",
+                        help="Body text for --save-memory-item/--update-memory-item")
+    parser.add_argument("--memory-item-tags", type=str, dest="memory_item_tags",
+                        help="JSON list of tags for --save-memory-item/--update-memory-item")
+    parser.add_argument("--memory-item-metadata", type=str, dest="memory_item_metadata",
+                        help="JSON object of metadata for --save-memory-item/--update-memory-item")
+    parser.add_argument("--memory-item-external-id", type=str, dest="memory_item_external_id",
+                        help="Caller dedup key for --save-memory-item")
+    parser.add_argument("--memory-item-artifact-type", type=str, dest="memory_item_artifact_type",
+                        help="Artifact type for --save-memory-item (item_type=artifact), or "
+                             "an artifact_type filter for --query-memory-items")
+    parser.add_argument("--memory-item-status", type=str, dest="memory_item_status",
+                        help="Status filter for --query-memory-items (e.g. active, open, retired)")
+    parser.add_argument("--memory-item-days", type=int, dest="memory_item_days", default=None,
+                        help="With --query-memory-items: only items created in the last N days")
+    parser.add_argument("--memory-item-limit", type=int, dest="memory_item_limit", default=50,
+                        help="With --query-memory-items: max rows to return (default 50, max 200)")
+    parser.add_argument("--memory-item-transition", type=str, dest="memory_item_transition",
+                        choices=["retire", "answer", "wont-answer"],
+                        help="Transition for --transition-memory-item")
+    parser.add_argument("--memory-item-reason", type=str, dest="memory_item_reason",
+                        help="Optional reason recorded on close, with --transition-memory-item")
+    parser.add_argument("--closing-session-id", type=str, dest="closing_session_id",
+                        help="Session performing the transition, with --transition-memory-item")
+    parser.add_argument("--new-project", type=str, dest="new_project",
+                        help="Destination project, with --update-memory-item")
+    parser.add_argument("--allow-project-change", action="store_true", dest="allow_project_change",
+                        help="Required to actually move a memory item between projects, "
+                             "with --update-memory-item")
+
     # Save args
     parser.add_argument("--title", type=str, help="Session title")
     parser.add_argument("--surface", type=str,
@@ -1029,6 +1185,20 @@ def main():
         if not args.context_topic:
             parser.error("--context-for requires --context-topic")
         cmd_context_for(args)
+    elif args.save_memory_item:
+        if not args.memory_item_type or not args.memory_item_title:
+            parser.error("--save-memory-item requires --memory-item-type and --memory-item-title")
+        cmd_save_memory_item(args)
+    elif args.query_memory_items:
+        cmd_query_memory_items(args)
+    elif args.transition_memory_item:
+        if not args.memory_item_id or not args.memory_item_transition:
+            parser.error("--transition-memory-item requires --memory-item-id and --memory-item-transition")
+        cmd_transition_memory_item(args)
+    elif args.update_memory_item:
+        if not args.memory_item_id:
+            parser.error("--update-memory-item requires --memory-item-id")
+        cmd_update_memory_item(args)
     elif args.read_id:
         read_session_by_id(args)
     elif args.search:
