@@ -308,7 +308,7 @@ Check your current tier and usage with `get_tier`. Activate a Pro license with
 
 [Upgrade to Pro -- $8/month](https://buy.stripe.com/9B65kv1VOgk3ekr7VD7N600)
 
-After checkout, your license key is emailed to the address you used at checkout, usually within one business day. Questions: info@labyrinthanalyticsconsulting.com.
+After checkout, your license key is emailed automatically to the address you used at checkout, usually within a few minutes. Questions: info@labyrinthanalyticsconsulting.com.
 
 ## MCP Tools
 
