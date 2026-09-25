@@ -4,6 +4,24 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.10.12 (2026-09-24)
+
+### Added
+
+- Structured memory items (decisions, open questions, and similar records)
+  can now be created, searched, updated, and closed from the fallback script
+  when the LoreConvo MCP server is unreachable. Session reads through the
+  fallback also include the previous-summary field when one is set. These
+  match the MCP tools of the same names.
+- The package now carries the metadata the official MCP Server Registry
+  requires, so LoreConvo can be listed there and installed by MCP clients that
+  browse the registry.
+
+### Changed
+
+- License keys for Pro are now delivered automatically within a few minutes of
+  checkout. Documentation previously said one business day.
+
 ## v0.10.11 (2026-09-21)
 
 ### Added

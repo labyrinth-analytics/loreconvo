@@ -1,5 +1,28 @@
 # LoreConvo Changelog
 
+## v0.10.12 (2026-09-24)
+
+### Added: memory-item CRUD on the fallback script (SH-102285)
+
+`scripts/save_to_loreconvo.py` gains `--save-memory-item`,
+`--query-memory-items`, `--transition-memory-item`, and
+`--update-memory-item`, each a thin caller of the shared-core memory-item
+methods the MCP tools use. `--read-id` output now includes
+`previous_summary`. `FALLBACK_CONTRACT.md` documents the new ops.
+
+### Added: MCP Server Registry metadata
+
+New `server.json` (name `io.github.labyrinth-analytics/loreconvo`, PyPI
+package over stdio via `uvx`). `README.md` carries the registry's
+`mcp-name:` ownership marker as its final line; the registry validates it
+against the PyPI README of this exact version, so the marker must survive
+any README regeneration.
+
+### Changed: license-delivery wording
+
+`README.md` and `INSTALL.md` now state automatic key delivery within minutes
+(Stripe webhook Lambda) instead of one business day.
+
 ## v0.10.11 (2026-09-21)
 
 ### Added: observability, export/import, and Pro search/digest ops on shared core (SH-101927, SH-101928, SH-101929, SH-101930)
