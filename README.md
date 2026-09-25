@@ -452,3 +452,5 @@ Business Source License 1.1 (BSL 1.1) - Labyrinth Analytics Consulting
 
 Free for personal/non-commercial use (up to 50 sessions). Commercial use requires
 a paid license. Converts to Apache 2.0 on 2030-03-31. See [LICENSE](LICENSE) for details.
+
+mcp-name: io.github.labyrinth-analytics/loreconvo
