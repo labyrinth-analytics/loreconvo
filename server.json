@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.labyrinth-analytics/loreconvo",
+  "title": "LoreConvo",
+  "description": "Local-first persistent session memory for Claude Code, Cowork, Codex, Cursor, and Hermes Agent. SQLite + FTS5, no cloud account.",
+  "repository": {
+    "url": "https://github.com/labyrinth-analytics/loreconvo",
+    "source": "github"
+  },
+  "version": "0.10.12",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "loreconvo",
+      "version": "0.10.12",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "LORECONVO_PRO",
+          "description": "Pro license key. Leave unset for the free tier.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
