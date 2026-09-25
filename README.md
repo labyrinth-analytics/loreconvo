@@ -1,4 +1,4 @@
-# LoreConvo v0.10.11
+# LoreConvo v0.10.12
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -414,33 +414,23 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.11 (2026-09-21)
+## v0.10.12 (2026-09-24)
 
 ### Added
 
-- If the LoreConvo MCP server is unreachable, the fallback script can now do
-  much more than save and search. Twelve operations that previously required
-  the MCP server work directly from the command line: browse and filter your
-  stored sessions, view usage stats and consolidation history, render a
-  session graph, export and import your data, and on Pro, related-session
-  search, memory digests, and topic context retrieval. Each one calls the same
-  underlying code the MCP server uses, so results match.
+- Structured memory items (decisions, open questions, and similar records)
+  can now be created, searched, updated, and closed from the fallback script
+  when the LoreConvo MCP server is unreachable. Session reads through the
+  fallback also include the previous-summary field when one is set. These
+  match the MCP tools of the same names.
+- The package now carries the metadata the official MCP Server Registry
+  requires, so LoreConvo can be listed there and installed by MCP clients that
+  browse the registry.
 
 ### Changed
 
-- Session summaries and reasoning notes saved directly through the
-  `save_session` tool can now be up to 15,000 characters, and each
-  decision or open question up to 2,000 characters, before being
-  shortened. Oversized fields still end with a clear
-  "[TRUNCATED: field exceeds N chars]" note instead of stopping
-  mid-sentence. Automatic session-capture hooks keep their previous,
-  tighter limits.
-
-### Fixed
-
-- When a saved session field is longer than the storage limit, the stored
-  record now ends with a clear "[TRUNCATED: field exceeds N chars]" note
-  instead of stopping mid-sentence with no explanation.
+- License keys for Pro are now delivered automatically within a few minutes of
+  checkout. Documentation previously said one business day.
 
 <!-- WHATS_NEW:END -->
 
