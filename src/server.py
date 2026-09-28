@@ -1693,6 +1693,9 @@ def get_anti_patterns(
 ) -> list[dict]:
     """Retrieve sessions marked as anti-patterns.
 
+    Delegates to SessionDatabase.get_anti_patterns (SH-102688) so the
+    MCP server, fallback script, and CLI all share one implementation.
+
     Returns a list of dicts with a 'truncated' boolean. Use at session start
     or before attempting a known-tricky approach to surface past failures.
 
@@ -1707,62 +1710,7 @@ def get_anti_patterns(
     if not isinstance(limit, int) or limit < 1 or limit > 100:
         return [{"error": "limit must be an integer 1-100", "status": "error"}]
 
-    topic_clean = (topic or "").strip()[:500]
-    project_clean = (project or "").strip() or None
-    truncated = False
-
-    if not topic_clean:
-        params: list = []
-        sql = """
-            SELECT s.*
-            FROM sessions s
-            JOIN anti_pattern_sessions ap ON ap.session_id = s.id
-        """
-        if project_clean:
-            sql += " WHERE s.project = ?"
-            params.append(project_clean)
-        sql += " ORDER BY s.start_date DESC LIMIT ?"
-        params.append(limit)
-        rows = _get_db().conn.execute(sql, params).fetchall()
-        sessions_list = [_get_db()._row_to_session(r) for r in rows]
-    else:
-        fetch_limit = min(limit * 4, 400)
-        fts_results = _get_db().search_sessions(
-            query=topic_clean,
-            project=project_clean,
-            limit=fetch_limit,
-        )
-        if not fts_results:
-            sessions_list = []
-        else:
-            candidate_ids = [r.session.id for r in fts_results]
-            placeholders = ",".join("?" * len(candidate_ids))
-            anti_ids = set(
-                row[0] for row in _get_db().conn.execute(
-                    f"SELECT session_id FROM anti_pattern_sessions "
-                    f"WHERE session_id IN ({placeholders})",
-                    candidate_ids
-                ).fetchall()
-            )
-            sessions_list = [
-                r.session for r in fts_results if r.session.id in anti_ids
-            ][:limit]
-        # FTS path can under-return when anti-patterns are sparse in corpus.
-        truncated = len(sessions_list) < limit
-
-    return [
-        {
-            "session_id": s.id or "",
-            "session_title": s.title or "",
-            "date": s.start_date or "",
-            "project": s.project or "",
-            "summary": (s.summary or "")[:2000],
-            "decisions": list(s.decisions) if isinstance(s.decisions, list) else [],
-            "open_questions": list(s.open_questions) if isinstance(s.open_questions, list) else [],
-            "truncated": truncated,
-        }
-        for s in sessions_list
-    ]
+    return _get_db().get_anti_patterns(topic=topic, limit=limit, project=project)
 
 
 @mcp.tool(title="Tag Session as Anti-Pattern")
