@@ -577,6 +577,10 @@ class SessionDatabase:
         # LAST among the migrations on purpose: any earlier step that recreates
         # the sessions table or its triggers is repaired by this one (SH-13438).
         self._migrate_fts_v4_external_content_triggers()
+        if getattr(self, "_fts_created_over_rows", False):
+            self.conn.execute("INSERT INTO sessions_fts(sessions_fts) VALUES('rebuild')")
+            self.conn.commit()
+            self._fts_created_over_rows = False
         self.conn.executescript(ANTI_PATTERN_SCHEMA_SQL)
         _validate_anti_pattern_schema(self.conn)
         self._sweep_anti_pattern_orphans()
@@ -854,6 +858,13 @@ class SessionDatabase:
             needs_rebuild = False
             self.conn.executescript(FTS_SQL)
             self.conn.executescript(FTS_TRIGGERS)
+            # SH-103036: a sessions table that predates sessions_fts already
+            # has rows; an empty external-content index makes the first UPDATE
+            # fire 'delete' for never-indexed rows -> "malformed". The rebuild
+            # runs in _init_schema once every indexed column exists.
+            self._fts_created_over_rows = self.conn.execute(
+                "SELECT 1 FROM sessions LIMIT 1"
+            ).fetchone() is not None
             return
 
         if not needs_rebuild:
@@ -1708,6 +1719,84 @@ class SessionDatabase:
                 raise
 
         return "removed" if changes else "not_present"
+
+    def get_anti_patterns(
+        self,
+        topic: Optional[str] = None,
+        limit: int = 10,
+        project: Optional[str] = None,
+    ) -> list:
+        """Retrieve sessions marked as anti-patterns.
+
+        Returns a list of dicts with a 'truncated' boolean. Mirrors the
+        MCP server's get_anti_patterns tool so the fallback script and CLI
+        can delegate here instead of re-implementing the query.
+
+        Args:
+            topic: Optional keyword to filter within anti-patterns. Omit
+                   for all anti-patterns ordered by recency. When provided,
+                   uses FTS5 search_sessions with a fan-out heuristic;
+                   result may be truncated if anti-patterns are sparse.
+            limit: Max results to return (1-100). Defaults to 10.
+            project: Restrict to a specific project slug. Case-sensitive.
+        """
+        if not isinstance(limit, int) or limit < 1 or limit > 100:
+            return [{"error": "limit must be an integer 1-100", "status": "error"}]
+
+        topic_clean = (topic or "").strip()[:500]
+        project_clean = (project or "").strip() or None
+        truncated = False
+
+        if not topic_clean:
+            params: list = []
+            sql = (
+                "SELECT s.* FROM sessions s "
+                "JOIN anti_pattern_sessions ap ON ap.session_id = s.id"
+            )
+            if project_clean:
+                sql += " WHERE s.project = ?"
+                params.append(project_clean)
+            sql += " ORDER BY s.start_date DESC LIMIT ?"
+            params.append(limit)
+            rows = self.conn.execute(sql, params).fetchall()
+            sessions_list = [self._row_to_session(r) for r in rows]
+        else:
+            fetch_limit = min(limit * 4, 400)
+            fts_results = self.search_sessions(
+                query=topic_clean,
+                project=project_clean,
+                limit=fetch_limit,
+            )
+            if not fts_results:
+                sessions_list = []
+            else:
+                candidate_ids = [r.session.id for r in fts_results]
+                placeholders = ",".join("?" * len(candidate_ids))
+                anti_ids = set(
+                    row[0] for row in self.conn.execute(
+                        "SELECT session_id FROM anti_pattern_sessions "
+                        "WHERE session_id IN ({})".format(placeholders),
+                        candidate_ids,
+                    ).fetchall()
+                )
+                sessions_list = [
+                    r.session for r in fts_results if r.session.id in anti_ids
+                ][:limit]
+            truncated = len(sessions_list) < limit
+
+        return [
+            {
+                "session_id": s.id or "",
+                "session_title": s.title or "",
+                "date": s.start_date or "",
+                "project": s.project or "",
+                "summary": (s.summary or "")[:2000],
+                "decisions": list(s.decisions) if isinstance(s.decisions, list) else [],
+                "open_questions": list(s.open_questions) if isinstance(s.open_questions, list) else [],
+                "truncated": truncated,
+            }
+            for s in sessions_list
+        ]
 
     def _migrate_index_existing_cooccurrences(self):
         """Populate session_cooccurrences for existing sessions on first run.
