@@ -30,10 +30,12 @@ import json
 import os
 import sys
 import traceback
+import types
 from datetime import datetime, timezone
 from pathlib import Path
 
 _MAX_UPWARD_LEVELS = 4
+_SRC_REL = Path("src")
 _REL_CANDIDATES = (
     Path("src") / "core" / "storage_core.py",
     Path("core") / "storage_core.py",
@@ -41,6 +43,17 @@ _REL_CANDIDATES = (
 _TIMEUTIL_REL_CANDIDATES = (
     Path("src") / "core" / "timeutil.py",
     Path("core") / "timeutil.py",
+)
+_SESSION_CORE_CLOSURE = (
+    "core/models.py",
+    "core/config.py",
+    "core/storage_core.py",
+    "core/trust_framing.py",
+    "core/hybrid_search.py",
+    "core/license_store.py",
+    "core/license.py",
+    "core/loredocs_bridge.py",
+    "core/database.py",
 )
 
 _DEGRADED_WARNED = False
@@ -269,5 +282,195 @@ def resolve_timeutil(origin):
     parts.append(
         "Remedy: pip install loreconvo, or run hooks from the "
         "distributed bundle where hooks/ and src/ are siblings."
+    )
+    raise BootstrapError("\n".join(parts))
+
+
+# ---------------------------------------------------------------------------
+# Session-core resolution (SH-101932 Phase B)
+# ---------------------------------------------------------------------------
+#
+# The fallback saver (scripts/save_to_loreconvo.py) is a second caller of
+# SessionDatabase.save_session -- the same internal API the MCP server uses,
+# never a second implementation. The MCP server is always launched from an
+# environment where `loreconvo` is importable (uvx/editable install). The
+# fallback is not: the Hermes session-end ceremony invokes it via
+# sys.executable, which in some fleet contexts is a bare system Python with
+# no loreconvo distribution installed. A package-level `import loreconvo`
+# in the fallback therefore fails on exactly the production path it exists
+# to serve. resolve_session_core() below gives the fallback the package in
+# BOTH worlds:
+#
+#   Path 1 -- installed package (preferred). When loreconvo.core is
+#     importable, its modules are returned directly.
+#   Path 2 -- bounded upward search for a sibling src/ checkout, then
+#     package synthesis: real package objects ('loreconvo', 'loreconvo.core')
+#     whose __path__ points at src/ are registered in sys.modules BEFORE any
+#     submodule is loaded, so the relative imports inside core/database.py
+#     (`.config`, `.hybrid_search`, ...) resolve naturally against the
+#     synthesized package. Only the session-core closure is loaded --
+#     server.py (FastMCP), anthropic_bridge.py (anthropic), and
+#     idle_watchdog.py (mcp.types) stay OUT, so synthesis works on a
+#     stdlib-only interpreter. The closure is stdlib-only at module scope
+#     by design: cryptography/lancedb/mcp imports are lazy inside the
+#     modules (checked 2026-09-27). src/__init__.py is NOT executed: it
+#     only carries version plumbing and re-exports the closure caller
+#     never needs.
+#
+# Force-registration (plain assignment, not setdefault) is deliberate:
+# path 1 has definitively failed by the time synthesis runs, so any
+# 'loreconvo' entry left in sys.modules by the failed attempt must be
+# replaced, not kept.
+
+
+def _synthesize_session_core(src_root, broken_pkg):
+    """Synthesize the loreconvo package and load the session-core closure.
+
+    Registers 'loreconvo' and 'loreconvo.core' as package objects whose
+    __path__ points at the checkout src/, then loads each closure module
+    under its canonical name. Modules already in sys.modules (loaded by an
+    earlier relative import) are skipped, never re-executed.
+
+    Raises BootstrapError on any missing file or load failure.
+    """
+    probed = [str(src_root / rel) for rel in _SESSION_CORE_CLOSURE]
+    missing = [p for p in probed if not Path(p).is_file()]
+    if missing:
+        parts = ["Cannot resolve loreconvo session core."]
+        parts.append(f"Missing closure files ({len(missing)}):")
+        for p in missing:
+            parts.append(f"  {p}")
+        if broken_pkg is not None:
+            parts.append(
+                f"loreconvo package was found but is broken: {broken_pkg}"
+            )
+        parts.append(
+            "Remedy: pip install loreconvo, or run the fallback from a "
+            "checkout where hooks/ and src/ are siblings."
+        )
+        raise BootstrapError("\n".join(parts))
+
+    pkg = types.ModuleType("loreconvo")
+    pkg.__path__ = [str(src_root)]
+    pkg.__package__ = "loreconvo"
+    pkg.__file__ = str(src_root / "__init__.py")
+    pkg.__spec__ = None
+    sys.modules["loreconvo"] = pkg
+
+    core_pkg = types.ModuleType("loreconvo.core")
+    core_pkg.__path__ = [str(src_root / "core")]
+    core_pkg.__package__ = "loreconvo.core"
+    core_pkg.__file__ = str(src_root / "core" / "__init__.py")
+    core_pkg.__spec__ = None
+    sys.modules["loreconvo.core"] = core_pkg
+
+    for rel in _SESSION_CORE_CLOSURE:
+        name = "loreconvo." + rel[:-3].replace("/", ".")
+        # Pop unconditionally: a failed path-1 import may have left a
+        # partial module under this name (editable installs register the
+        # module BEFORE its body finishes executing). Re-executing the
+        # closure under the synthesized package guarantees a consistent
+        # module graph; module-scope code here is idempotent.
+        sys.modules.pop(name, None)
+        try:
+            _load_by_path(src_root / rel, name)
+        except Exception as exc:
+            raise _raise_synth_failed(src_root, broken_pkg, exc) from exc
+
+    if broken_pkg is not None:
+        _warn_once_degraded(str(src_root), broken_pkg)
+    _clear_breadcrumb()
+
+
+def _raise_synth_failed(src_root, broken_pkg, exc):
+    parts = ["Cannot synthesize loreconvo session core."]
+    parts.append(f"src root probed: {src_root}")
+    parts.append(f"Failure: {exc!r}")
+    if broken_pkg is not None:
+        parts.append(
+            f"loreconvo package was found but is broken: {broken_pkg}"
+        )
+    parts.append(
+        "Remedy: pip install loreconvo, or run the fallback from a "
+        "checkout where hooks/ and src/ are siblings."
+    )
+    return BootstrapError("\n".join(parts))
+
+
+def resolve_session_core(origin):
+    """Resolve the SessionDatabase/Config/Session triad for non-package callers.
+
+    Args:
+        origin: Path(__file__) of the calling script.
+
+    Returns:
+        A SimpleNamespace with attributes SessionDatabase,
+        SessionLimitReachedError, Config, and Session.
+
+    Raises:
+        BootstrapError: if neither the installed package nor a sibling
+            src/ checkout can provide the session core.
+    """
+    # Path 1 -- installed package, preferred.
+    broken_pkg = None
+    try:
+        if importlib.util.find_spec("loreconvo.core") is not None:
+            try:
+                from loreconvo.core.database import (
+                    SessionDatabase,
+                    SessionLimitReachedError,
+                )
+                from loreconvo.core.config import Config
+                from loreconvo.core.models import Session
+                _clear_breadcrumb()
+                return types.SimpleNamespace(
+                    SessionDatabase=SessionDatabase,
+                    SessionLimitReachedError=SessionLimitReachedError,
+                    Config=Config,
+                    Session=Session,
+                )
+            except Exception as exc:
+                broken_pkg = exc  # remembered, NOT fatal -- see path 2
+    except ModuleNotFoundError as exc:
+        # See resolve_storage_core: a missing 'loreconvo' is the normal
+        # source-checkout layout, not a broken install.
+        if exc.name != "loreconvo":
+            broken_pkg = exc
+    except Exception as exc:
+        broken_pkg = exc
+
+    # Path 2 -- bounded upward search for a sibling src/ checkout.
+    base = origin.resolve().parent
+    for level in range(_MAX_UPWARD_LEVELS + 1):
+        root = base.parents[level - 1] if level else base
+        src_root = root / _SRC_REL
+        if src_root.is_dir():
+            _synthesize_session_core(src_root, broken_pkg)
+            from loreconvo.core.database import (
+                SessionDatabase,
+                SessionLimitReachedError,
+            )
+            from loreconvo.core.config import Config
+            from loreconvo.core.models import Session
+            return types.SimpleNamespace(
+                SessionDatabase=SessionDatabase,
+                SessionLimitReachedError=SessionLimitReachedError,
+                Config=Config,
+                Session=Session,
+            )
+
+    # Both paths failed -- raise with full diagnostics.
+    parts = ["Cannot resolve loreconvo session core."]
+    parts.append(
+        "No installed package and no sibling src/ checkout within "
+        f"{_MAX_UPWARD_LEVELS} levels above {origin.resolve().parent}."
+    )
+    if broken_pkg is not None:
+        parts.append(
+            f"loreconvo package was found but is broken: {broken_pkg}"
+        )
+    parts.append(
+        "Remedy: pip install loreconvo, or run the fallback from a "
+        "checkout where hooks/ and src/ are siblings."
     )
     raise BootstrapError("\n".join(parts))
