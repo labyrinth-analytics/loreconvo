@@ -33,7 +33,6 @@ import json
 import os
 import sqlite3
 import sys
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -140,37 +139,13 @@ def _is_pro_licensed():
 
 
 def _check_session_tier_limit(conn):
-    """Check LoreConvo Free-tier session limit before saving.
-
-    Returns True if the operation is allowed, False if rejected.
-    Mirrors the check in database.py:save_session().
-    """
-    if _is_pro_licensed():
-        return True
-
-    # The source column may not exist in older schemas; fall back to
-    # counting all sessions if the column is missing.
-    try:
-        row = conn.execute(
-            "SELECT COUNT(*) as c FROM sessions "
-            "WHERE source IS NULL OR source != 'file_memory'"
-        ).fetchone()
-    except sqlite3.OperationalError:
-        row = conn.execute(
-            "SELECT COUNT(*) as c FROM sessions"
-        ).fetchone()
-    current_count = row[0] if row else 0
-
-    if current_count >= FREE_SESSION_LIMIT:
-        print(
-            f"Error: Free tier limit reached: {current_count} of "
-            f"{FREE_SESSION_LIMIT} sessions stored. "
-            "Upgrade at https://buy.stripe.com/9B65kv1VOgk3ekr7VD7N600 "
-            "to unlock unlimited sessions, then set your LORECONVO_PRO "
-            "license key."
-        )
-        return False
-
+    """DEPRECATED shim -- the fallback save path no longer performs its own
+    limit check (SH-101932 Phase B: save_session is a SessionDatabase caller,
+    and SessionDatabase.save_session enforces the canonical tier limit
+    itself). Kept as a pass-through so legacy callers (e.g. tests that
+    imported the name) keep working; the duplicate count query, FREE_SESSION_LIMIT,
+    and the 4-path _is_pro_licensed license resolution below are retained for
+    read-path Pro gating (--semantic) and are NOT reimplementing save logic."""
     return True
 
 
@@ -236,18 +211,40 @@ def _connect(db_path=None):
 # -- Save session --
 
 def save_session(args):
-    """Save a session to LoreConvo, matching the MCP tool's behavior exactly.
+    """Save a session to LoreConvo via the canonical SessionDatabase.save_session.
 
-    SH-12871: when args.session_id is provided (Claude Code's native session
-    ID, e.g. threaded through by agent_session_end.py from the transcript
-    file), upsert by that ID instead of always minting a fresh UUID. Without
-    this, a PreCompact-hook stub for the same real session (which DOES key by
-    that native ID) gets permanently orphaned the moment SessionEnd inserts an
-    unrelated row under a random UUID -- the stub's truncated content is all
-    that's ever findable. getattr() with a default keeps every existing caller
-    (none of which pass session_id) on today's behavior unchanged.
+    SH-101932 Phase B: the fallback is a second caller of the MCP server's
+    own save path, never a second implementation. Removes the duplicated
+    Free-tier limit check, the 4-path license resolution, and the raw
+    INSERT/UPDATE that had drifted from the canonical write (content_hash,
+    origin_machine, previous_summary, digest invalidation, truncation, and
+    the source column all now flow through the same code the MCP server
+    uses).
+
+    Preserved fallback-specific semantics:
+      - SH-12871 merge: when --session-id names an EXISTING row, the true
+        session start (start_date/created_at) is read from that row and
+        passed through on Session construction, so the canonical upsert
+        does not overwrite it with 'now'.
+      - Free-tier rejection still prints the canonical upgrade message on
+        stdout and returns None (not an uncaught exception) -- callers
+        like agent_session_end.py rely on exit 0 with no row.
     """
-    conn, db_path = _connect(args.db_path)
+
+    try:
+        core = _bootstrap.resolve_session_core(Path(__file__))
+        SessionDatabase = core.SessionDatabase
+        SessionLimitReachedError = core.SessionLimitReachedError
+        Config = core.Config
+        Session = core.Session
+    except _bootstrap.BootstrapError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    db_path = args.db_path or _find_loreconvo_db()
+    if not db_path:
+        print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
+        sys.exit(1)
 
     provided_id = getattr(args, "session_id", None)
     now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
@@ -279,76 +276,48 @@ def save_session(args):
     open_questions = parse_list(args.open_questions, flag_name="open-questions")
     tags = parse_list(args.tags, flag_name="tags")
 
-    if provided_id:
-        existing = conn.execute(
-            "SELECT id FROM sessions WHERE id = ?", (provided_id,)
-        ).fetchone()
-        if existing:
-            # Merge into the existing row (e.g. a PreCompact stub). start_date
-            # and created_at are the true session start -- left untouched.
-            conn.execute(
-                """UPDATE sessions SET title = ?, surface = ?, project = ?,
-                   end_date = ?, summary = ?, decisions = ?, artifacts = ?,
-                   open_questions = ?, tags = ?
-                   WHERE id = ?""",
-                (
-                    args.title,
-                    args.surface,
-                    args.project,
-                    args.end_date or now,
-                    args.summary,
-                    json.dumps(decisions),
-                    json.dumps(artifacts),
-                    json.dumps(open_questions),
-                    json.dumps(tags),
-                    provided_id,
-                )
-            )
-            conn.commit()
-            conn.close()
+    db = SessionDatabase(Config(db_path=db_path))
+    try:
+        existing = db.get_session(provided_id) if provided_id else None
 
-            print(f"Saved session {provided_id} to {db_path}")
-            print(f"  title: {args.title}")
-            print(f"  surface: {args.surface}")
-            return provided_id
-        session_id = provided_id
-    else:
-        session_id = str(uuid.uuid4())
+        if existing is not None:
+            # SH-12871 merge: the true session start survives the upsert.
+            start_date = existing.start_date or args.start_date or now
+            created_at = existing.created_at or now
+            session_id = provided_id
+        else:
+            start_date = args.start_date or now
+            created_at = now
+            session_id = provided_id  # None -> Session mints a UUID
 
-    # SH-100324: Enforce Free-tier session limit before INSERT
-    # (parity with MCP server's save_session path). Skipped for
-    # upserts of existing sessions (the UPDATE path above).
-    if not _check_session_tier_limit(conn):
-        conn.close()
-        return None
-
-    conn.execute(
-        """INSERT INTO sessions
-           (id, title, surface, project, start_date, end_date, summary,
-            decisions, artifacts, open_questions, tags, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            session_id,
-            args.title,
-            args.surface,
-            args.project,
-            args.start_date or now,
-            args.end_date,
-            args.summary,
-            json.dumps(decisions),
-            json.dumps(artifacts),
-            json.dumps(open_questions),
-            json.dumps(tags),
-            now,
+        session = Session(
+            title=args.title,
+            surface=args.surface,
+            project=args.project,
+            start_date=start_date,
+            end_date=args.end_date,
+            summary=args.summary,
+            decisions=decisions,
+            artifacts=artifacts,
+            open_questions=open_questions,
+            tags=tags,
+            created_at=created_at,
         )
-    )
-    conn.commit()
-    conn.close()
+        if session_id is not None:
+            session.id = session_id
 
-    print(f"Saved session {session_id} to {db_path}")
+        try:
+            saved_id = db.save_session(session)
+        except SessionLimitReachedError as exc:
+            print(str(exc))
+            return None
+    finally:
+        db.close()
+
+    print(f"Saved session {saved_id} to {db_path}")
     print(f"  title: {args.title}")
     print(f"  surface: {args.surface}")
-    return session_id
+    return saved_id
 
 
 # -- Read recent sessions --
@@ -517,10 +486,10 @@ def _cmd_search_semantic(args):
         return False
 
     try:
-        from loreconvo.core.database import SessionDatabase
-        from loreconvo.core.config import Config
-    except ImportError:
+        core = _bootstrap.resolve_session_core(Path(__file__))
+    except _bootstrap.BootstrapError as exc:
         print(tip, file=sys.stderr)
+        print(f"ERROR: {exc}", file=sys.stderr)
         return False
 
     db_path = args.db_path or _find_loreconvo_db()
@@ -528,7 +497,7 @@ def _cmd_search_semantic(args):
         print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
         sys.exit(1)
 
-    db = SessionDatabase(Config(db_path=db_path))
+    db = core.SessionDatabase(core.Config(db_path=db_path))
     try:
         results = db.search_sessions(args.search, limit=args.limit, semantic=True)
     finally:
@@ -576,16 +545,18 @@ def _session_database(args):
     """Open a SessionDatabase for shared-core operations.
 
     The fallback is a second caller of the MCP server's own
-    SessionDatabase methods -- never a second implementation. Mirrors the
-    optional-import pattern _cmd_search_semantic uses.
+    SessionDatabase methods -- never a second implementation. Resolution
+    goes through _bootstrap.resolve_session_core (installed package first,
+    then synthesis from a sibling src/ checkout) because the fallback must
+    work from BOTH interpreters the fleet invokes it with: .venv python
+    (editable loreconvo install) and a bare system python (no loreconvo
+    distribution -- the Hermes ceremony path).
     """
     try:
-        from loreconvo.core.database import SessionDatabase
-        from loreconvo.core.config import Config
-    except ImportError:
+        core = _bootstrap.resolve_session_core(Path(__file__))
+    except _bootstrap.BootstrapError as exc:
         print(
-            "ERROR: the loreconvo package is not importable; "
-            "install it (pip install loreconvo) to use this operation.",
+            f"ERROR: {exc}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -595,7 +566,7 @@ def _session_database(args):
         print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
         sys.exit(1)
 
-    return SessionDatabase(Config(db_path=db_path))
+    return core.SessionDatabase(core.Config(db_path=db_path))
 
 
 def skill_history(args):
@@ -870,6 +841,103 @@ def cmd_context_for(args):
 
 # -- Structured memory items: decisions/questions/artifacts (SH-102285) --
 
+# -- Session lifecycle ops (SH-102688) --
+
+
+def cmd_link_session(args):
+    """Link two related sessions (link_sessions)."""
+    db = _session_database(args)
+    try:
+        db.link_sessions(args.link_from, args.link_to, args.link_type)
+    finally:
+        db.close()
+    print(f"Linked: {args.link_from} -> {args.link_to} (type: {args.link_type})")
+
+
+def cmd_set_session_expiry(args):
+    """Set or clear session expiry (set_session_expiry)."""
+    db = _session_database(args)
+    try:
+        result = db.set_session_expiry(args.expiry_session_id, args.expires_at)
+    finally:
+        db.close()
+    if not result.get("ok"):
+        print(
+            f"ERROR: {result.get('code')}: {result.get('message')}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    print(json.dumps(result, indent=2))
+
+
+def cmd_pin_session(args):
+    """Pin a session to exclude it from cleanup (set_keep_forever True)."""
+    db = _session_database(args)
+    try:
+        found = db.set_keep_forever(args.pin_session_id, keep_forever=True)
+    finally:
+        db.close()
+    if not found:
+        print(f"ERROR: session not found: {args.pin_session_id}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Pinned: {args.pin_session_id}")
+
+
+def cmd_unpin_session(args):
+    """Remove pin from a session (set_keep_forever False)."""
+    db = _session_database(args)
+    try:
+        found = db.set_keep_forever(args.unpin_session_id, keep_forever=False)
+    finally:
+        db.close()
+    if not found:
+        print(f"ERROR: session not found: {args.unpin_session_id}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Unpinned: {args.unpin_session_id}")
+
+
+def cmd_tag_as_anti_pattern(args):
+    """Mark a session as an anti-pattern (mark_anti_pattern)."""
+    db = _session_database(args)
+    try:
+        result = db.mark_anti_pattern(
+            args.anti_pattern_session_id,
+            source=args.anti_pattern_source,
+            reason=args.anti_pattern_reason,
+        )
+    finally:
+        db.close()
+    print(json.dumps({"status": result, "session_id": args.anti_pattern_session_id}))
+
+
+def cmd_untag_anti_pattern(args):
+    """Remove an anti-pattern tag (remove_anti_pattern)."""
+    db = _session_database(args)
+    try:
+        result = db.remove_anti_pattern(
+            args.anti_pattern_session_id,
+            source=args.anti_pattern_source,
+            reason=args.anti_pattern_reason,
+        )
+    finally:
+        db.close()
+    print(json.dumps({"status": result, "session_id": args.anti_pattern_session_id}))
+
+
+def cmd_get_anti_patterns(args):
+    """Retrieve anti-pattern sessions (get_anti_patterns)."""
+    db = _session_database(args)
+    try:
+        result = db.get_anti_patterns(
+            topic=getattr(args, "anti_pattern_topic", None),
+            limit=args.limit,
+            project=getattr(args, "project", None),
+        )
+    finally:
+        db.close()
+    print(json.dumps(result, indent=2))
+
+
 def _parse_json_arg(raw, expected_type, flag_name):
     """Parse a JSON CLI argument, exiting with a clear error on failure.
 
@@ -1126,6 +1194,47 @@ def main():
                         help="Required to actually move a memory item between projects, "
                              "with --update-memory-item")
 
+    # Session lifecycle flags (SH-102688)
+    parser.add_argument("--link-session", action="store_true", dest="link_session",
+                        help="Link two sessions (link_sessions)")
+    parser.add_argument("--link-from", type=str, dest="link_from",
+                        help="With --link-session: source session ID")
+    parser.add_argument("--link-to", type=str, dest="link_to",
+                        help="With --link-session: target session ID")
+    parser.add_argument("--link-type", type=str, dest="link_type", default="continues",
+                        help="With --link-session: relationship type (default continues)")
+    parser.add_argument("--set-session-expiry", action="store_true", dest="set_session_expiry",
+                        help="Set or clear session expiry (set_session_expiry)")
+    parser.add_argument("--expiry-session-id", type=str, dest="expiry_session_id",
+                        help="With --set-session-expiry: session ID")
+    parser.add_argument("--expires-at", type=str, dest="expires_at", default=None,
+                        help="With --set-session-expiry: ISO 8601 timestamp or 'clear' to remove")
+    parser.add_argument("--pin-session", action="store_true", dest="pin_session",
+                        help="Pin a session to exclude from cleanup (set_keep_forever True)")
+    parser.add_argument("--pin-session-id", type=str, dest="pin_session_id",
+                        help="With --pin-session: session ID")
+    parser.add_argument("--unpin-session", action="store_true", dest="unpin_session",
+                        help="Remove pin from a session (set_keep_forever False)")
+    parser.add_argument("--unpin-session-id", type=str, dest="unpin_session_id",
+                        help="With --unpin-session: session ID")
+    parser.add_argument("--tag-as-anti-pattern", action="store_true", dest="tag_as_anti_pattern",
+                        help="Mark a session as anti-pattern (mark_anti_pattern)")
+    parser.add_argument("--untag-anti-pattern", action="store_true", dest="untag_anti_pattern",
+                        help="Remove anti-pattern tag (remove_anti_pattern)")
+    parser.add_argument("--get-anti-patterns", action="store_true", dest="get_anti_patterns",
+                        help="Retrieve anti-pattern sessions (get_anti_patterns)")
+    parser.add_argument("--anti-pattern-session-id", type=str, dest="anti_pattern_session_id",
+                        help="With --tag-as-anti-pattern/--untag-anti-pattern: session ID")
+    parser.add_argument("--anti-pattern-source", type=str, dest="anti_pattern_source",
+                        default="unknown",
+                        help="With --tag-as-anti-pattern/--untag-anti-pattern: attribution source")
+    parser.add_argument("--anti-pattern-reason", type=str, dest="anti_pattern_reason",
+                        default="",
+                        help="With --tag-as-anti-pattern/--untag-anti-pattern: reason")
+    parser.add_argument("--anti-pattern-topic", type=str, dest="anti_pattern_topic",
+                        default=None,
+                        help="With --get-anti-patterns: optional topic filter")
+
     # Save args
     parser.add_argument("--title", type=str, help="Session title")
     parser.add_argument("--surface", type=str,
@@ -1199,6 +1308,32 @@ def main():
         if not args.memory_item_id:
             parser.error("--update-memory-item requires --memory-item-id")
         cmd_update_memory_item(args)
+    elif args.link_session:
+        if not args.link_from or not args.link_to:
+            parser.error("--link-session requires --link-from and --link-to")
+        cmd_link_session(args)
+    elif args.set_session_expiry:
+        if not args.expiry_session_id:
+            parser.error("--set-session-expiry requires --expiry-session-id")
+        cmd_set_session_expiry(args)
+    elif args.pin_session:
+        if not args.pin_session_id:
+            parser.error("--pin-session requires --pin-session-id")
+        cmd_pin_session(args)
+    elif args.unpin_session:
+        if not args.unpin_session_id:
+            parser.error("--unpin-session requires --unpin-session-id")
+        cmd_unpin_session(args)
+    elif args.tag_as_anti_pattern:
+        if not args.anti_pattern_session_id:
+            parser.error("--tag-as-anti-pattern requires --anti-pattern-session-id")
+        cmd_tag_as_anti_pattern(args)
+    elif args.untag_anti_pattern:
+        if not args.anti_pattern_session_id:
+            parser.error("--untag-anti-pattern requires --anti-pattern-session-id")
+        cmd_untag_anti_pattern(args)
+    elif args.get_anti_patterns:
+        cmd_get_anti_patterns(args)
     elif args.read_id:
         read_session_by_id(args)
     elif args.search:
