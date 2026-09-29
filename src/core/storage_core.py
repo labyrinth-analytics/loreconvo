@@ -221,6 +221,41 @@ def _is_in_memory_db(db_path) -> bool:
     return False
 
 
+def discover_loreconvo_db(custom_path: str | None = None) -> Path:
+    """Discover the LoreConvo sessions.db using unified logic.
+
+    Priority order:
+    1. custom_path (--db-path flag argument)
+    2. LORECONVO_DB environment variable
+    3. Cowork VM mount paths (/sessions/*/mnt/.loreconvo/sessions.db)
+    4. Default ~/.loreconvo/sessions.db
+
+    Raises FileNotFoundError if LORECONVO_DB is set but path does not exist.
+    Returns Path object (may not exist; caller is responsible for creation).
+    """
+    custom_path_arg = custom_path
+    if custom_path_arg:
+        return Path(custom_path_arg).expanduser().resolve()
+    if os.environ.get("LORECONVO_DB"):
+        env_path = Path(os.environ["LORECONVO_DB"]).expanduser().resolve()
+        if not env_path.exists():
+            raise FileNotFoundError(
+                f"ERROR: LORECONVO_DB is set but database does not exist at "
+                f"{env_path}.\nFix the path, unset LORECONVO_DB, or pass --db-path."
+            )
+        return env_path
+    try:
+        sessions_dir = Path("/sessions")
+        if sessions_dir.exists():
+            for mount_db in sessions_dir.glob("*/mnt/.loreconvo/sessions.db"):
+                if mount_db.exists():
+                    return mount_db
+    except (OSError, PermissionError):
+        pass
+    default_path = Path.home() / ".loreconvo" / "sessions.db"
+    return default_path
+
+
 def _open_conn(db_path, busy_timeout_ms=10000) -> sqlite3.Connection:
     """Open a SQLite connection with all required pragmas for LoreConvo.
 

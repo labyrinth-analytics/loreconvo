@@ -59,6 +59,7 @@ except _bootstrap.BootstrapError as exc:
 _open_conn = _storage._open_conn
 ensure_schema = _storage.ensure_schema
 sanitize_fts_query = _storage.sanitize_fts_query
+discover_loreconvo_db = _storage.discover_loreconvo_db
 
 
 # -- Tier enforcement (SH-100324: parity with MCP server's save_session) --
@@ -151,56 +152,9 @@ def _check_session_tier_limit(conn):
 
 # -- DB discovery --
 
-def _find_loreconvo_db():
-    """Find the LoreConvo sessions.db, checking common locations.
-
-    `LORECONVO_DB`, when set, is the highest-precedence *discovery*
-    candidate (below the `--db-path` flag, which callers check before this
-    function runs). Resolution delegates to Config itself (the optional-
-    import pattern already used elsewhere in this file for the license
-    module) rather than duplicating its env-check -- one implementation, not
-    two. An explicitly-set-but-unresolvable LORECONVO_DB is a hard error,
-    never a silent fall-through to a different corpus (SH-101500).
-
-    Mounted paths are checked next. In Cowork VMs, os.path.expanduser("~")
-    resolves to the ephemeral VM home (e.g. /sessions/sharp-adoring-dijkstra/),
-    NOT Debbie's Mac home. Writing to VM ~ loses all data when the session ends.
-    Checking /sessions/*/mnt/.loreconvo/ first ensures we find the Mac-backed
-    mount when running in a Cowork VM.
-    """
-    if os.environ.get("LORECONVO_DB"):
-        try:
-            from loreconvo.core.config import Config
-            resolved = Config().db_path
-        except ImportError:
-            # Package absent. Config's set-case resolution is the env var
-            # verbatim, so this is the same value, not a second derivation.
-            resolved = os.environ["LORECONVO_DB"]
-        if not os.path.isfile(resolved):
-            print(
-                f"ERROR: LORECONVO_DB is set but no database exists at "
-                f"{resolved}. Refusing to fall back to a different corpus. "
-                f"Fix the path, unset LORECONVO_DB, or pass --db-path.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        return resolved
-
-    # Cowork VM mount paths FIRST -- VM ~ is ephemeral, mount is Debbie's Mac
-    import glob
-    candidates = sorted(glob.glob("/sessions/*/mnt/.loreconvo/sessions.db"))
-    # VM home fallback (used in Claude Code on Debbie's Mac where ~ IS the Mac home)
-    candidates += [os.path.expanduser("~/.loreconvo/sessions.db")]
-
-    for path in candidates:
-        if os.path.isfile(path):
-            return path
-    return None
-
-
 def _connect(db_path=None):
     """Connect to LoreConvo DB, auto-discovering if no path given."""
-    path = db_path or _find_loreconvo_db()
+    path = db_path or str(discover_loreconvo_db())
     if not path:
         print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
         sys.exit(1)
@@ -241,7 +195,7 @@ def save_session(args):
         print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    db_path = args.db_path or _find_loreconvo_db()
+    db_path = args.db_path or discover_loreconvo_db()
     if not db_path:
         print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
         sys.exit(1)
@@ -492,7 +446,7 @@ def _cmd_search_semantic(args):
         print(f"ERROR: {exc}", file=sys.stderr)
         return False
 
-    db_path = args.db_path or _find_loreconvo_db()
+    db_path = args.db_path or discover_loreconvo_db()
     if not db_path:
         print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
         sys.exit(1)
@@ -561,7 +515,7 @@ def _session_database(args):
         )
         sys.exit(1)
 
-    db_path = args.db_path or _find_loreconvo_db()
+    db_path = args.db_path or discover_loreconvo_db()
     if not db_path:
         print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
         sys.exit(1)

@@ -37,10 +37,8 @@ class Config:
 
     def __post_init__(self):
         if not self.db_path:
-            self.db_path = os.environ.get(
-                "LORECONVO_DB",
-                str(Path.home() / ".loreconvo" / "sessions.db")
-            )
+            from .storage_core import discover_loreconvo_db
+            self.db_path = str(discover_loreconvo_db())
 
     def ensure_db_dir(self):
         db_dir = Path(self.db_path).parent
