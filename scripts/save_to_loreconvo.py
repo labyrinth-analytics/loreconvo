@@ -152,9 +152,42 @@ def _check_session_tier_limit(conn):
 
 # -- DB discovery --
 
+
+def _find_loreconvo_db():
+    """Find the LoreConvo sessions.db, checking common locations.
+
+    SH-101932 Phase C convergence: the RESOLUTION delegates to the single
+    core implementation (storage_core.discover_loreconvo_db) -- one
+    derivation, not two. This wrapper preserves the fallback script's own
+    contract, which differs from Config's:
+      - a set-but-missing LORECONVO_DB prints an error and exits 1, never a
+        silent fall-through to a different corpus (SH-101500);
+      - the unset case returns None when no database exists anywhere
+        (callers print the guided "Could not find LoreConvo sessions.db"
+        message), rather than returning the not-yet-created default path.
+    Mounted Cowork paths are handled inside discover_loreconvo_db.
+    """
+    if os.environ.get("LORECONVO_DB"):
+        resolved = discover_loreconvo_db()
+        if not os.path.isfile(resolved):
+            print(
+                f"ERROR: LORECONVO_DB is set but no database exists at "
+                f"{resolved}. Refusing to fall back to a different corpus. "
+                f"Fix the path, unset LORECONVO_DB, or pass --db-path.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        return str(resolved)
+
+    resolved = discover_loreconvo_db()
+    if os.path.isfile(resolved):
+        return str(resolved)
+    return None
+
+
 def _connect(db_path=None):
     """Connect to LoreConvo DB, auto-discovering if no path given."""
-    path = db_path or str(discover_loreconvo_db())
+    path = db_path or _find_loreconvo_db()
     if not path:
         print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
         sys.exit(1)
@@ -195,7 +228,7 @@ def save_session(args):
         print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    db_path = args.db_path or discover_loreconvo_db()
+    db_path = args.db_path or _find_loreconvo_db()
     if not db_path:
         print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
         sys.exit(1)
@@ -446,7 +479,7 @@ def _cmd_search_semantic(args):
         print(f"ERROR: {exc}", file=sys.stderr)
         return False
 
-    db_path = args.db_path or discover_loreconvo_db()
+    db_path = args.db_path or _find_loreconvo_db()
     if not db_path:
         print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
         sys.exit(1)
@@ -515,7 +548,7 @@ def _session_database(args):
         )
         sys.exit(1)
 
-    db_path = args.db_path or discover_loreconvo_db()
+    db_path = args.db_path or _find_loreconvo_db()
     if not db_path:
         print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
         sys.exit(1)
