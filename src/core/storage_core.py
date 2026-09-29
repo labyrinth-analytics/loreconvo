@@ -221,7 +221,9 @@ def _is_in_memory_db(db_path) -> bool:
     return False
 
 
-def discover_loreconvo_db(custom_path: str | None = None) -> Path:
+def discover_loreconvo_db(
+    custom_path: str | None = None, require_existing: bool = False
+) -> Path:
     """Discover the LoreConvo sessions.db using unified logic.
 
     Priority order:
@@ -230,7 +232,13 @@ def discover_loreconvo_db(custom_path: str | None = None) -> Path:
     3. Cowork VM mount paths (/sessions/*/mnt/.loreconvo/sessions.db)
     4. Default ~/.loreconvo/sessions.db
 
-    Raises FileNotFoundError if LORECONVO_DB is set but path does not exist.
+    require_existing=True makes a set-but-missing LORECONVO_DB (and an
+    absent default path) raise FileNotFoundError -- the fallback script's
+    hard-fail contract, never a silent fall-through to a different corpus.
+    Default False preserves the server's create-on-first-use contract:
+    Config() returns the env-named path even when the file does not exist
+    yet and SessionDatabase creates it on first write.
+
     Returns Path object (may not exist; caller is responsible for creation).
     """
     custom_path_arg = custom_path
@@ -238,7 +246,7 @@ def discover_loreconvo_db(custom_path: str | None = None) -> Path:
         return Path(custom_path_arg).expanduser().resolve()
     if os.environ.get("LORECONVO_DB"):
         env_path = Path(os.environ["LORECONVO_DB"]).expanduser().resolve()
-        if not env_path.exists():
+        if not env_path.exists() and require_existing:
             raise FileNotFoundError(
                 f"ERROR: LORECONVO_DB is set but database does not exist at "
                 f"{env_path}.\nFix the path, unset LORECONVO_DB, or pass --db-path."
@@ -253,6 +261,11 @@ def discover_loreconvo_db(custom_path: str | None = None) -> Path:
     except (OSError, PermissionError):
         pass
     default_path = Path.home() / ".loreconvo" / "sessions.db"
+    if not default_path.exists() and require_existing:
+        raise FileNotFoundError(
+            f"ERROR: no LoreConvo database found at {default_path} and no "
+            f"LORECONVO_DB override is set."
+        )
     return default_path
 
 
