@@ -192,39 +192,9 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
         messages: Optional[List[Dict[str, Any]]] = None,
         turn_author: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Save a completed turn as a LoreConvo session entry (fire-and-forget)."""
-        if not self._initialized or not self._db:
-            return
-
-        def _save() -> None:
-            try:
-                Session = _import_loreconvo("models").Session
-
-                now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-                title = self._make_title(user_content)
-                summary = (
-                    f"User: {user_content[:300]}\n\n"
-                    f"Assistant: {assistant_content[:500]}"
-                )
-
-                session = Session(
-                    title=title,
-                    surface="code",
-                    project=self._project,
-                    start_date=now,
-                    end_date=now,
-                    summary=summary,
-                    tags=["hermes", "auto-capture"],
-                    source="hermes",
-                    external_tool_session=False,
-                )
-                self._db.save_session(session)
-                logger.debug("LoreConvo sync_turn saved: %s", title[:60])
-            except Exception as exc:
-                logger.debug("LoreConvo sync_turn failed: %s", exc)
-
-        t = threading.Thread(target=_save, daemon=True)
-        t.start()
+        """Per-turn sync disabled — LoreConvo saves once at session end to avoid noise.
+        Override to re-enable incremental saves."""
+        pass
 
     def on_session_end(self, messages: List[Dict[str, Any]]) -> None:
         """End-of-session save: persist the full conversation."""
@@ -263,7 +233,7 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
                     summary=f"Hermes agent session.\n\n{transcript[:3000]}",
                     tags=["hermes", "session-end"],
                     source="hermes",
-                    external_tool_session=True,
+                    external_tool_session=False,
                 )
                 self._db.save_session(session)
                 logger.info(
