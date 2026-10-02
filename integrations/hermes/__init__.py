@@ -62,13 +62,16 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
             return False
         try:
             import loreconvo  # noqa: F401
+        except ImportError:
+            logger.warning("is_available: loreconvo import failed")
+            return False
+        try:
             db_dir = Path.home() / ".loreconvo"
             if db_dir.exists():
                 return os.access(db_dir, os.W_OK)
             return os.access(db_dir.parent, os.W_OK)
-        except ImportError:
-            return False
         except Exception:
+            logger.warning("is_available: path check failed", exc_info=True)
             return False
 
     def unavailable_reason(self) -> str:
