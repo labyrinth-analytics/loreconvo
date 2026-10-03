@@ -557,11 +557,19 @@ def _truncate_if_needed(value, max_length, field_name):
     marker. Appending the marker after the slice was the SH-13718 overshoot
     bug on the hook path -- do not reintroduce it. Returns the value
     unchanged when it fits or is falsy.
+
+    The cut trims back to the last space (word boundary) so words are never
+    split mid-character (SH-101907). A single-word value longer than the
+    cap falls back to the raw slice (no space to anchor on).
     """
     if not value or len(value) <= max_length:
         return value
     marker = f" [TRUNCATED: {field_name} exceeds {max_length} chars]"
     max_content_length = max(0, max_length - len(marker))
+    # Trim to last word boundary so the cut never splits a word.
+    space = value.rfind(" ", 0, max_content_length)
+    if space > 0:
+        max_content_length = space
     return value[:max_content_length] + marker
 
 
