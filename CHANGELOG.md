@@ -1,5 +1,23 @@
 # LoreConvo Changelog
 
+## v0.10.13 (2026-10-02)
+
+### integrations/hermes/ (new)
+
+Hermes Agent memory provider plugin. `LoreConvoMemoryProvider` subclasses
+`MemoryProvider` (agent/memory_provider.py). Implements `is_available`,
+`initialize`, `shutdown`, `prefetch`, `sync_turn` (no-op), `on_session_end`,
+`on_memory_write`, and three tools (`loreconvo_search_sessions`,
+`loreconvo_get_context`, `loreconvo_save_memory`). Reads `agent_context`
+from `initialize` kwargs and skips writes for cron/flush/subagent.
+
+### packaging pin: 25.0 -> 26.0
+
+`pyproject.toml`, `requirements.txt`. Hermes Agent venv resolves
+`packaging==26.0`; loreconvo's internal use (`compat_check.py`) is
+compatible with both. Bumped so the memory provider's declared
+`python_dependencies: ["loreconvo==0.10.13"]` resolves under Hermes's
+core constraints.
 ## v0.10.12 (2026-09-24)
 
 ### Added: memory-item CRUD on the fallback script (SH-102285)
