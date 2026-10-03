@@ -4,6 +4,26 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.10.13 (2026-10-02)
+
+### Added: Hermes Agent memory provider integration
+
+LoreConvo is now available as a memory provider for Hermes Agent via
+`hermes plugins install loreconvo`. The provider wraps LoreConvo's existing
+session store, so Hermes users share the same sessions, search, and
+structured memory as their Claude Code sessions.
+
+Activate with `hermes memory setup` -> select LoreConvo, or set
+`memory.provider: loreconvo` in `config.yaml`.
+
+Includes three tools: `loreconvo_search_sessions`,
+`loreconvo_get_context`, and `loreconvo_save_memory`.
+
+### Changed: packaging pin 25.0 -> 26.0
+
+Bumped `packaging` dependency from 25.0 to 26.0 for compatibility with
+Hermes Agent's managed environment. No behavioral change -- the package is
+used only for internal version comparisons.
 ## v0.10.12 (2026-09-24)
 
 ### Added
