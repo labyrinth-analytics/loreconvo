@@ -23,12 +23,9 @@ logger = logging.getLogger(__name__)
 # -- LoreConvo imports (pip-installed package or source-tree fallback) --------
 
 def _import_loreconvo(module: str):
-    """Import a loreconvo submodule from either the installed package or a source tree."""
+    """Import a loreconvo core submodule from the installed package."""
     import importlib
-    try:
-        return importlib.import_module(f"loreconvo.core.{module}")
-    except ImportError:
-        return importlib.import_module(f"core.{module}")
+    return importlib.import_module(f"loreconvo.core.{module}")
 
 # -- Hermes imports (only available inside Hermes runtime) -------------------
 try:
@@ -53,6 +50,7 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
         self._db: Any = None
         self._last_prefetch_count: int = 0
         self._initialized: bool = False
+        self._is_primary: bool = True
 
     # -- Core lifecycle -------------------------------------------------------
 
@@ -89,12 +87,14 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
 
         self._session_id = session_id
         self._project = os.environ.get("LORECONVO_HERMES_PROJECT", "hermes")
+        agent_context = kwargs.get("agent_context", "primary")
+        self._is_primary = agent_context not in ("cron", "flush", "subagent")
         try:
             self._db = SessionDatabase()
             self._initialized = True
             logger.info(
-                "LoreConvo memory provider initialized (session=%s, project=%s)",
-                session_id[:8] if session_id else "?", self._project,
+                "LoreConvo memory provider initialized (session=%s, project=%s, primary=%s)",
+                session_id[:8] if session_id else "?", self._project, self._is_primary,
             )
         except Exception as exc:
             logger.warning("LoreConvo DB open failed: %s — provider will be inert", exc)
@@ -197,8 +197,8 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
         pass
 
     def on_session_end(self, messages: List[Dict[str, Any]]) -> None:
-        """End-of-session save: persist the full conversation."""
-        if not self._initialized or not self._db:
+        """End-of-session save: persist the full conversation (primary sessions only)."""
+        if not self._initialized or not self._db or not self._is_primary:
             return
 
         def _save() -> None:
