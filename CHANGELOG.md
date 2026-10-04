@@ -1,5 +1,12 @@
 # LoreConvo Changelog
 
+## v0.10.14 (2026-10-02)
+
+### Dependencies: MCP server stack moved to [server] extra
+
+`mcp[cli]` and `starlette` moved from base to `[server]` extra. Base install
+is leaner for non-server use cases. `cryptography` bumped to 50.0.1.
+
 ## v0.10.13 (2026-10-02)
 
 ### integrations/hermes/ (new)
