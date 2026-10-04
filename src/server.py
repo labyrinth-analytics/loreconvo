@@ -977,7 +977,8 @@ def rebuild_index() -> dict:
         return {
             "error": (
                 "rebuild_index requires LoreConvo Pro. "
-                f"Get a license by upgrading at {LORECONVO_UPGRADE_URL}."
+                f"Get a license by upgrading at {LORECONVO_UPGRADE_URL} "
+                "(14-day free trial available)."
             )
         }
     return _get_db().rebuild_lance_index()
@@ -1154,7 +1155,8 @@ class VaultSetTierInput(BaseModel):
 def vault_set_tier(params: VaultSetTierInput) -> str:
     """Activate a tier (free or pro) for LoreConvo.
 
-    Pro tier removes the free-tier session limit (default: 50 sessions).
+    Pro tier removes the free-tier session limit (default: 50 sessions)
+    with a 14-day free trial available at the upgrade link.
     After purchasing a Pro license, set LORECONVO_PRO=<your-license-key> in
     your environment and restart the server, then call this tool with tier='pro'
     to confirm Pro is active. Reverting to tier='free' re-enables limits (existing
@@ -1167,13 +1169,15 @@ def vault_set_tier(params: VaultSetTierInput) -> str:
                 return (
                     "Error: Invalid or expired license key in LORECONVO_PRO. "
                     + status.get("error", "")
-                    + f" Get a new key by upgrading at {LORECONVO_UPGRADE_URL}."
+                    + f" Get a new key by upgrading at {LORECONVO_UPGRADE_URL} "
+                    "(14-day free trial available)."
                 )
             return (
                 "Error: No Pro license key found. "
                 "Set LORECONVO_PRO=<your-license-key> in your environment and "
                 "restart the server, then call vault_set_tier again. "
-                f"Get a license key by upgrading at {LORECONVO_UPGRADE_URL}."
+                f"Get a license key by upgrading at {LORECONVO_UPGRADE_URL} "
+                "(14-day free trial available)."
             )
 
     db_dir = Path(_get_db().config.db_path).parent

@@ -2811,8 +2811,9 @@ class SessionDatabase:
                 raise SessionLimitReachedError(
                     f"Free tier limit reached: {current_count} of "
                     f"{self.config.max_free_sessions} sessions stored. "
-                    f"Upgrade at {LORECONVO_UPGRADE_URL} to unlock unlimited "
-                    "sessions, then set your LORECONVO_PRO license key."
+                    f"Upgrade at {LORECONVO_UPGRADE_URL} (14-day free trial "
+                    "available) to unlock unlimited sessions, "
+                    "then set your LORECONVO_PRO license key."
                 )
         content_hash = (
             session.content_hash
@@ -4460,8 +4461,9 @@ class SessionDatabase:
                     raise SessionLimitReachedError(
                         f"Free tier limit reached: {current_count} of "
                         f"{self.config.max_free_sessions} sessions stored. "
-                        f"Upgrade at {LORECONVO_UPGRADE_URL} to unlock unlimited "
-                        "sessions, then set your LORECONVO_PRO license key."
+                        f"Upgrade at {LORECONVO_UPGRADE_URL} (14-day free trial "
+                        "available) to unlock unlimited sessions, "
+                        "then set your LORECONVO_PRO license key."
                     )
 
         content_hash = (
@@ -4805,7 +4807,8 @@ class SessionDatabase:
         if limit_hit:
             summary["warning"] = (
                 "Free tier limit reached. Some sessions were not imported. "
-                "Upgrade to Pro for unlimited sessions."
+                "Upgrade to Pro for unlimited sessions "
+                "(14-day free trial available)."
             )
             summary["upgrade_url"] = LORECONVO_UPGRADE_URL
         return summary
