@@ -187,8 +187,21 @@ def resolve_storage_core(origin):
         if importlib.util.find_spec("loreconvo.core") is not None:
             try:
                 from loreconvo.core import storage_core
-                _clear_breadcrumb()
-                return storage_core
+                # Validate that the module has the attributes callers need.
+                # A stale/incomplete install may import successfully but be
+                # missing functions added in recent versions (e.g.,
+                # discover_loreconvo_db). Treat as broken and fall back to
+                # source if validation fails.
+                _required_attrs = ("discover_loreconvo_db", "ensure_schema",
+                                   "sanitize_fts_query", "_open_conn")
+                missing = [attr for attr in _required_attrs
+                           if not hasattr(storage_core, attr)]
+                if missing:
+                    broken_pkg = AttributeError(
+                        f"storage_core missing attributes: {missing}")
+                else:
+                    _clear_breadcrumb()
+                    return storage_core
             except Exception as exc:
                 broken_pkg = exc  # remembered, NOT fatal -- see path 2
     except ModuleNotFoundError as exc:
