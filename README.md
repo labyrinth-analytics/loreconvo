@@ -1,4 +1,4 @@
-# LoreConvo v0.10.14
+# LoreConvo v0.10.15
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -414,12 +414,11 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.14 (2026-10-02)
+## v0.10.15 (2026-10-02)
 
-### Changed: slimmer base install
+### Changed: click 8.4.2
 
-MCP server is now optional: `pip install loreconvo[server]` to get it back.
-Base install is leaner for non-server use cases. cryptography bumped to 50.0.1.
+Routine dependency bump.
 
 <!-- WHATS_NEW:END -->
 

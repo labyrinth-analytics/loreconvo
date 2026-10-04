@@ -1,5 +1,12 @@
 # LoreConvo Changelog
 
+## v0.10.15 (2026-10-02)
+
+### click pin: 8.3.3 -> 8.4.2
+
+Bumped for Hermes Agent core compatibility (hermes-agent's huggingface-hub
+requires click>=8.4.2).
+
 ## v0.10.14 (2026-10-02)
 
 ### Dependencies: MCP server stack moved to [server] extra
