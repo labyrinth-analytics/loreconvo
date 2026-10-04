@@ -1,4 +1,4 @@
-# LoreConvo v0.10.13
+# LoreConvo v0.10.14
 
 Your memory follows your identity, not your tool — with your consent.
 
@@ -414,26 +414,12 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.13 (2026-10-02)
+## v0.10.14 (2026-10-02)
 
-### Added: Hermes Agent memory provider integration
+### Changed: slimmer base install
 
-LoreConvo is now available as a memory provider for Hermes Agent via
-`hermes plugins install loreconvo`. The provider wraps LoreConvo's existing
-session store, so Hermes users share the same sessions, search, and
-structured memory as their Claude Code sessions.
-
-Activate with `hermes memory setup` -> select LoreConvo, or set
-`memory.provider: loreconvo` in `config.yaml`.
-
-Includes three tools: `loreconvo_search_sessions`,
-`loreconvo_get_context`, and `loreconvo_save_memory`.
-
-### Changed: packaging pin 25.0 -> 26.0
-
-Bumped `packaging` dependency from 25.0 to 26.0 for compatibility with
-Hermes Agent's managed environment. No behavioral change -- the package is
-used only for internal version comparisons.
+MCP server is now optional: `pip install loreconvo[server]` to get it back.
+Base install is leaner for non-server use cases. cryptography bumped to 50.0.1.
 
 <!-- WHATS_NEW:END -->
 

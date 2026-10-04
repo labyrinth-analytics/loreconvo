@@ -4,6 +4,13 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.10.14 (2026-10-02)
+
+### Changed: slimmer base install
+
+MCP server is now optional: `pip install loreconvo[server]` to get it back.
+Base install is leaner for non-server use cases. cryptography bumped to 50.0.1.
+
 ## v0.10.13 (2026-10-02)
 
 ### Added: Hermes Agent memory provider integration
