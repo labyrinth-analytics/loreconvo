@@ -4,6 +4,12 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.10.15 (2026-10-02)
+
+### Changed: click 8.4.2
+
+Routine dependency bump.
+
 ## v0.10.14 (2026-10-02)
 
 ### Changed: slimmer base install

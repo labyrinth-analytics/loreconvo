@@ -1,6 +1,6 @@
 [project]
 name = "loreconvo"
-version = "0.10.14"
+version = "0.10.15"
 description = "Cross-surface persistent memory for Claude sessions. Vault conversations from Code, Cowork, and Chat -- recall decisions, artifacts, and context in any future session."
 readme = "README.md"
 license = "BUSL-1.1"
@@ -21,7 +21,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "click==8.3.3",
+    "click==8.4.2",
     "cryptography==50.0.1",
     "packaging==26.0",
     # Semantic search moved from the [pro] extra to base on 2026-07-25
