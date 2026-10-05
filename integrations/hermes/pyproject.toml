@@ -1,0 +1,9 @@
+[project]
+name = "hermes-plugin-loreconvo"
+version = "0.10.15"
+requires-python = ">=3.11"
+dependencies = ["loreconvo==0.10.15"]
+
+# Exempt only reviewed exact pins; transitive releases keep Hermes' quarantine.
+[tool.uv.exclude-newer-package]
+loreconvo = false
