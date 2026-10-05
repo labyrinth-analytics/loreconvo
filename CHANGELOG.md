@@ -1,5 +1,18 @@
 # LoreConvo Changelog
 
+## v0.10.16 (2026-10-05)
+
+### Fix: plugin MCP server now starts (SH-103398)
+
+The 0.10.14 move of `mcp[cli]` and `starlette` to the `[server]` extra
+broke the `.mcp.json` launch line: `uvx loreconvo==<version>` no longer
+installed the MCP server stack, so the server crashed with
+`ModuleNotFoundError: No module named 'mcp'`. The generated `.mcp.json`
+now uses `uvx --from loreconvo[server]==<version> loreconvo`, which
+resolves the extra. A clear error message is also printed if the server
+is launched without the extra. A release-gate smoke test now validates
+the `.mcp.json` command starts a working MCP server before every release.
+
 ## v0.10.15 (2026-10-02)
 
 ### click pin: 8.3.3 -> 8.4.2

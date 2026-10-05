@@ -67,7 +67,7 @@ The installer will:
 You should see output ending with `Installation complete!`.
 
 The server itself is not installed into a virtual environment. It runs via
-`uvx loreconvo==<version>`, pinned to the version the plugin shipped with, and
+`uvx --from loreconvo[server]==<version> loreconvo`, pinned to the version the plugin shipped with, and
 uvx fetches it on first use.
 
 ### Running from a working copy
@@ -88,16 +88,16 @@ After installation, register LoreConvo with Claude Code using the `claude mcp ad
 claude mcp add --scope user \
   "--env=LORECONVO_PRO=<your-license-key>" \
   loreconvo -- \
-  uvx loreconvo==<version>
+  uvx --from loreconvo[server]==<version> loreconvo
 ```
 
-Replace `<version>` with the version you want to pin to (for example `0.8.6`).
+Replace `<version>` with the version you want to pin to (for example `0.10.16`).
 There is no path to substitute: uvx resolves the package itself.
 
 The `--env=LORECONVO_PRO=<your-license-key>` flag is optional -- omit it if you are using the free tier. The `--scope user` flag registers LoreConvo for all Claude Code sessions (not just the current project).
 
 > **Why pin an exact version?** The pin is what makes an install reproducible
-> and an upgrade deliberate. An unpinned `uvx loreconvo` can change underneath
+> and an upgrade deliberate. An unpinned `uvx --from loreconvo[server] loreconvo` can change underneath
 > you mid-session. The plugin ships a generated `.mcp.json` carrying the pin for
 > exactly this reason.
 
@@ -139,7 +139,7 @@ Cursor uses the same MCP protocol as Claude Code. Configure it by creating a `.c
   "mcpServers": {
     "loreconvo": {
       "command": "uvx",
-      "args": ["loreconvo==<version>"],
+      "args": ["--from", "loreconvo[server]==<version>", "loreconvo"],
       "env": {
         "LORECONVO_PRO": "your-license-key"
       }
@@ -256,7 +256,7 @@ claude mcp add --scope user \
   "--env=LORECONVO_PRO=<your-license-key>" \
   "--env=LORECONVO_PROJECT_PATH=/Users/YOUR_USERNAME/projects/my_project" \
   loreconvo -- \
-  uvx loreconvo==<version>
+  uvx --from loreconvo[server]==<version> loreconvo
 ```
 
 Replace `YOUR_USERNAME` and `my_project` with your actual values. Use the full absolute path -- do not use `~` or `$HOME`.
@@ -319,7 +319,7 @@ claude mcp add --scope user \
   "--env=LORECONVO_POST_TURN_CAPTURE=1" \
   "--env=LORECONVO_PRO=<your-license-key>" \
   loreconvo -- \
-  uvx loreconvo==<version>
+  uvx --from loreconvo[server]==<version> loreconvo
 ```
 
 **How it works:**
@@ -433,7 +433,7 @@ Usually the pinned environment is incomplete or stale. Refresh it -- uvx rebuild
 the environment from scratch:
 
 ```bash
-uvx --refresh loreconvo==<version>
+uvx --refresh --from loreconvo[server]==<version> loreconvo
 ```
 
 Use the same version your client is configured with (see `.mcp.json`). There is
@@ -562,7 +562,7 @@ claude mcp add --scope user \
   "--env=LORECONVO_PRO=<your-license-key>" \
   "--env=HF_HUB_OFFLINE=1" \
   loreconvo -- \
-  uvx loreconvo==<version>
+  uvx --from loreconvo[server]==<version> loreconvo
 ```
 
 With `HF_HUB_OFFLINE=1`, the model loads from the local cache and all HuggingFace

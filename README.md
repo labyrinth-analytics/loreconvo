@@ -1,10 +1,10 @@
-# LoreConvo v0.10.15
+# LoreConvo v0.10.16
 
 Your memory follows your identity, not your tool — with your consent.
 
 LoreConvo is the only AI memory that carries your context across Claude Code, Cowork, Codex, Cursor, and Hermes Agent. One install, one memory, everywhere you code.
 
-> Install directly from Claude Code's plugin marketplace, or via PyPI: `uvx loreconvo`
+> Install directly from Claude Code's plugin marketplace, or via PyPI: `uvx --from loreconvo[server] loreconvo`
 
 ## Why LoreConvo?
 
