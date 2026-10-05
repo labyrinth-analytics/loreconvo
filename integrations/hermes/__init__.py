@@ -253,8 +253,8 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
         content: str,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Mirror built-in memory writes to LoreConvo as structured memory items."""
-        if not self._initialized or not self._db:
+        """Mirror built-in memory writes to LoreConvo (primary sessions only)."""
+        if not self._initialized or not self._db or not self._is_primary:
             return
 
         def _save() -> None:
