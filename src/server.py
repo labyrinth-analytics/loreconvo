@@ -14,7 +14,22 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 logger = logging.getLogger(__name__)
 
-from mcp.server.fastmcp import FastMCP
+try:
+    from mcp.server.fastmcp import FastMCP
+except ModuleNotFoundError as _exc:
+    if _exc.name == "mcp":
+        sys.stderr.write(
+            "ERROR: the 'mcp' package is not installed. The LoreConvo MCP "
+            "server stack (mcp[cli], starlette) is in the [server] extra -- "
+            "install it with:\n"
+            "  pip install loreconvo[server]\n"
+            "or, if you are using uvx, launch with:\n"
+            "  uvx --from loreconvo[server]==<version> loreconvo\n"
+            "The lean core (without [server]) is intended for the Hermes "
+            "memory provider and other non-MCP embeds only.\n"
+        )
+        sys.exit(2)
+    raise
 from pydantic import BaseModel, ConfigDict, Field
 from core.models import Session
 from core.database import (

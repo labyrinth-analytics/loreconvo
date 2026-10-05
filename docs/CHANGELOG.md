@@ -4,6 +4,16 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.10.16 (2026-10-05)
+
+### Fixed: plugin MCP server now starts
+
+The Claude Code plugin MCP server was broken in 0.10.14 and 0.10.15: the
+MCP server stack was moved to an optional extra, but the launch command
+was not updated, so the server crashed on startup. The launch command now
+installs the server stack correctly. If you were affected, update to
+0.10.16 and reload your plugins.
+
 ## v0.10.15 (2026-10-02)
 
 ### Changed: click 8.4.2
