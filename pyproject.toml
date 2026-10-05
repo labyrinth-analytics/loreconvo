@@ -28,7 +28,9 @@ dependencies = [
     # (spec amendment A1). fastembed runs BAAI/bge-small-en-v1.5 on
     # onnxruntime instead of torch: same 384-dim vectors, ~130MB instead
     # of ~300MB, one install path for every tier. Pro is a license flag.
-    "lancedb==0.30.2",
+    # allow-range: lancedb -- verified hybrid index APIs through 0.34.0.
+    # Keep the upper bound closed until newer engines pass the integration tests.
+    "lancedb>=0.30.2,<=0.34.0",
     "pyarrow==24.0.0",
     "fastembed==0.8.0",
     # fastembed 0.8.0 caps onnxruntime <1.24 on Python <=3.13 but requires
