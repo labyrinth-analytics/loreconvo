@@ -178,7 +178,72 @@ Restart Codex after saving the file. LoreConvo MCP tools will be available in th
 
 ## Connecting to Hermes Agent
 
-Hermes Agent uses its own YAML config file at `~/.hermes/config.yaml` -- it does **not** use `.mcp.json`. Add an entry under `mcp_servers:`:
+LoreConvo is listed in the Hermes plugin catalog and can be installed with one command. You can also connect LoreConvo as an MCP server if you prefer the MCP approach.
+
+### Option A: Hermes Plugin Catalog (Recommended)
+
+This is the simplest way to add LoreConvo to Hermes. The catalog installs LoreConvo as a native Hermes memory provider -- it reads and writes the same `~/.loreconvo/sessions.db` as your other LoreConvo clients.
+
+**First install:**
+
+```bash
+hermes plugins install loreconvo
+```
+
+The installer shows a disclosure and asks three questions:
+
+1. **`LORECONVO_HERMES_PROJECT`:** The default project name for sessions Hermes saves to LoreConvo.
+   - Press Enter (leave it empty) unless you want every Hermes session filed under a specific project name. An empty value means LoreConvo uses `"hermes"` as the project, which is correct for most setups. You can change this later in `~/.hermes/.env`.
+
+2. **"Enable 'loreconvo' now?":** Answer `y`.
+   - Hermes plugins install disabled by default. This step activates the plugin for your current profile.
+
+3. **"Prepare these with Hermes through PM now?" (Python deps):** Answer `y`.
+   - This installs the `loreconvo` package into Hermes' managed Python environment. If you answer `n`, run these two commands afterwards:
+     ```bash
+     hermes plugins enable loreconvo
+     hermes pm repair
+     ```
+
+**Verify the install:**
+
+```bash
+hermes plugins doctor
+```
+
+You should see `loreconvo` listed as enabled with manifest, import, and registration checks all passing. A warning that the pip dependency is not installed until the plugin is enabled is expected during a fresh install and resolves after enabling.
+
+---
+
+**Upgrading from a non-catalog install** (for example, a development copy or a manual install from before the catalog listing):
+
+- `hermes plugins install loreconvo` fails with "Plugin 'loreconvo' already exists"
+- `hermes plugins update loreconvo` fails with "was not installed from git (no .git directory). Cannot update."
+
+The working fix is to remove the old install and re-install from the catalog:
+
+```bash
+rm -rf ~/.hermes/plugins/loreconvo
+hermes plugins install loreconvo
+```
+
+Your session data in `~/.loreconvo/sessions.db` is stored outside the plugin directory and is not affected by this removal.
+
+After re-installing from the catalog, future upgrades should use:
+
+```bash
+hermes plugins update loreconvo
+```
+
+> Note: catalog-based updates via `hermes plugins update` are the expected path but have not been verified by Labyrinth Analytics as of this writing.
+
+---
+
+### Option B: MCP Server via YAML Config
+
+Hermes Agent also supports LoreConvo as an MCP server through its YAML config file. This gives you the full set of 39 LoreConvo MCP tools rather than the three catalog provider tools.
+
+Add an entry under `mcp_servers:` in `~/.hermes/config.yaml`:
 
 ```yaml
 mcp_servers:
