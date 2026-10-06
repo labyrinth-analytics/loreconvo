@@ -14,6 +14,20 @@ was not updated, so the server crashed on startup. The launch command now
 installs the server stack correctly. If you were affected, update to
 0.10.16 and reload your plugins.
 
+### Added: 14-day free trial for Pro
+
+When you hit the free-tier session limit or any Pro feature gate, LoreConvo
+now offers a Stripe-managed 14-day free trial. The trial is available once
+per account and cancels automatically at the end of the period if you do not
+subscribe. No credit card is required to start. The trial link appears in the
+upgrade message alongside the standard Pro purchase link.
+
+### Fixed: Hermes memory-write mirroring in non-primary sessions
+
+Memory writes from Hermes cron, flush, and subagent contexts were incorrectly
+being mirrored to LoreConvo alongside primary session writes. Only primary
+Hermes sessions should write to LoreConvo. This is now enforced.
+
 ## v0.10.15 (2026-10-02)
 
 ### Changed: click 8.4.2
