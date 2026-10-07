@@ -155,8 +155,7 @@ class LoreConvoMemoryBackend(BetaAbstractMemoryTool):
         except SessionLimitReachedError:
             raise ToolError(
                 "Memory limit reached on free tier. "
-                "Upgrade to Pro at labyrinthanalyticsconsulting.com "
-                "(14-day free trial available) for unlimited memories."
+                "Upgrade to Pro at labyrinthanalyticsconsulting.com for unlimited memories."
             )
         return f"Memory created: {path}"
 
@@ -186,8 +185,7 @@ class LoreConvoMemoryBackend(BetaAbstractMemoryTool):
         except SessionLimitReachedError:
             raise ToolError(
                 "Memory limit reached on free tier. "
-                "Upgrade to Pro at labyrinthanalyticsconsulting.com "
-                "(14-day free trial available) for unlimited memories."
+                "Upgrade to Pro at labyrinthanalyticsconsulting.com for unlimited memories."
             )
         return f"Memory updated: {command.path}"
 
@@ -213,8 +211,7 @@ class LoreConvoMemoryBackend(BetaAbstractMemoryTool):
         except SessionLimitReachedError:
             raise ToolError(
                 "Memory limit reached on free tier. "
-                "Upgrade to Pro at labyrinthanalyticsconsulting.com "
-                "(14-day free trial available) for unlimited memories."
+                "Upgrade to Pro at labyrinthanalyticsconsulting.com for unlimited memories."
             )
         return f"Memory updated: {command.path}"
 
