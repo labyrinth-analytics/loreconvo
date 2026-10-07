@@ -13,6 +13,13 @@ resolves the extra. A clear error message is also printed if the server
 is launched without the extra. A release-gate smoke test now validates
 the `.mcp.json` command starts a working MCP server before every release.
 
+### Fix: Hermes provider gates memory writes on primary context
+
+`integrations/hermes/__init__.py`: `on_memory_write` now returns early when
+`_is_primary` is False (agent_context cron/flush/subagent), matching the
+existing `on_session_end` gate. Regression tests parametrize both hooks over
+primary/default/cron/flush/subagent and were mutation-tested.
+
 ## v0.10.15 (2026-10-02)
 
 ### click pin: 8.3.3 -> 8.4.2
