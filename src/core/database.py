@@ -5259,6 +5259,9 @@ class SessionDatabase:
                     params.append(new_project)
 
                 if not set_clauses:
+                    if new_project and not allow_project_change:
+                        conn.execute("ROLLBACK")
+                        return {"ok": True, "message": "Project change blocked by missing --allow-project-change flag (no-op)."}
                     conn.execute("ROLLBACK")
                     return {"ok": False, "code": "no_fields_to_update", "message": "No updatable fields were provided."}
 
