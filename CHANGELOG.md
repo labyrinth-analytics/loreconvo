@@ -1,5 +1,25 @@
 # LoreConvo Changelog
 
+## Unreleased
+
+### LanceDB 0.30.2 -> 0.34.0
+
+Bumped lancedb from 0.30.2 to 0.34.0 in both pyproject.toml and
+requirements.txt. Exact pin (no range). Required for co-installability
+with the Hermes Agent lancedb-suite plugin, which requires lancedb==0.34.0.
+Full test suite passes (522 passed, 1 pre-existing flake). Known:
+create_fts_index emits deprecation warnings on 0.34.0 (migration tracked
+separately).
+
+### Hermes plugin quarantine declaration
+
+Added `integrations/hermes/pyproject.toml` declaring the hermes-plugin-loreconvo
+package with `[tool.uv.exclude-newer-package] loreconvo = false` (exempts
+LoreConvo from Hermes' proposed 14-day release quarantine). The version is
+pinned in two places; a new check script
+`scripts/check_hermes_plugin_version_sync.py` validates both match the product
+version (mutation-tested: mismatched version returns exit code 2).
+
 ## v0.10.16 (2026-10-05)
 
 ### Fix: plugin MCP server now starts (SH-103398)
