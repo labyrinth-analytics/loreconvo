@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fix: Hermes provider gates memory reads on primary context (SH-103558)
+
+`integrations/hermes/__init__.py`: `prefetch()` and `system_prompt_block()`
+now return empty string when `_is_primary` is False (agent_context
+cron/flush/subagent), preventing context injection into cron/fleet sessions.
+Avoids token overhead and stale context in scheduled agent runs. Regression
+tests parametrize both methods over primary/default/cron/flush/subagent and
+were mutation-tested.
+
 ### LanceDB 0.30.2 -> 0.34.0
 
 Bumped lancedb from 0.30.2 to 0.34.0 in both pyproject.toml and
