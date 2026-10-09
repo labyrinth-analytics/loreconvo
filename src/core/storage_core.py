@@ -561,11 +561,18 @@ def _truncate_if_needed(value, max_length, field_name):
     The cut trims back to the last space (word boundary) so words are never
     split mid-character (SH-101907). A single-word value longer than the
     cap falls back to the raw slice (no space to anchor on).
+
+    If max_length is smaller than the marker itself, reserving space for
+    the marker would leave a negative content length and the marker would
+    overshoot max_length on its own (SH-102442). In that case skip the
+    marker entirely and return a plain slice, which always respects the cap.
     """
     if not value or len(value) <= max_length:
         return value
     marker = f" [TRUNCATED: {field_name} exceeds {max_length} chars]"
-    max_content_length = max(0, max_length - len(marker))
+    if len(marker) > max_length:
+        return value[:max_length]
+    max_content_length = max_length - len(marker)
     # Trim to last word boundary so the cut never splits a word.
     space = value.rfind(" ", 0, max_content_length)
     if space > 0:
