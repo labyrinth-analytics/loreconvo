@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Fix: _truncate_if_needed respects max_length when cap is smaller than the marker (SH-102442)
+
+`core/storage_core.py`: `_truncate_if_needed` could return a value longer
+than `max_length` when `max_length` was smaller than the truncation marker
+itself (e.g. `max_length=20` with a 41-char marker). Added a guard that
+short-circuits to a plain slice in that case. `hooks/scripts/auto_save.py`
+aliases this function, so the fix applies there too; its test
+`test_edge_case_very_short_max_length` previously asserted the overshoot as
+correct behavior and was updated to assert the length cap. Mutation-tested
+(removing the guard fails `test_truncate_marker_longer_than_cap_still_respects_cap`).
+
 ### Fix: Hermes provider gates memory reads on primary context (SH-103558)
 
 `integrations/hermes/__init__.py`: `prefetch()` and `system_prompt_block()`
