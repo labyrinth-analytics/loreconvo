@@ -113,6 +113,8 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
     # -- System prompt --------------------------------------------------------
 
     def system_prompt_block(self) -> str:
+        if not self._is_primary:
+            return ""
         return (
             "LoreConvo session memory is active. Past sessions across Claude surfaces "
             "(Code, Cowork, Chat) are searchable. Use loreconvo_search_sessions to find "
@@ -124,7 +126,7 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
         """Return formatted context from past LoreConvo sessions relevant to the query."""
-        if not self._initialized or not self._db:
+        if not self._initialized or not self._db or not self._is_primary:
             return ""
         if not query.strip():
             return ""
