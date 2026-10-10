@@ -180,9 +180,11 @@ Restart Codex after saving the file. LoreConvo MCP tools will be available in th
 
 LoreConvo is listed in the Hermes plugin catalog and can be installed with one command. You can also connect LoreConvo as an MCP server if you prefer the MCP approach.
 
-### Option A: Hermes Plugin Catalog (Recommended)
+### Option A: Hermes Plugin Catalog (Recommended for simplest setup)
 
 This is the simplest way to add LoreConvo to Hermes. The catalog installs LoreConvo as a native Hermes memory provider -- it reads and writes the same `~/.loreconvo/sessions.db` as your other LoreConvo clients.
+
+> **Tool coverage note:** The catalog integration exposes 3 tools (search, context retrieval, and save). It does not support Pro license keys. If you need the full 39-tool MCP suite or Pro features (consolidation, semantic search, anti-pattern tagging, etc.), use Option B instead.
 
 **First install:**
 
