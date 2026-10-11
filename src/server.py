@@ -1479,7 +1479,7 @@ def consolidate_memories(
 ) -> dict:
     """Run memory consolidation for a project to build a structured digest.
 
-    Analyzes recent sessions and extracts decisions, open questions, and tech
+    Analyzes recent SESSIONS and extracts decisions, open questions, and tech
     stack facts. Free tier: up to 3 consolidations per day. Pro: unlimited.
 
     Returns a digest dict with status, decisions found, open questions, and
@@ -1487,6 +1487,11 @@ def consolidate_memories(
 
     Acquires an exclusive lock; returns status='lock_held' if another
     consolidation is already running.
+
+    Note: This consolidation analyzes SESSIONS ONLY. Structured memory items
+    (decisions, questions, artifacts saved via save_memory_item) are a separate
+    feature -- use query_memory_items to retrieve them. Users often query both
+    digest and memory items together for complete recall.
 
     Args:
         project: Project name (matches the --project tag used when saving sessions)
@@ -1517,12 +1522,17 @@ def get_memory_digest(
     disable: bool | None = None,
     max_tokens: int = 2000,
 ) -> dict:
-    """Retrieve the current memory digest for a project without re-running consolidation.
+    """Retrieve the current memory digest for a project (built from sessions) without re-running consolidation.
 
     Returns None if no digest exists. Use consolidate_memories first to generate one.
 
     Optionally set disable=True to suppress auto-load injection for this digest,
     or disable=False to re-enable injection. Omit disable to just read the current state.
+
+    Note: This retrieves the SESSION-BASED digest only. Structured memory items
+    (decisions, open questions, artifacts saved via save_memory_item) are separate --
+    use query_memory_items to retrieve them. Users often query both digest and
+    memory items together for complete recall.
 
     Args:
         project: Project name
