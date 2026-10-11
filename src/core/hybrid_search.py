@@ -15,8 +15,12 @@ import json
 import logging
 import os
 import re
+import shutil
+import tempfile
+import threading
+import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 _UUID_RE = re.compile(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
@@ -114,6 +118,35 @@ def _recency_rerank(results: list, half_life_days: int, limit: int) -> list:
     return [r for _, r in scored[:limit]]
 
 
+def _classify_exclusion(s: dict) -> str:
+    """Return the reason a session is excluded from the Lance index.
+
+    Returns the FIRST matching reason found. Callers must verify the
+    session IS excluded before calling this function -- an includable
+    session returns nothing.
+    """
+    if not s.get('id'):
+        return 'missing_id'
+    if not s.get('title'):
+        return 'missing_title'
+    if s.get('summary') is None:
+        return 'missing_summary'
+    if bool(s.get('external_tool_session')):
+        return 'external_tool_session'
+    src = s.get('source')
+    if src == 'periodic':
+        return 'source_periodic'
+    if src == 'file_memory':
+        return 'source_file_memory'
+    title = s.get('title') or ''
+    if title.startswith('--- name:'):
+        return 'skill_title'
+    summary = s.get('summary') or ''
+    if summary[:20].startswith('--- name:'):
+        return 'skill_summary'
+    return 'unknown'
+
+
 class LanceIndex:
     """Manages the sessions.lance/ LanceDB index for LoreConvo Pro hybrid search.
 
@@ -187,11 +220,17 @@ class LanceIndex:
 
     def is_available(self) -> bool:
         """Return True if the index exists and has at least one row."""
+        return self.row_count() > 0
+
+    def row_count(self) -> int:
+        """Return the number of rows in the Lance index, or 0 if unavailable."""
         try:
             table = self._open_table()
-            return table is not None and table.count_rows() > 0
+            if table is None:
+                return 0
+            return table.count_rows()
         except Exception:
-            return False
+            return 0
 
     def index_session(
         self,
@@ -350,33 +389,91 @@ class LanceIndex:
             _log.error("get_vectors_by_session_ids failed: %s", exc)
             return {}
 
-    def rebuild(self, sessions: list) -> int:
+    def rebuild(self, sessions: list, state: Optional[dict] = None) -> dict:
         """Rebuild the Lance index from a list of session dicts.
 
         Each dict must have: id, title, summary (nullable), project, surface,
         start_date, tags (JSON string or list), external_tool_session (int), source.
 
-        Drops and recreates the table. Returns count of indexed sessions.
-        Raises on fatal errors (caller should handle).
+        Builds the new index in a temporary directory, then swaps it in
+        atomically at the filesystem level.  If the process is killed mid-build
+        the previous index stays intact (the temp dir is orphaned, not the live
+        dir).
+
+        If *state* is provided it is a mutable dict keyed on 'lock' (optional
+        threading.Lock), 'progress' (int), 'total' (int), 'phase' (str),
+        'started_at' (float), 'done' (bool), and 'error' (str or None).  The
+        caller may read this dict from another thread to observe progress.
+
+        Returns a dict with:
+          status: 'ok' | 'error'
+          indexed: count of sessions inserted
+          total_in_db: total sessions passed in
+          exclusions: {reason: count} dict
+          elapsed_s: wall-clock seconds
         """
-        valid = [
-            s for s in sessions
-            if s.get('id')
-            and s.get('title')
-            and _should_index(
-                s.get('title'),
-                bool(s.get('external_tool_session')),
-                s.get('source'),
-                s.get('summary'),
-            )
-            and s.get('summary') is not None
-        ]
+        if state is None:
+            state = {}
+        lock = state.get('lock')
+        state.setdefault('progress', 0)
+        state.setdefault('total', len(sessions))
+        state.setdefault('phase', 'classifying')
+        state.setdefault('started_at', time.time())
+        state.setdefault('done', False)
+        state.setdefault('error', None)
+
+        # ----- classify every session -----
+        exclusions: Dict[str, int] = {}
+        valid: list = []
+        for s in sessions:
+            sid = s.get('id')
+            title = s.get('title')
+            summary = s.get('summary')
+            ext_tool = bool(s.get('external_tool_session'))
+            src = s.get('source')
+
+            if not sid or not title or summary is None or not _should_index(title, ext_tool, src, summary):
+                reason = _classify_exclusion(s)
+                exclusions[reason] = exclusions.get(reason, 0) + 1
+            else:
+                valid.append(s)
+
+        def _set(k, v):
+            state[k] = v
+            if k == 'progress' and state.get('total'):
+                state['progress_pct'] = int(100 * state['progress'] / state['total'])
+            if lock:
+                with lock:
+                    pass  # memory barrier
+
+        _set('phase', 'embedding')
+        _set('exclusions', exclusions)
+        _set('valid_count', len(valid))
 
         if not valid:
-            return 0
+            _set('phase', 'done')
+            _set('done', True)
+            return {
+                'status': 'ok',
+                'indexed': 0,
+                'total_in_db': len(sessions),
+                'exclusions': exclusions,
+                'elapsed_s': time.time() - state['started_at'],
+            }
 
         texts = [f"{s['title']} {s.get('summary', '')}" for s in valid]
-        embeddings = self._embed_many(texts)
+        _set('total', len(valid))
+        _set('progress', 0)
+
+        # Embed in batches, updating progress after each batch
+        batch_size = 128
+        all_embeddings = []
+        for batch_start in range(0, len(texts), batch_size):
+            batch = texts[batch_start:batch_start + batch_size]
+            all_embeddings.extend(self._embed_many(batch, batch_size=batch_size))
+            _set('progress', min(batch_start + batch_size, len(texts)))
+
+        _set('phase', 'building_table')
 
         data = []
         for i, s in enumerate(valid):
@@ -390,20 +487,64 @@ class LanceIndex:
                 'title': s['title'],
                 'summary': (s.get('summary') or '')[:2000],
                 'tags': tags_raw if isinstance(tags_raw, str) else json.dumps(tags_raw),
-                'vector': embeddings[i],
+                'vector': all_embeddings[i],
             })
 
-        db = self._get_db()
+        # Build in a temp directory, then atomically swap
+        tmp_dir = Path(tempfile.mkdtemp(prefix='loreconvo_lance_tmp_'))
         try:
-            db.drop_table('sessions')
-        except Exception:
-            pass
-        self._table = None
+            import lancedb as _lancedb
+            tmp_db = _lancedb.connect(str(tmp_dir))
+            schema = self._make_schema()
+            tmp_table = tmp_db.create_table('sessions', data, schema=schema)
+            tmp_table.create_fts_index('title', replace=True)
+            tmp_table.create_fts_index('summary', replace=True)
+            tmp_table.create_fts_index('tags', replace=True)
+            # Close to release file handles before the rename
+            del tmp_table
+            del tmp_db
 
-        schema = self._make_schema()
-        self._table = db.create_table('sessions', data, schema=schema)
-        self._table.create_fts_index('title', replace=True)
-        self._table.create_fts_index('summary', replace=True)
-        self._table.create_fts_index('tags', replace=True)
-        os.chmod(self._lance_dir, 0o700)
-        return len(data)
+            _set('phase', 'swapping')
+
+            # Atomically replace the live directory
+            live_dir = self._lance_dir
+            if live_dir.exists():
+                backup_dir = Path(str(live_dir) + '.old')
+                if backup_dir.exists():
+                    shutil.rmtree(backup_dir)
+                shutil.move(str(live_dir), str(backup_dir))
+            shutil.move(str(tmp_dir), str(live_dir))
+            os.chmod(live_dir, 0o700)
+
+            # Clean up backup
+            backup_dir = Path(str(live_dir) + '.old')
+            if backup_dir.exists():
+                try:
+                    shutil.rmtree(str(backup_dir))
+                except Exception:
+                    pass
+
+            # Reset cached state so next access reconnects
+            self._db = None
+            self._table = None
+        except Exception:
+            # Clean up temp dir on failure
+            try:
+                if tmp_dir.exists():
+                    shutil.rmtree(str(tmp_dir))
+            except Exception:
+                pass
+            raise
+
+        elapsed = time.time() - state['started_at']
+        _set('phase', 'done')
+        _set('done', True)
+        _set('progress', len(valid))
+
+        return {
+            'status': 'ok',
+            'indexed': len(data),
+            'total_in_db': len(sessions),
+            'exclusions': exclusions,
+            'elapsed_s': elapsed,
+        }

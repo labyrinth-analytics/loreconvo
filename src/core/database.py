@@ -488,6 +488,9 @@ class SessionDatabase:
         # close from an idle-watchdog release, which must keep reopening.
         self._closed = False
         self._lance_index = None  # lazy init; LanceIndex instance when Pro
+        self._rebuild_state: dict = {}  # background rebuild progress (see rebuild_lance_index)
+        self._rebuild_lock = threading.Lock()  # guards _rebuild_state reads/writes
+        self._rebuild_thread: Optional[threading.Thread] = None
         _check_shared_environment_warning()
         _check_network_filesystem_warning(str(self.config.db_path))
         self._init_schema()
@@ -2002,9 +2005,16 @@ class SessionDatabase:
         return self._lance_index
 
     def _lance_write_safe(self, session: Session) -> None:
-        """Write session to Lance index if Pro tier. Errors are logged, never raised."""
+        """Write session to Lance index if Pro tier. Errors are logged, never raised.
+
+        Skipped while a background rebuild is in progress -- the rebuild
+        will include this session when it completes.
+        """
         if not self.config.is_pro:
             return
+        with self._rebuild_lock:
+            if self._rebuild_state.get('in_progress'):
+                return
         try:
             self._get_lance_index().index_session(
                 session_id=session.id,
@@ -2086,29 +2096,153 @@ class SessionDatabase:
 
         return results[:limit]
 
-    def rebuild_lance_index(self) -> dict:
+    def rebuild_lance_index(self, background: bool = True) -> dict:
         """Rebuild the Lance index from all SQLite sessions. Pro tier only.
 
-        Returns a summary dict with 'indexed' and 'total_in_db' counts.
-        Raises on fatal errors.
+        By default starts the rebuild in a background thread and returns
+        immediately with a status handle.  Call ``rebuild_index_status()``
+        to poll progress.
+
+        When *background* is False (used by the background thread itself,
+        or for synchronous rebuilds in tests), runs the rebuild inline and
+        returns the full result dict.
+
+        Returns:
+          background=True (default):
+            {'status': 'started', 'message': '...'}
+            or {'status': 'busy', 'message': '...', 'progress_pct': N}
+          background=False:
+            The full result dict from LanceIndex.rebuild().
         """
         if not self.config.is_pro:
             return {"error": "rebuild-index requires LoreConvo Pro"}
 
+        # Reject if already running
+        with self._rebuild_lock:
+            if self._rebuild_state.get('in_progress'):
+                progress_pct = self._rebuild_state.get('progress_pct', 0)
+                return {
+                    'status': 'busy',
+                    'message': (
+                        'A rebuild is already in progress. '
+                        'Call rebuild_index_status() for progress.'
+                    ),
+                    'progress_pct': progress_pct,
+                }
+            self._rebuild_state = {
+                'in_progress': True,
+                'phase': 'fetching',
+                'progress': 0,
+                'total': 0,
+                'progress_pct': 0,
+                'started_at': __import__('time').time(),
+                'done': False,
+                'error': None,
+                'result': None,
+                'exclusions': None,
+            }
+
         rows = self.conn.execute(
             "SELECT id, title, summary, project, surface, start_date, tags, "
-            "external_tool_session, source FROM sessions WHERE id IS NOT NULL AND title IS NOT NULL"
+            "external_tool_session, source FROM sessions "
+            "WHERE id IS NOT NULL AND title IS NOT NULL"
         ).fetchall()
         sessions_list = [dict(r) for r in rows]
 
+        if background:
+            def _run():
+                import traceback
+                state = self._rebuild_state
+                state['total'] = len(sessions_list)
+                state['phase'] = 'starting'
+                try:
+                    from .hybrid_search import LanceIndex
+                    lance_dir = Path(self.config.db_path).parent / 'sessions.lance'
+                    index = LanceIndex(lance_dir)
+
+                    # Pass state dict so rebuild() can update progress
+                    result = index.rebuild(sessions_list, state=state)
+
+                    # Replace cached instance with the freshly built one
+                    self._lance_index = index
+
+                    with self._rebuild_lock:
+                        state['result'] = result
+                        state['done'] = True
+                        state['in_progress'] = False
+                        state['phase'] = 'done'
+                        state['progress_pct'] = 100
+                except Exception as exc:
+                    with self._rebuild_lock:
+                        state['error'] = str(exc)
+                        state['traceback'] = traceback.format_exc()
+                        state['done'] = True
+                        state['in_progress'] = False
+                        state['phase'] = 'error'
+                        import logging as _log
+                        _log.getLogger(__name__).error(
+                            "Background rebuild failed: %s", exc
+                        )
+
+            self._rebuild_thread = threading.Thread(
+                target=_run, daemon=True, name='loreconvo-rebuild'
+            )
+            self._rebuild_thread.start()
+            return {
+                'status': 'started',
+                'message': (
+                    'Rebuild started in background. '
+                    'Call rebuild_index_status() for progress. '
+                    'The server remains responsive.'
+                ),
+            }
+
+        # Synchronous path (for tests and direct CLI use)
         from .hybrid_search import LanceIndex
         lance_dir = Path(self.config.db_path).parent / 'sessions.lance'
         index = LanceIndex(lance_dir)
-        count = index.rebuild(sessions_list)
-
-        # Replace cached instance with the freshly built one
+        result = index.rebuild(sessions_list, state=self._rebuild_state)
         self._lance_index = index
-        return {"status": "ok", "indexed": count, "total_in_db": len(sessions_list)}
+        with self._rebuild_lock:
+            self._rebuild_state['in_progress'] = False
+            self._rebuild_state['done'] = True
+            self._rebuild_state['result'] = result
+        return result
+
+    def rebuild_index_status(self) -> dict:
+        """Return the current status of a background rebuild, or idle state."""
+        with self._rebuild_lock:
+            state = dict(self._rebuild_state)
+        if not state:
+            return {
+                'status': 'idle',
+                'message': 'No rebuild has been started.',
+            }
+        if state.get('done'):
+            if state.get('error'):
+                return {
+                    'status': 'error',
+                    'message': f'Rebuild failed: {state.get("error")}',
+                    'phase': state.get('phase'),
+                    'result': state.get('result'),
+                }
+            result = state.get('result', {})
+            return {
+                'status': 'complete',
+                'message': 'Rebuild finished successfully.',
+                'indexed': result.get('indexed'),
+                'total_in_db': result.get('total_in_db'),
+                'exclusions': result.get('exclusions'),
+                'elapsed_s': result.get('elapsed_s'),
+            }
+        return {
+            'status': 'running',
+            'phase': state.get('phase', 'unknown'),
+            'progress': state.get('progress', 0),
+            'total': state.get('total', 0),
+            'progress_pct': state.get('progress_pct', 0),
+            'elapsed_s': __import__('time').time() - state.get('started_at', 0),
+        }
 
     def get_related_sessions(
         self,
@@ -4070,7 +4204,7 @@ class SessionDatabase:
         ).fetchone()
         total_chars = char_count_row["total_chars"] or 0
 
-        return {
+        result = {
             "total_sessions": total,
             "by_surface": {r["surface"]: r["c"] for r in by_surface},
             "by_project": {r["project"]: r["c"] for r in by_project},
@@ -4090,6 +4224,25 @@ class SessionDatabase:
                 "estimated_tokens": total_chars // 4,
             },
         }
+
+        # LanceDB index stats (Pro only)
+        if self.config.is_pro:
+            try:
+                lance_index = self._get_lance_index()
+                if lance_index.is_available():
+                    result["semantic_index"] = {
+                        "available": True,
+                        "sessions_indexed": lance_index.row_count(),
+                    }
+                else:
+                    result["semantic_index"] = {
+                        "available": False,
+                        "message": "Index not yet built. Call rebuild_index() to create it.",
+                    }
+            except Exception:
+                result["semantic_index"] = {"available": False, "message": "Could not read index."}
+
+        return result
 
     # -- Dreaming / Recall operations (v0.6.0) --
 

@@ -980,12 +980,21 @@ def graph_session_map(
 def rebuild_index() -> dict:
     """Rebuild the LanceDB semantic search index from all stored sessions. Pro only.
 
-    Run after first Pro activation, or to recover from a corrupted index.
-    Downloads BAAI/bge-small-en-v1.5 (~130MB) once on first run; subsequent
-    runs use the cached model. May take 1-2 minutes for large session stores.
+    Starts the rebuild in a background thread and returns immediately with a
+    status handle.  The server remains responsive to other calls while the
+    rebuild runs.  Call rebuild_index_status() to track progress.
 
-    Returns a dict with 'indexed' (sessions added to index) and 'total_in_db'
-    (total sessions in SQLite, including those excluded from indexing).
+    The first run downloads BAAI/bge-small-en-v1.5 (~130MB; cached afterwards).
+    Expect roughly 3-10 minutes per thousand sessions depending on hardware.
+
+    A rebuild already in progress returns status 'busy' with the current
+    progress percentage.
+
+    Returns:
+      - {'status': 'started', 'message': '...'}  when a new rebuild begins
+      - {'status': 'busy', 'message': '...', 'progress_pct': N}  when one is
+        already running
+      - {'error': '...'}  when the tier is Free
     """
     status = get_license_status()
     if not status["is_pro"]:
@@ -995,7 +1004,25 @@ def rebuild_index() -> dict:
                 f"Get a license by upgrading at {LORECONVO_UPGRADE_URL}."
             )
         }
-    return _get_db().rebuild_lance_index()
+    return _get_db().rebuild_lance_index(background=True)
+
+
+@mcp.tool(title="Rebuild Index Status")
+def rebuild_index_status() -> dict:
+    """Return the current status of a background semantic-index rebuild.
+
+    Call after rebuild_index() to monitor progress.  Returns 'idle' when
+    no rebuild has been started or the last rebuild has finished.
+
+    Returns:
+      - {'status': 'idle', 'message': '...'}
+      - {'status': 'running', 'phase': '...', 'progress': N, 'total': N,
+         'progress_pct': N, 'elapsed_s': N.N}
+      - {'status': 'complete', 'message': '...', 'indexed': N,
+         'total_in_db': N, 'exclusions': {reason: count}, 'elapsed_s': N.N}
+      - {'status': 'error', 'message': '...'}
+    """
+    return _get_db().rebuild_index_status()
 
 
 @mcp.tool(title="Get Project")
@@ -1429,10 +1456,13 @@ def inspect_sessions(
 @mcp.tool(title="Get Usage Stats")
 def get_stats() -> dict:
     """Return a usage dashboard: session counts by surface, project, and tag;
-    storage metrics (DB size, estimated tokens stored); and the 5 most recent sessions.
+    storage metrics (DB size, estimated tokens stored); and the 5 most recent
+    sessions. Pro tier also includes ``semantic_index`` with session counts
+    for the LanceDB semantic search index.
 
-    Provides visibility into your memory usage -- who saved what, how much is stored,
-    and what's been captured most recently. Includes hook_saves_failing status.
+    Provides visibility into your memory usage -- who saved what, how much is
+    stored, and what's been captured most recently. Includes
+    hook_saves_failing status.
     """
     return _get_db().usage_stats_with_hook_status()
 
