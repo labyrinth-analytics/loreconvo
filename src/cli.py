@@ -531,14 +531,21 @@ def rebuild_index():
         click.echo("error: rebuild-index requires LoreConvo Pro. "
                    "Get a license at labyrinthanalyticsconsulting.com.")
         sys.exit(1)
-    click.echo("Rebuilding semantic search index (may take 1-2 minutes on first run)...")
+    click.echo("Rebuilding semantic search index...")
+    click.echo("(May take 3-10 minutes per thousand sessions; the server "
+               "rebuild_index tool runs in the background so the MCP server "
+               "stays responsive.)")
     try:
-        result = db.rebuild_lance_index()
+        result = db.rebuild_lance_index(background=False)
         if "error" in result:
             click.echo(f"error: {result['error']}")
             sys.exit(1)
         click.echo(f"[OK] Index built: {result['indexed']} session(s) indexed "
                    f"(of {result['total_in_db']} total in database).")
+        exclusions = result.get('exclusions', {})
+        if exclusions:
+            click.echo(f"Excluded: {json.dumps(exclusions)}")
+        click.echo(f"Elapsed: {result.get('elapsed_s', 0):.1f}s")
     except Exception as exc:
         click.echo(f"error: rebuild failed: {exc}")
         sys.exit(1)

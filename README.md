@@ -312,7 +312,7 @@ After checkout, your license key is emailed automatically to the address you use
 
 ## MCP Tools
 
-LoreConvo provides 39 MCP tools that Claude calls automatically during sessions.
+LoreConvo provides 40 MCP tools that Claude calls automatically during sessions.
 The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs/mcp_tool_catalog.md) for the complete reference.
 
 | Tool | What it does |
