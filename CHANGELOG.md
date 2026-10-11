@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### rebuild_index: background rebuild, progress, exclusion enumeration (SH-103913, SH-103914)
+
+`rebuild_index` now runs in a background thread and returns immediately with
+a status handle, so the MCP server stays responsive to other tool calls
+(including FTS search and get_stats) while the rebuild runs. A new
+`rebuild_index_status` tool polls progress (phase, count, percentage,
+elapsed seconds).
+
+The rebuild response now enumerates excluded sessions by reason
+(`external_tool_session`, `source_periodic`, `source_file_memory`,
+`skill_title`, `skill_summary`, `missing_id`, `missing_title`,
+`missing_summary`), so `indexed + sum(exclusions) == total_in_db` is
+checkable from the response alone.
+
+The new index is built in a temp directory and atomically swapped in, so
+interrupting a rebuild (kill, crash, timeout) leaves the previous index
+intact and usable -- no partial lance directory.
+
+Embedding is now batched (128 texts per batch) with progress updates after
+each batch, replacing the previous single-call path that held the server
+blocked for the entire duration.
+
+`get_stats` (Pro tier) now includes a `semantic_index` section with
+`available` (bool) and `sessions_indexed` (count) so users can see how many
+sessions are semantically searchable.
+
+The docstring previously said "may take 1-2 minutes for large session
+stores"; the measured time on 7.5k sessions was 37 minutes. The docstring now
+says "3-10 minutes per thousand sessions" and the CLI shows the elapsed time.
+
 ### Fix: _truncate_if_needed respects max_length when cap is smaller than the marker (SH-102442)
 
 `core/storage_core.py`: `_truncate_if_needed` could return a value longer

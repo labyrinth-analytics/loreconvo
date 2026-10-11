@@ -4,6 +4,27 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## Unreleased
+
+### Improved: rebuild_index no longer blocks the server
+
+The semantic index rebuild (`rebuild_index`) now runs in the background. The
+tool returns immediately with a status handle, and the server stays fully
+responsive to all other tools while the rebuild runs. A new
+`rebuild_index_status` tool shows live progress (phase, session count,
+percentage, elapsed time).
+
+The rebuild response now lists how many sessions were excluded and why
+(external tool sessions, periodic snapshots, skill-file content, etc.), so
+you can verify that `indexed + excluded == total` from the response alone.
+
+Interrupting a rebuild (closing the terminal, killing the process) no longer
+leaves a partial index -- the new index is built in a temporary location and
+swapped in atomically only on success.
+
+`get_stats` now shows how many sessions are in the semantic index under
+`semantic_index.sessions_indexed` (Pro tier).
+
 ## v0.10.16 (2026-10-05)
 
 ### Fixed: plugin MCP server now starts
