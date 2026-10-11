@@ -432,7 +432,9 @@ def search_sessions(
     or a specific skill/project was involved.
 
     Args:
-        query: Search keywords (matched against title, summary, decisions)
+        query: Search keywords (matched against title, summary, decisions).
+            Short alphabetic tokens (<=10 chars) are prefix-matched automatically.
+            Append `*` to force prefix matching on longer terms (e.g., "consolid*").
         persona: Filter to sessions tagged with this persona (supports prefix matching)
         tags: Filter to sessions with any of these tags
         skills: Filter to sessions that used any of these skills
