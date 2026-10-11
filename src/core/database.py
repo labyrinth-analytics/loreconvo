@@ -2260,6 +2260,7 @@ class SessionDatabase:
         shared_term_count=0 as a sentinel (semantically related, no term overlap).
         Co-occurrence wins when the same session appears in both result sets.
         Embedding links are excluded for free-tier callers.
+        Total results never exceed `limit` (Max 50).
         """
         # Co-occurrence results (unchanged from v1)
         cooc_rows = self.conn.execute(
@@ -2295,7 +2296,9 @@ class SessionDatabase:
             }
 
         # Embedding results from session_links (Pro only)
+        # Limit to remaining capacity: do not exceed total `limit`
         if self.config.is_pro:
+            remaining_capacity = max(0, limit - len(seen))
             emb_rows = self.conn.execute(
                 """SELECT sl.to_session_id, s.title, s.project, s.start_date, s.summary
                    FROM session_links sl
@@ -2304,7 +2307,7 @@ class SessionDatabase:
                      AND sl.link_type = 'auto:embedding'
                      AND (s.source IS NULL OR s.source NOT IN ('periodic', 'file_memory'))
                    LIMIT ?""",
-                (session_id, limit)
+                (session_id, remaining_capacity)
             ).fetchall()
             for row in emb_rows:
                 sid = row[0]
