@@ -4,6 +4,26 @@ Known-item recall probe for semantic vs FTS search.
 
 Selects 10 deterministic probes, runs both FTS and semantic search,
 records if target is in top 3. Output: CSV with per-probe results + summary.
+
+PURPOSE CLARIFICATION:
+This probe specifically measures KNOWN-ITEM recall -- finding one specific
+session by a 3-word query extracted from that session's own summary. This is
+an adversarially hard task for semantic search, which is designed for
+TOPICAL DISCOVERY (finding sessions about a concept even when they use
+different words), not for pinpointing a single session by distinctive terms.
+
+Semantic search (BGE-small embeddings + BM25 + RRF + recency rerank) is
+expected to underperform FTS5 on this axis because:
+  1. 3-word queries encode weak semantic signal before embedding.
+  2. RRF fusion gives equal weight to vector and BM25, diluting rare-term
+     matches that make FTS5 strong at known-item lookup.
+  3. Recency decay (half-life 90 days) penalizes older probe sessions.
+  4. BGE-small is trained for passage relevance, not document fingerprinting.
+
+An FTS-dominant result here is EXPECTED, not a regression. Interpreting the
+semantic column as "broken" would be a category error. The semantic column
+answers "did topical search surface this session at top 3" -- a stricter and
+more informative bar than the tool's actual design goal.
 """
 
 import os
@@ -16,11 +36,13 @@ from typing import List, Tuple, Optional
 # Ensure loreconvo is importable via PYTHONPATH shim or installed
 try:
     from loreconvo.core.database import SessionDatabase
+    from loreconvo.core.config import Config
 except ImportError:
     # Try adding the source path
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     sys.path.insert(0, os.path.join(repo_root, 'src'))
     from core.database import SessionDatabase
+    from core.config import Config
 
 
 STOPWORDS = {
@@ -113,13 +135,9 @@ def extract_query(db: SessionDatabase, session_id: str) -> Optional[str]:
 
 def main():
     """Main execution."""
-    db_path = os.path.expanduser("~/.loreconvo/sessions.db")
-    if not os.path.exists(db_path):
-        print(f"Error: Database not found at {db_path}", file=sys.stderr)
-        return 1
-
     try:
-        db = SessionDatabase(db_path)
+        config = Config()
+        db = SessionDatabase(config)
 
         # Get probes
         probes = get_probe_sessions(db)
