@@ -429,10 +429,13 @@ def upsert_session(conn: sqlite3.Connection, session_id: str, title: str,
 # ---------------------------------------------------------------------------
 
 def expand_compound_token(token: str):
-    """Split a compound token (camelCase, PascalCase, snake_case) into parts.
+    """Split a compound token (camelCase, PascalCase) into parts.
 
-    Returns the original token plus its constituent parts so FTS5 matches
-    both the compound form and individual words.
+    Returns the original token plus its constituent parts for camelCase/PascalCase
+    so FTS5 matches both the compound form and individual words.
+
+    Snake_case tokens are NOT expanded -- they are returned as-is.
+    This avoids false matches from common subwords (e.g., "social" in "social_pipeline").
 
     Only expands tokens that are purely alphanumeric (plus underscores).
     Tokens with hyphens, colons, or other special chars are left as-is
@@ -441,7 +444,7 @@ def expand_compound_token(token: str):
     Examples:
         "autoSave"      -> ["autoSave", "auto", "Save"]
         "PreCompact"    -> ["PreCompact", "Pre", "Compact"]
-        "snake_case"    -> ["snake_case", "snake", "case"]
+        "snake_case"    -> ["snake_case"]
         "simple"        -> ["simple"]
         "agent:ron"     -> ["agent:ron"]  (colon = not a compound)
         "K-1"           -> ["K-1"]        (hyphen = not a compound)
@@ -451,16 +454,17 @@ def expand_compound_token(token: str):
     if not re.match(r'^[A-Za-z0-9_]+$', token):
         return [token]
 
-    parts = []
-    # snake_case / SCREAMING_SNAKE: split on underscores
+    # snake_case / SCREAMING_SNAKE: don't expand, return as-is
+    # (e.g., "social_pipeline" -> ["social_pipeline"], not ["social_pipeline", "social", "pipeline"])
     if '_' in token:
-        parts = [p for p in token.split('_') if p]
-    else:
-        # camelCase / PascalCase: split on case transitions
-        # "autoSave" -> ["auto", "Save"], "HTMLParser" -> ["HTML", "Parser"]
-        camel_parts = re.findall(r'[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+', token)
-        if len(camel_parts) > 1:
-            parts = camel_parts
+        return [token]
+
+    parts = []
+    # camelCase / PascalCase: split on case transitions
+    # "autoSave" -> ["auto", "Save"], "HTMLParser" -> ["HTML", "Parser"]
+    camel_parts = re.findall(r'[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+', token)
+    if len(camel_parts) > 1:
+        parts = camel_parts
 
     if not parts:
         return [token]
