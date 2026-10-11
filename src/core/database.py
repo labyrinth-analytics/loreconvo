@@ -3382,7 +3382,7 @@ class SessionDatabase:
         # column (not in the FTS5-indexed text).
         normalized_topic = normalize_project_name(topic) if topic else topic
         fts_results = self.search_sessions(
-            query=normalized_topic or topic,
+            query=topic,
             limit=max_results,
             include_external=include_external,
         )
