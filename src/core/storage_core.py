@@ -635,3 +635,38 @@ def remediate_permissions(data_dir: str) -> None:
                 )
         except OSError:
             pass  # best-effort; log at debug if needed
+
+
+# ---------------------------------------------------------------------------
+# Project name normalization (SH-103918)
+# ---------------------------------------------------------------------------
+
+# Known non-canonical project names mapped to their canonical form.
+# When new variants are discovered, add them here and re-run the migration.
+PROJECT_ALIASES: dict[str, str] = {
+    "labyrinthanalytics_website": "labyrinth_analytics_website",
+}
+
+
+def normalize_project_name(project: str | None) -> str | None:
+    """Normalize a project name to its canonical form.
+
+    Steps: strip -> lowercase -> resolve alias -> collapse runs of
+    underscores -> strip leading/trailing underscores.
+
+    Returns None for a None or empty-string input (the (none) bucket),
+    since an empty string is semantically the same as None for project
+    filtering but creates a separate bucket in GROUP BY queries.
+    """
+    if project is None:
+        return None
+    stripped = project.strip()
+    if not stripped:
+        return None
+    lowered = stripped.lower()
+    # Resolve known aliases before underscore normalization so the
+    # canonical form is always the one stored.
+    canonical = PROJECT_ALIASES.get(lowered, lowered)
+    # Collapse runs of underscores and strip leading/trailing
+    collapsed = re.sub(r'_+', '_', canonical).strip('_')
+    return collapsed if collapsed else None

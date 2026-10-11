@@ -40,6 +40,8 @@ from .storage_core import (
     remediate_permissions,
     expand_compound_token,
     sanitize_fts_query,
+    normalize_project_name,
+    PROJECT_ALIASES,
 )
 
 from .loredocs_bridge import (
@@ -606,6 +608,38 @@ class SessionDatabase:
                     (new_id, row['rowid'])
                 )
             self.conn.commit()
+        self._migrate_normalize_project_names()
+
+    def _migrate_normalize_project_names(self):
+        """Normalize all existing project names (SH-103918).
+
+        Reads every distinct non-None project value, computes its canonical
+        form via normalize_project_name(), and UPDATEs rows where it differs.
+        Idempotent: normalizing an already-normalized name is a no-op.
+        """
+        rows = self.conn.execute(
+            "SELECT DISTINCT project FROM sessions WHERE project IS NOT NULL"
+        ).fetchall()
+        changes = 0
+        for row in rows:
+            original = row["project"]
+            normalized = normalize_project_name(original)
+            if normalized is None or normalized == original:
+                continue
+            self.conn.execute(
+                "UPDATE sessions SET project = ? WHERE project = ?",
+                (normalized, original),
+            )
+            changes += 1
+            logger.info(
+                "migrate_normalize_project_names: %s -> %s", original, normalized
+            )
+        if changes:
+            self.conn.commit()
+            logger.info(
+                "migrate_normalize_project_names: total groups normalized = %d",
+                changes,
+            )
 
     def _migrate_add_agent_context_configs(self):
         """Create agent_context_configs table (SH-12766, agent context injection).
@@ -2935,6 +2969,9 @@ class SessionDatabase:
                 "instead of raw SQL inserts."
             )
         truncate_session_fields(session)
+        # SH-103918: normalize project name on write so the store never
+        # accumulates spelling variants of the same project.
+        session.project = normalize_project_name(session.project)
         existing = self.conn.execute(
             "SELECT summary, project, surface, source, external_tool_session, "
             "start_date FROM sessions WHERE id = ?",
@@ -3219,8 +3256,10 @@ class SessionDatabase:
         params = [cutoff]
 
         if project:
-            query += " AND project = ?"
-            params.append(project)
+            normalized = normalize_project_name(project)
+            if normalized:
+                query += " AND project = ?"
+                params.append(normalized)
 
         if skill:
             query += " AND id IN (SELECT session_id FROM session_skills WHERE skill_name = ?)"
@@ -3295,8 +3334,10 @@ class SessionDatabase:
             params.append(persona + "%")
 
         if project:
-            sql += " AND s.project = ?"
-            params.append(project)
+            normalized = normalize_project_name(project)
+            if normalized:
+                sql += " AND s.project = ?"
+                params.append(normalized)
 
         if skills:
             placeholders = ",".join("?" * len(skills))
@@ -3334,6 +3375,17 @@ class SessionDatabase:
         semantic: bool = False,
         half_life_days: int = SEARCH_HALF_LIFE_DAYS,
     ) -> List[SearchResult]:
+        # SH-103918: normalize the topic for project-name tolerance.
+        # When the topic looks like a project identifier, also run a
+        # project-filtered search so sessions under that project are
+        # found even if the exact spelling only appears in the project
+        # column (not in the FTS5-indexed text).
+        normalized_topic = normalize_project_name(topic) if topic else topic
+        fts_results = self.search_sessions(
+            query=normalized_topic or topic,
+            limit=max_results,
+            include_external=include_external,
+        )
         if semantic and self.config.is_pro:
             lance = self._get_lance_index()
             if lance.is_available():
@@ -3343,10 +3395,33 @@ class SessionDatabase:
                     half_life_days=half_life_days,
                 )
                 if session_ids:
-                    return self._fetch_sessions_for_semantic(
+                    sem_results = self._fetch_sessions_for_semantic(
                         session_ids, None, None, None, max_results, include_external
                     )
-        return self.search_sessions(query=topic, limit=max_results, include_external=include_external)
+                    # Merge: semantic first, then FTS to fill remaining slots
+                    sem_ids = {r.session.id for r in sem_results}
+                    merged = list(sem_results)
+                    for r in fts_results:
+                        if r.session.id not in sem_ids and len(merged) < max_results:
+                            merged.append(r)
+                    return merged
+        # If normalized topic differs from original AND is non-empty,
+        # also do a project-filtered search and merge (dedup by session id).
+        if normalized_topic and normalized_topic != (topic or "").strip().lower():
+            proj_results = self.search_sessions(
+                query=normalized_topic,
+                project=normalized_topic,
+                limit=max_results,
+                include_external=include_external,
+            )
+            seen = {r.session.id for r in fts_results}
+            merged = list(fts_results)
+            for r in proj_results:
+                if r.session.id not in seen and len(merged) < max_results:
+                    merged.append(r)
+                    seen.add(r.session.id)
+            return merged[:max_results]
+        return fts_results[:max_results]
 
     def list_all_skills(self) -> List[dict]:
         """Return all distinct skill names with session counts, sorted by use count desc."""
