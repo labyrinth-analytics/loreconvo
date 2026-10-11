@@ -473,17 +473,19 @@ def sanitize_fts_query(query: str) -> str:
 
     Processing steps:
     1. Split on whitespace into raw tokens.
-    2. Expand compound tokens (camelCase, snake_case) into parts.
-    3. Apply prefix matching (trailing *) for short alpha tokens (<=7 chars)
-       so partial terms like "precomp" match "PreCompact".
-    4. Quote each token to escape FTS5 operators (hyphens, colons).
-    5. Implicit AND across all tokens (FTS5 default).
+    2. Handle explicit trailing `*` by stripping it before processing.
+    3. Expand compound tokens (camelCase, snake_case) into parts.
+    4. Apply prefix matching (trailing *) for short alpha tokens (<=10 chars)
+       so partial terms like "consolid" match "consolidation".
+    5. Quote each token to escape FTS5 operators (hyphens, colons).
+    6. Implicit AND across all tokens (FTS5 default).
 
     Examples:
         "stripe billing"     -> '"stripe" "billing"'
         "autoSave"           -> '"autoSave" OR "auto" OR "Save"'
         "snake_case"         -> '"snake_case" OR "snake" OR "case"'
-        "precomp"            -> '"precomp"*'
+        "consolid"           -> '"consolid"*'
+        "word*"              -> '"word"*'
         "fts-migration"      -> '"fts-migration"'
         "agent:ron"          -> '"agent:ron"'
         "K-1 parser waiting" -> '"K-1" "parser" "waiting"'
@@ -501,7 +503,11 @@ def sanitize_fts_query(query: str) -> str:
         if not clean:
             continue
 
-        expanded = expand_compound_token(clean)
+        # Strip explicit trailing `*` to check conditions on the base token
+        has_trailing_wildcard = clean.endswith('*')
+        base_token = clean.rstrip('*') if has_trailing_wildcard else clean
+
+        expanded = expand_compound_token(base_token)
 
         if len(expanded) > 1:
             # Compound token: OR the original with its parts
@@ -510,14 +516,19 @@ def sanitize_fts_query(query: str) -> str:
             has_or_group = True
         else:
             # Single token: apply prefix matching for short terms
-            # Tokens <= 7 chars that are purely alphabetic are likely
-            # abbreviations or partial words (e.g., "precomp" -> PreCompact)
+            # Tokens <= 10 chars that are purely alphabetic are treated as
+            # likely abbreviations or partial words (e.g., "consolid" -> consolidation)
             t = expanded[0]
-            if len(t) <= 7 and t.isalpha():
+            if len(t) <= 10 and t.isalpha():
                 # Short alphabetic token -- prefix match
                 fts_groups.append('"' + t + '"*')
             else:
-                fts_groups.append('"' + t + '"')
+                # Longer or non-alphabetic token -- no prefix match
+                # But preserve explicit trailing `*` if user provided it
+                if has_trailing_wildcard:
+                    fts_groups.append('"' + t + '"*')
+                else:
+                    fts_groups.append('"' + t + '"')
 
     if not fts_groups:
         return '""'
