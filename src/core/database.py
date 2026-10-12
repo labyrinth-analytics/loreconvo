@@ -579,6 +579,7 @@ class SessionDatabase:
         self._migrate_add_summary_source_columns()
         self._migrate_add_cross_product_columns()
         self._migrate_add_cascade_fks()
+        self._migrate_add_skill_position_column()
         # LAST among the migrations on purpose: any earlier step that recreates
         # the sessions table or its triggers is repaired by this one (SH-13438).
         self._migrate_fts_v4_external_content_triggers()
@@ -1310,6 +1311,27 @@ class SessionDatabase:
             self.conn.rollback()
             logger.error(f"Migration failed with error: {e}")
             raise
+
+    def _migrate_add_skill_position_column(self):
+        """Add a `position` column to session_skills (SH-103920).
+
+        Preserves the order skills were used in. Without it, get_session
+        returns skills in alphabetical order because the query planner serves
+        the WHERE session_id=? lookup from the (session_id, skill_name)
+        primary-key index. Idempotent: no-op when the column already exists.
+        """
+        skill_cols = {
+            row[1] for row in self.conn.execute(
+                "PRAGMA table_info(session_skills)"
+            ).fetchall()
+        }
+        if "position" not in skill_cols:
+            self.conn.execute(
+                "ALTER TABLE session_skills "
+                "ADD COLUMN position INTEGER NOT NULL DEFAULT 0"
+            )
+            self.conn.commit()
+            logger.info("Migration: added session_skills.position column")
 
     # -- keep_forever / session pinning (v0.8.1) --
 
@@ -3049,12 +3071,18 @@ class SessionDatabase:
             self._invalidate_memory_digests_for_session_scope(
                 session.project, session.surface
             )
-        for skill_name in session.skills_used:
+        # Preserve insertion order via the position column (SH-103920).
+        # INSERT OR REPLACE updates position in place, so a same-set re-save
+        # reorders correctly without needing a delete-first. (A shrink that
+        # removes a skill is out of scope here -- that is a pre-existing,
+        # separate behaviour and a delete-first would also break the
+        # cascade-safety invariant in test_database_cascade_safety.py.)
+        for position, skill_name in enumerate(session.skills_used):
             self.conn.execute(
                 """INSERT OR REPLACE INTO session_skills
-                   (session_id, skill_name, invocation_count)
-                   VALUES (?, ?, 1)""",
-                (session.id, skill_name)
+                   (session_id, skill_name, invocation_count, position)
+                   VALUES (?, ?, 1, ?)""",
+                (session.id, skill_name, position)
             )
         self.conn.commit()
 
@@ -3224,6 +3252,12 @@ class SessionDatabase:
             return 0
 
     def get_session(self, session_id: str) -> Optional[Session]:
+        """Return one session, or None.
+
+        ``skills_used`` is returned in insertion order (the order skills were
+        saved), not alphabetical -- preserved via the ``position`` column
+        (SH-103920).
+        """
         row = self.conn.execute(
             "SELECT * FROM sessions WHERE id = ?", (session_id,)
         ).fetchone()
@@ -3231,7 +3265,7 @@ class SessionDatabase:
             return None
         session = self._row_to_session(row)
         skills = self.conn.execute(
-            "SELECT skill_name FROM session_skills WHERE session_id = ?",
+            "SELECT skill_name FROM session_skills WHERE session_id = ? ",
             (session_id,)
         ).fetchall()
         session.skills_used = [s["skill_name"] for s in skills]
@@ -4308,10 +4342,16 @@ class SessionDatabase:
             try:
                 lance_index = self._get_lance_index()
                 if lance_index.is_available():
+                    # Include coverage check (SH-103940)
+                    coverage = self.check_lance_coverage()
                     result["semantic_index"] = {
                         "available": True,
                         "sessions_indexed": lance_index.row_count(),
+                        "eligible_sessions": coverage["eligible_sessions"],
+                        "coverage_pct": coverage["coverage_pct"],
                     }
+                    if coverage.get("warning"):
+                        result["semantic_index"]["warning"] = coverage["warning"]
                 else:
                     result["semantic_index"] = {
                         "available": False,
@@ -4322,7 +4362,73 @@ class SessionDatabase:
 
         return result
 
-    # -- Dreaming / Recall operations (v0.6.0) --
+    def check_lance_coverage(self) -> dict:
+        """Check Lance index coverage against eligible SQLite sessions (Pro only).
+
+        Compares the Lance index row count to the number of SQLite sessions
+        that pass the _should_index filter.  When coverage is critically low
+        (< 50%), logs a warning so the gap is visible to operators and users
+        rather than silently degrading semantic search recall.
+
+        Returns a dict with:
+          coverage_pct: float (0-100), 0 when no index exists
+          lance_rows: int
+          eligible_sessions: int
+          warning: str or None
+        """
+        if not self.config.is_pro:
+            return {
+                "coverage_pct": 0,
+                "lance_rows": 0,
+                "eligible_sessions": 0,
+                "warning": None,
+            }
+
+        # Count eligible sessions using the same filters as rebuild_lance_index
+        rows = self.conn.execute(
+            "SELECT id, title, summary, external_tool_session, source FROM sessions "
+            "WHERE id IS NOT NULL AND title IS NOT NULL"
+        ).fetchall()
+
+        from .hybrid_search import _should_index
+        eligible = 0
+        for r in rows:
+            ext = bool(r["external_tool_session"]) if r["external_tool_session"] else False
+            src = r["source"]
+            title = r["title"]
+            summary = r["summary"]
+            if title and summary is not None and _should_index(title, ext, src, summary):
+                eligible += 1
+
+        try:
+            lance = self._get_lance_index()
+            lance_rows = lance.row_count() if lance.is_available() else 0
+        except Exception:
+            lance_rows = 0
+
+        if eligible > 0:
+            coverage_pct = round(100.0 * lance_rows / eligible, 1)
+        else:
+            coverage_pct = 100.0 if lance_rows == 0 else 0.0
+
+        warning = None
+        if eligible > 0 and coverage_pct < 50.0:
+            warning = (
+                "Lance index coverage is critically low: "
+                f"{lance_rows}/{eligible} sessions indexed ({coverage_pct}%). "
+                "Semantic search recall will be severely degraded. "
+                "Run rebuild_index() to backfill missing sessions."
+            )
+            import logging as _log
+            _log.getLogger(__name__).warning("Lance coverage gap: %s", warning)
+
+        return {
+            "coverage_pct": coverage_pct,
+            "lance_rows": lance_rows,
+            "eligible_sessions": eligible,
+            "warning": warning,
+        }
+
 
     def upsert_memory_digest(self, project: str, surface: Optional[str], data: dict) -> None:
         """Insert or update a memory digest keyed by (project, surface)."""
@@ -4663,7 +4769,8 @@ class SessionDatabase:
 
         for session in sessions:
             skill_rows = self.conn.execute(
-                "SELECT skill_name FROM session_skills WHERE session_id = ?",
+                "SELECT skill_name FROM session_skills WHERE session_id = ? "
+                "ORDER BY position, skill_name",
                 (session.id,)
             ).fetchall()
             session.skills_used = [r["skill_name"] for r in skill_rows]
@@ -4797,12 +4904,12 @@ class SessionDatabase:
                 "DELETE FROM session_skills WHERE session_id = ?", (session.id,)
             )
         if session.skills_used:
-            for skill_name in session.skills_used:
+            for position, skill_name in enumerate(session.skills_used):
                 self.conn.execute(
                     """INSERT OR REPLACE INTO session_skills
-                       (session_id, skill_name, invocation_count)
-                       VALUES (?, ?, 1)""",
-                    (session.id, skill_name)
+                       (session_id, skill_name, invocation_count, position)
+                       VALUES (?, ?, 1, ?)""",
+                    (session.id, skill_name, position)
                 )
         self.conn.commit()
         return "replaced" if existing else "imported"

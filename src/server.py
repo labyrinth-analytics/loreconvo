@@ -2017,6 +2017,18 @@ def main():
 
     _compat_emit(_compat_check())
     _check_egg_info_conflict()
+
+    # Startup guard: warn if Lance index coverage is critically low (SH-103940).
+    # This catches the silent degradation that left 85% of sessions unindexed
+    # for months -- the gap is invisible without an explicit check.
+    try:
+        _get_db().check_lance_coverage()
+    except Exception as exc:
+        import logging as _log
+        _log.getLogger("loreconvo.server").warning(
+            "Lance coverage check failed at startup: %s", exc
+        )
+
     from core import idle_watchdog
     # Release the DB connection (and its write lock) when the client parks
     # this process idle -- stays alive so Claude Code/Desktop (which do not
