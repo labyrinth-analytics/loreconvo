@@ -32,17 +32,22 @@ import sqlite3
 import csv
 import random
 from typing import List, Tuple, Optional
+from pathlib import Path
 
-# Ensure loreconvo is importable via PYTHONPATH shim or installed
+# Bootstrap: resolve storage_core for non-package callers.
+sys.path.insert(0, str(Path(__file__).parent.parent / "hooks" / "scripts"))
+from _bootstrap import resolve_session_core, BootstrapError
+
 try:
-    from loreconvo.core.database import SessionDatabase
-    from loreconvo.core.config import Config
-except ImportError:
-    # Try adding the source path
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    sys.path.insert(0, os.path.join(repo_root, 'src'))
-    from core.database import SessionDatabase
-    from core.config import Config
+    _core = resolve_session_core(Path(__file__))
+    SessionDatabase = _core.SessionDatabase
+    Config = _core.Config
+except BootstrapError as exc:
+    sys.stderr.write(f"LoreConvo bootstrap error: {exc}\n")
+    sys.exit(1)
+finally:
+    # Remove the temporary hooks/scripts entry after bootstrap
+    sys.path.pop(0)
 
 
 STOPWORDS = {
