@@ -1151,6 +1151,17 @@ def vault_suggest(
     Use at the start of a session to find the most valuable prior context,
     or when you're unsure what to work on next.
 
+    When `project` is given and the initial window returns no suggestions but
+    the project still has sessions, the window is expanded progressively
+    (30, 90, 365, then all-time days) so older unresolved work is surfaced
+    instead of returning an empty result. The response metadata reports the
+    effective window (`days_back`), and -- when the window was expanded --
+    `window_expanded`, `expanded_to_days`, `initial_days_back`, and an
+    `expansion_note`. An empty result with `project` set therefore means the
+    project genuinely has no suggestions (no open questions, no >=2-decision
+    sessions, no skill gaps) at any window, not merely that the default
+    window was too narrow.
+
     Args:
         project: Filter suggestions to this project
         persona: Filter to sessions tagged with this persona (prefix matching)
