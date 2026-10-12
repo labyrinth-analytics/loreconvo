@@ -3880,14 +3880,15 @@ class SessionDatabase:
         When a project is specified and returns empty results, automatically expands
         the search window to older sessions (progressively: 30, 90, 365 days, all-time).
         """
+        normalized_project = normalize_project_name(project)
         result = self._get_suggestions_with_window(project, persona, days_back, limit)
 
-        if result["suggestions"] or not project:
+        if result["suggestions"] or not normalized_project:
             return result
 
         project_has_sessions = self.conn.execute(
             "SELECT COUNT(*) as c FROM sessions WHERE project = ?",
-            (project,)
+            (normalized_project,)
         ).fetchone()["c"] > 0
 
         if not project_has_sessions:
@@ -3915,6 +3916,7 @@ class SessionDatabase:
         days_back: int = 14, limit: int = 5
     ) -> dict:
         """Get suggestions with a specific window. Internal helper method."""
+        normalized_project = normalize_project_name(project)
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
         suggestions = []
 
@@ -3926,9 +3928,9 @@ class SessionDatabase:
               AND open_questions != '[]'
         """
         oq_params: list = [cutoff]
-        if project:
+        if normalized_project:
             oq_sql += " AND project = ?"
-            oq_params.append(project)
+            oq_params.append(normalized_project)
         if persona:
             oq_sql += " AND id IN (SELECT session_id FROM persona_sessions WHERE persona_name LIKE ?)"
             oq_params.append(persona + "%")
@@ -3957,9 +3959,9 @@ class SessionDatabase:
               AND decisions != '[]'
         """
         dec_params: list = [cutoff]
-        if project:
+        if normalized_project:
             dec_sql += " AND project = ?"
-            dec_params.append(project)
+            dec_params.append(normalized_project)
         if persona:
             dec_sql += " AND id IN (SELECT session_id FROM persona_sessions WHERE persona_name LIKE ?)"
             dec_params.append(persona + "%")
@@ -3984,10 +3986,10 @@ class SessionDatabase:
 
         # 3. Skill gaps (project expected_skills not used recently)
         skill_gaps = []
-        if project:
+        if normalized_project:
             proj_row = self.conn.execute(
                 "SELECT expected_skills FROM projects WHERE name = ?",
-                (project,)
+                (normalized_project,)
             ).fetchone()
             if proj_row:
                 expected = json.loads(proj_row["expected_skills"] or "[]")
@@ -3997,12 +3999,11 @@ class SessionDatabase:
                            FROM session_skills sk
                            JOIN sessions s ON sk.session_id = s.id
                            WHERE s.start_date >= ? AND s.project = ?""",
-                        (cutoff, project)
+                        (cutoff, normalized_project)
                     ).fetchall()
                     used = {r["skill_name"] for r in recent_skills}
                     for skill in expected:
                         if skill not in used:
-                            # Find last time this skill was used
                             last = self.conn.execute(
                                 """SELECT s.start_date FROM sessions s
                                    JOIN session_skills sk ON s.id = sk.session_id
