@@ -346,12 +346,14 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
         except Exception:
             pass  # FTS table might not exist in older DBs
 
-        # Save skill/tool usage
-        for tool in parsed.get("tools_used", []):
+        # Save skill/tool usage, preserving the order tools were used in
+        # (SH-103920: position column mirrors the tools_used list order).
+        for position, tool in enumerate(parsed.get("tools_used", [])):
             try:
                 conn.execute(
-                    "INSERT INTO session_skills (session_id, skill_name) VALUES (?, ?)",
-                    (session_uuid, tool),
+                    "INSERT INTO session_skills (session_id, skill_name, position) "
+                    "VALUES (?, ?, ?)",
+                    (session_uuid, tool, position),
                 )
             except Exception:
                 pass
