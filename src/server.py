@@ -444,7 +444,12 @@ def search_sessions(
             Default False. Can also be enabled globally via LORECONVO_EXTERNAL_TOOL_EXCLUSION=0.
         semantic: If True, use LanceDB hybrid (vector + BM25) search instead of FTS5.
             Pro tier only. Falls back to FTS5 if index not built yet; run
-            rebuild_index to build it after first Pro activation.
+            rebuild_index to build it after first Pro activation. Semantic search
+            is for TOPICAL DISCOVERY (finding sessions about a concept, even when
+            they use different words). It is not tuned for KNOWN-ITEM recall --
+            finding one specific session by its own exact keywords -- where the
+            default semantic=False FTS5 path is the better fit (exact-term
+            matching plus prefix/compound-word expansion).
         include_expired: If True, include sessions whose expires_at is in the past.
             Default False (expired sessions are hidden from search).
         after: Optional ISO 8601 UTC instant (e.g. "2026-07-06T00:00:00Z"). Only
