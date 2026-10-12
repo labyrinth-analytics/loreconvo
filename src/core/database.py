@@ -3902,11 +3902,12 @@ class SessionDatabase:
                 expanded_result["metadata"]["initial_days_back"] = days_back
                 return expanded_result
 
-        result["metadata"]["window_expanded"] = True
-        result["metadata"]["expanded_to_days"] = 36500
-        result["metadata"]["expansion_note"] = "No suggestions found even after expanding to all-time window"
-        result["metadata"]["initial_days_back"] = days_back
-        return result
+        expanded_result = self._get_suggestions_with_window(project, persona, 36500, limit)
+        expanded_result["metadata"]["window_expanded"] = True
+        expanded_result["metadata"]["expanded_to_days"] = 36500
+        expanded_result["metadata"]["expansion_note"] = "No suggestions found even after expanding to all-time window"
+        expanded_result["metadata"]["initial_days_back"] = days_back
+        return expanded_result
 
     def _get_suggestions_with_window(
         self, project: Optional[str] = None,
