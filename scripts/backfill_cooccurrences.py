@@ -26,12 +26,20 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-# Add src to path
-script_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(script_dir / "src"))
+# Bootstrap: resolve storage_core for non-package callers.
+sys.path.insert(0, str(Path(__file__).parent.parent / "hooks" / "scripts"))
+from _bootstrap import resolve_session_core, BootstrapError
 
-from core.database import SessionDatabase
-from core.config import Config
+try:
+    _core = resolve_session_core(Path(__file__))
+    SessionDatabase = _core.SessionDatabase
+    Config = _core.Config
+except BootstrapError as exc:
+    sys.stderr.write(f"LoreConvo bootstrap error: {exc}\n")
+    sys.exit(1)
+finally:
+    # Remove the temporary hooks/scripts entry after bootstrap
+    sys.path.pop(0)
 
 def configure_logging():
     logging.basicConfig(
