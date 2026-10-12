@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Schema revision -- increment on any DDL change.
 # Used as PRAGMA user_version for cross-environment compatibility gating.
-SCHEMA_REVISION = 2
+SCHEMA_REVISION = 3
 
 # ---------------------------------------------------------------------------
 # DDL constants
@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS session_skills (
     skill_name       TEXT NOT NULL,
     skill_source     TEXT,
     invocation_count INTEGER DEFAULT 1,
+    position         INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (session_id, skill_name)
 );
 
@@ -341,6 +342,16 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             conn.execute(
                 f"ALTER TABLE sessions ADD COLUMN {name} {column_type}"
             )
+    # session_skills gained a `position` column (SH-103920) to preserve the
+    # order skills were used in. The hook path opens DBs via ensure_schema,
+    # which has no table-recreation migration, so add the column here too.
+    skill_cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(session_skills)").fetchall()
+    }
+    if "position" not in skill_cols:
+        conn.execute(
+            "ALTER TABLE session_skills ADD COLUMN position INTEGER NOT NULL DEFAULT 0"
+        )
     row = conn.execute("PRAGMA user_version").fetchone()
     current = row[0] if row else 0
     if current < SCHEMA_REVISION:

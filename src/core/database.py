@@ -3265,7 +3265,8 @@ class SessionDatabase:
             return None
         session = self._row_to_session(row)
         skills = self.conn.execute(
-            "SELECT skill_name FROM session_skills WHERE session_id = ? ",
+            "SELECT skill_name FROM session_skills WHERE session_id = ? "
+            "ORDER BY position, skill_name",
             (session_id,)
         ).fetchall()
         session.skills_used = [s["skill_name"] for s in skills]
