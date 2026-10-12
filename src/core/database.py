@@ -3876,7 +3876,44 @@ class SessionDatabase:
         - Unresolved open questions
         - Recent decisions that may need follow-up
         - Skill gaps (expected by project but not used recently)
+
+        When a project is specified and returns empty results, automatically expands
+        the search window to older sessions (progressively: 30, 90, 365 days, all-time).
         """
+        result = self._get_suggestions_with_window(project, persona, days_back, limit)
+
+        if result["suggestions"] or not project:
+            return result
+
+        project_has_sessions = self.conn.execute(
+            "SELECT COUNT(*) as c FROM sessions WHERE project = ?",
+            (project,)
+        ).fetchone()["c"] > 0
+
+        if not project_has_sessions:
+            return result
+
+        for expanded_days in [30, 90, 365, 36500]:
+            expanded_result = self._get_suggestions_with_window(project, persona, expanded_days, limit)
+            if expanded_result["suggestions"]:
+                expanded_result["metadata"]["window_expanded"] = True
+                expanded_result["metadata"]["expanded_to_days"] = expanded_days
+                expanded_result["metadata"]["expansion_note"] = "No results in initial %d-day window; expanded to %d days" % (days_back, expanded_days)
+                expanded_result["metadata"]["initial_days_back"] = days_back
+                return expanded_result
+
+        result["metadata"]["window_expanded"] = True
+        result["metadata"]["expanded_to_days"] = 36500
+        result["metadata"]["expansion_note"] = "No suggestions found even after expanding to all-time window"
+        result["metadata"]["initial_days_back"] = days_back
+        return result
+
+    def _get_suggestions_with_window(
+        self, project: Optional[str] = None,
+        persona: Optional[str] = None,
+        days_back: int = 14, limit: int = 5
+    ) -> dict:
+        """Get suggestions with a specific window. Internal helper method."""
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
         suggestions = []
 
@@ -3999,6 +4036,7 @@ class SessionDatabase:
                 "suggestions_returned": len(suggestions),
                 "project_filter": project,
                 "persona_filter": persona,
+                "window_expanded": False,
             }
         }
 
