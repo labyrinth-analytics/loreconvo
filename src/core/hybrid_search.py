@@ -30,6 +30,14 @@ _UUID_RE = re.compile(
 SEARCH_HALF_LIFE_DAYS = 90     # user-triggered search_sessions default
 AUTOLOAD_HALF_LIFE_DAYS = 30   # auto-load hook default
 
+# Batch size for embedding during rebuild. Larger batches amortize the ONNX
+# inference overhead. 256 was measured as a good throughput/memory trade-off
+# for the BGE-small-en-v1.5 model (384-dim, ~130MB) on M-series Apple Silicon;
+# above 512 the memory pressure from the intermediate Arrow array starts to
+# outweigh the batching benefit on large stores. This is a tunable, not a
+# hard limit -- the ONNX runtime handles any batch size that fits in memory.
+REBUILD_BATCH_SIZE = 256
+
 _log = logging.getLogger(__name__)
 
 
@@ -466,7 +474,7 @@ class LanceIndex:
         _set('progress', 0)
 
         # Embed in batches, updating progress after each batch
-        batch_size = 128
+        batch_size = REBUILD_BATCH_SIZE
         all_embeddings = []
         for batch_start in range(0, len(texts), batch_size):
             batch = texts[batch_start:batch_start + batch_size]
