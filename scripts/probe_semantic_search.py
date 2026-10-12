@@ -24,6 +24,22 @@ An FTS-dominant result here is EXPECTED, not a regression. Interpreting the
 semantic column as "broken" would be a category error. The semantic column
 answers "did topical search surface this session at top 3" -- a stricter and
 more informative bar than the tool's actual design goal.
+
+COVERAGE GAP (SH-103938, 2026-10-12):
+If the Lance index has low coverage (many sessions missing from the index),
+semantic recall will be additionally depressed because the target session
+may not be in the index at all. The incremental dual-write only indexes
+sessions saved AFTER the index was created; sessions that predate the index
+or that silently failed to write are NOT backfilled. A full rebuild_index()
+is the only way to close this gap.
+
+Before interpreting probe results, check Lance index coverage:
+  lance_row_count vs total eligible sessions (summary >= 200 chars).
+If coverage is below ~90%, run rebuild_index() first, then re-run this probe.
+
+Investigation found (2026-10-12): 1,070 rows in Lance vs 7,212 eligible
+sessions (14.8% coverage) -- the 10% semantic recall was primarily a
+coverage problem, not a ranking problem.
 """
 
 import os
