@@ -3883,7 +3883,7 @@ class SessionDatabase:
         normalized_project = normalize_project_name(project)
         result = self._get_suggestions_with_window(project, persona, days_back, limit)
 
-        if result["suggestions"] or result["skill_gaps"] or not normalized_project:
+        if result["suggestions"] or not normalized_project:
             return result
 
         project_has_sessions = self.conn.execute(
@@ -3897,6 +3897,8 @@ class SessionDatabase:
         for expanded_days in [30, 90, 365, 36500]:
             expanded_result = self._get_suggestions_with_window(project, persona, expanded_days, limit)
             if expanded_result["suggestions"]:
+                # Preserve initial skill_gaps when merging with expanded suggestions
+                expanded_result["skill_gaps"] = result["skill_gaps"]
                 expanded_result["metadata"]["window_expanded"] = True
                 expanded_result["metadata"]["expanded_to_days"] = expanded_days
                 expanded_result["metadata"]["expansion_note"] = "No results in initial %d-day window; expanded to %d days" % (days_back, expanded_days)
@@ -3904,6 +3906,8 @@ class SessionDatabase:
                 return expanded_result
 
         expanded_result = self._get_suggestions_with_window(project, persona, 36500, limit)
+        # Preserve initial skill_gaps in final all-time window result
+        expanded_result["skill_gaps"] = result["skill_gaps"]
         expanded_result["metadata"]["window_expanded"] = True
         expanded_result["metadata"]["expanded_to_days"] = 36500
         expanded_result["metadata"]["expansion_note"] = "No suggestions found even after expanding to all-time window"
