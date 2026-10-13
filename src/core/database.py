@@ -2964,6 +2964,11 @@ class SessionDatabase:
             if self._conn is not None:
                 self._conn.close()
                 self._conn = None
+            # SH-104068: drop the LanceIndex (and the ~120 MB embedding model
+            # it holds). A closed DB that is still referenced -- e.g. by a
+            # pytest class instance that outlives the test -- otherwise pins
+            # the model; across a test suite that reached 15-31 GB.
+            self._lance_index = None
 
     def __enter__(self):
         return self
@@ -3178,12 +3183,12 @@ class SessionDatabase:
 
         try:
             import lancedb as _lancedb
-            from fastembed import TextEmbedding as _TE  # ONNX, no torch (spec A1)
+            from .hybrid_search import get_shared_embedding_model
 
             # Same BGE-small model as before, ONNX-quantized. Vectors differ
             # slightly from the old torch fp32 output, which is why the 0.8.7
             # CHANGELOG recommends a one-time rebuild_index.
-            model = _TE(CROSS_LINK_EMBEDDING_MODEL)
+            model = get_shared_embedding_model(CROSS_LINK_EMBEDDING_MODEL)
             q_vec = next(iter(model.embed([query_text]))).tolist()
 
             ld_lance_db = _lancedb.connect(str(lance_path))

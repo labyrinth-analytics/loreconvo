@@ -40,6 +40,30 @@ REBUILD_BATCH_SIZE = 256
 
 _log = logging.getLogger(__name__)
 
+# SH-104068: one embedding model per process, shared by every caller.
+# Building a fresh fastembed/ONNX session per LanceIndex (one per
+# SessionDatabase) leaks native memory that the allocator never returns --
+# the Python heap stays flat while RSS grows ~70 MB per instance; the test
+# suite reached 15-31 GB. The model is stateless for inference, so sharing
+# it is safe.
+_shared_models: Dict[str, object] = {}
+_shared_models_lock = threading.Lock()
+
+
+def get_shared_embedding_model(name: str = 'BAAI/bge-small-en-v1.5'):
+    """Return the process-wide fastembed TextEmbedding for `name`."""
+    with _shared_models_lock:
+        model = _shared_models.get(name)
+        if model is None:
+            from fastembed import TextEmbedding  # ONNX runtime, no torch (spec A1)
+            _log.info(
+                "Loading embedding model %s; the first run downloads it "
+                "(~90MB) and may take a minute.", name
+            )
+            model = TextEmbedding(name)
+            _shared_models[name] = model
+        return model
+
 
 def _parse_date(d: Optional[str]) -> datetime.datetime:
     """Parse an ISO 8601 date string to a naive UTC datetime."""
@@ -176,12 +200,7 @@ class LanceIndex:
 
     def _get_model(self):
         if self._model is None:
-            from fastembed import TextEmbedding  # ONNX runtime, no torch (spec A1)
-            _log.info(
-                "Loading embedding model BAAI/bge-small-en-v1.5; the first run "
-                "downloads it (~90MB) and may take a minute."
-            )
-            self._model = TextEmbedding('BAAI/bge-small-en-v1.5')
+            self._model = get_shared_embedding_model('BAAI/bge-small-en-v1.5')
         return self._model
 
     def _embed_one(self, text):
