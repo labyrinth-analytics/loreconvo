@@ -3883,7 +3883,7 @@ class SessionDatabase:
         normalized_project = normalize_project_name(project)
         result = self._get_suggestions_with_window(project, persona, days_back, limit)
 
-        if result["suggestions"] or not normalized_project:
+        if result["suggestions"] or result["skill_gaps"] or not normalized_project:
             return result
 
         project_has_sessions = self.conn.execute(
