@@ -341,6 +341,7 @@ The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs
 | `inspect_sessions` | Inspect session internals for debugging |
 | `export_for_anthropic` | Export sessions in Anthropic managed-agent format (Pro) |
 | `rebuild_index` | Rebuild the LanceDB semantic search index (Pro) |
+| `rebuild_index_status` | Poll the status of an in-progress rebuild_index operation (Pro) |
 | `loreconvo_onboard` | First-time setup wizard |
 | `get_dream_log` | View the consolidation activity log |
 | `get_docs_for_session` | Retrieve LoreDocs documents linked to a specific session (Pro -- requires LoreDocs Pro) |
