@@ -4,7 +4,7 @@ What changed in each release, written for users (not developers).
 
 ---
 
-## Unreleased
+## v0.10.17 (2026-10-15)
 
 ### Improved: rebuild_index no longer blocks the server
 
@@ -12,7 +12,7 @@ The semantic index rebuild (`rebuild_index`) now runs in the background. The
 tool returns immediately with a status handle, and the server stays fully
 responsive to all other tools while the rebuild runs. A new
 `rebuild_index_status` tool shows live progress (phase, session count,
-percentage, elapsed time).
+percentage, elapsed time). Rebuilds also run faster.
 
 The rebuild response now lists how many sessions were excluded and why
 (external tool sessions, periodic snapshots, skill-file content, etc.), so
@@ -24,6 +24,50 @@ swapped in atomically only on success.
 
 `get_stats` now shows how many sessions are in the semantic index under
 `semantic_index.sessions_indexed` (Pro tier).
+
+### Fixed: project names spelled two ways now match
+
+Sessions saved under slightly different spellings of the same project name
+(for example, differing only in case or underscores) were split into separate
+groups, so `get_context_for`, `search_sessions`, and `get_recent_sessions`
+returned only some of them. Project names are now normalized when saved and
+when searched, and existing sessions are normalized automatically the first
+time the server starts after you upgrade.
+
+### Fixed: search finds more partial-word matches
+
+Partial-word (prefix) matching now applies to words up to 10 characters long
+(previously 7), so searching for the start of a longer word finds sessions
+that contain the full word. Compound names like `snake_case` identifiers are
+no longer over-expanded, which keeps exact matches near the top.
+
+### Fixed: get_context_for finds camelCase topics again
+
+`get_context_for` with a topic like `autoSave` once again finds sessions that
+mention the words separately ("auto ... save"), matching what
+`search_sessions` returns for the same query.
+
+### Fixed: vault_suggest all-time results
+
+When `vault_suggest` widened its search to all time because recent sessions
+had no suggestions, it returned the recent-window results under an all-time
+label. It now returns the actual all-time results.
+
+`vault_suggest` also no longer stops at the recent window when the only
+suggestions there are skill gaps; it widens the window to find sessions worth
+revisiting.
+
+### Improved: lower memory use with semantic search (Pro)
+
+The embedding model used by semantic search is now loaded once per process
+and shared, instead of once per database connection, so long-running
+sessions use noticeably less memory.
+
+### Improved: clearer tool descriptions
+
+The `search_sessions`, `get_memory_digest`, and `vault_suggest` tool
+descriptions now explain when to use semantic versus keyword search, how
+prefix matching behaves, and that the memory digest is built from sessions.
 
 ## v0.10.16 (2026-10-05)
 
