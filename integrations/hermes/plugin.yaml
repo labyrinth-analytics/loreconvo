@@ -1,10 +1,11 @@
 name: loreconvo
-version: "0.10.16"
-description: "LoreConvo — cross-surface persistent session memory with search, recall, and structured memory items."
+version: 0.10.17
+description: "LoreConvo \u2014 cross-surface persistent session memory with search,\
+  \ recall, and structured memory items."
 python_dependencies:
-  - "loreconvo==0.10.16"
+- loreconvo==0.10.17
 requires_env:
-  - name: LORECONVO_HERMES_PROJECT
-    description: "Default project name for LoreConvo sessions created by Hermes"
-    required: false
-    default: "hermes"
+- name: LORECONVO_HERMES_PROJECT
+  description: Default project name for LoreConvo sessions created by Hermes
+  required: false
+  default: hermes
