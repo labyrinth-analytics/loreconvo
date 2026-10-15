@@ -1,6 +1,6 @@
 # LoreConvo Changelog
 
-## Unreleased
+## v0.10.17 (2026-10-15)
 
 ### rebuild_index: background rebuild, progress, exclusion enumeration (SH-103913, SH-103914)
 
@@ -20,7 +20,7 @@ The new index is built in a temp directory and atomically swapped in, so
 interrupting a rebuild (kill, crash, timeout) leaves the previous index
 intact and usable -- no partial lance directory.
 
-Embedding is now batched (128 texts per batch) with progress updates after
+Embedding is now batched (256 texts per batch, SH-103924) with progress updates after
 each batch, replacing the previous single-call path that held the server
 blocked for the entire duration.
 
@@ -69,6 +69,58 @@ LoreConvo from Hermes' proposed 14-day release quarantine). The version is
 pinned in two places; a new check script
 `scripts/check_hermes_plugin_version_sync.py` validates both match the product
 version (mutation-tested: mismatched version returns exit code 2).
+
+### Project-name normalization (SH-103918, SH-103942, SH-103956)
+
+`core/storage_core.py`: new `normalize_project_name()` + `PROJECT_ALIASES`
+(case, underscore-collapse, alias resolution; empty string -> None). Applied
+on `save_session` and on the `project` param of `search_sessions` and
+`get_recent_sessions`. A startup migration normalizes existing
+`sessions.project` values in place. `get_context_for` runs a supplementary
+project-filtered search when the topic normalizes to a project name. The
+first cut passed the lowercased topic as the primary FTS query, breaking
+camelCase compound-token expansion (QA HIGH, SH-103942); fixed by keeping the
+original topic as the primary query. Regression test SH-103956.
+
+### FTS query construction (SH-103916, SH-103927)
+
+`core/storage_core.py`: prefix-match threshold for purely alphabetic tokens
+raised from <=7 to <=10 chars; explicit trailing wildcards are honored.
+snake_case tokens are no longer expanded inside compound-token queries
+(reduced BM25 saturation).
+
+### vault_suggest all-time fallback (SH-104015)
+
+`get_suggestions()` fallback now calls `_get_suggestions_with_window(36500)`
+instead of returning the 14-day result relabeled with all-time metadata, so
+`skill_gaps`/`scan_count` agree with `expansion_note`.
+
+### vault_suggest skill-gap window expansion (SH-104057, SH-104064)
+
+In-window skill gaps no longer suppress window expansion in
+`get_suggestions()`; expansion proceeds when the project-scoped revisit list
+is empty.
+
+### Shared embedding model (SH-104068)
+
+`core/hybrid_search.py`: new `get_shared_embedding_model()` caches one
+fastembed `TextEmbedding` per model name per process (lock-guarded);
+`LanceIndex` and the cross-link path in `core/database.py` use it.
+`SessionDatabase.close()` drops its `_lance_index`. Fixes native-memory growth
+(~70 MB RSS per instance) behind the test-suite OOMs.
+
+### Lance coverage guard + rebuild batch size (SH-103940, SH-103924)
+
+`core/database.py`: startup guard checks Lance index coverage against the
+sessions table; `get_stats` reports coverage. `REBUILD_BATCH_SIZE` raised
+from 128 to 256.
+
+### Diagnostics and docstrings (SH-103912, SH-103915, SH-103917, SH-103919, SH-103928, SH-103938, SH-103960)
+
+Cooccurrence backfill script; known-item recall probe script; diagnostic
+scripts routed through `_bootstrap.py`; docstring clarifications for
+`search_sessions` (semantic vs FTS5, prefix matching), `vault_suggest`
+(window expansion), and `get_memory_digest` (session-based).
 
 ## v0.10.16 (2026-10-05)
 
