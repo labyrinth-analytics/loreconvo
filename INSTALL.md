@@ -31,7 +31,7 @@ If that prints a version, you are good to go.
 
 ---
 
-## Option A: Install as a Cowork Plugin (Recommended)
+## Option A: Install as a Claude Code or Cowork Plugin (Recommended)
 
 Add the Labyrinth Analytics plugin marketplace, then install LoreConvo from it:
 
@@ -86,7 +86,7 @@ claude mcp add --scope user \
   uvx --from loreconvo[server]==<version> loreconvo
 ```
 
-Replace `<version>` with the version you want to pin to (for example `0.10.16`).
+Replace `<version>` with the version you want to pin to (for example `0.10.17`).
 There is no path to substitute: uvx resolves the package itself.
 
 The `--env=LORECONVO_PRO=<your-license-key>` flag is optional -- omit it if you are using the free tier. The `--scope user` flag registers LoreConvo for all Claude Code sessions (not just the current project).
@@ -179,7 +179,7 @@ LoreConvo is listed in the Hermes plugin catalog and can be installed with one c
 
 This is the simplest way to add LoreConvo to Hermes. The catalog installs LoreConvo as a native Hermes memory provider -- it reads and writes the same `~/.loreconvo/sessions.db` as your other LoreConvo clients.
 
-> **Tool coverage note:** The catalog integration exposes 3 tools (search, context retrieval, and save). It does not support Pro license keys. If you need the full 39-tool MCP suite or Pro features (consolidation, semantic search, anti-pattern tagging, etc.), use Option B instead.
+> **Tool coverage note:** The catalog integration exposes 3 tools (search, context retrieval, and save). It does not support Pro license keys. If you need the full 40-tool MCP suite or Pro features (consolidation, semantic search, anti-pattern tagging, etc.), use Option B instead.
 
 **First install:**
 
@@ -238,7 +238,7 @@ hermes plugins update loreconvo
 
 ### Option B: MCP Server via YAML Config
 
-Hermes Agent also supports LoreConvo as an MCP server through its YAML config file. This gives you the full set of 39 LoreConvo MCP tools rather than the three catalog provider tools.
+Hermes Agent also supports LoreConvo as an MCP server through its YAML config file. This gives you the full set of 40 LoreConvo MCP tools rather than the three catalog provider tools.
 
 Add an entry under `mcp_servers:` in `~/.hermes/config.yaml`:
 
