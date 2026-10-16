@@ -33,7 +33,7 @@ _PRODUCT_DIST_NAME = "loreconvo"
 # SH-13566 spec-change grep (-32002, roots, sampling/create_message, Mcp-Session-Id)
 # against the new SDK to verify the stdio-only exemption still holds before assuming
 # this product needs no code changes for the new spec.
-_MCP_TESTED_VERSION = "1.28.1"
+_MCP_TESTED_VERSION = "1.30.0"
 
 _CACHED_RESULT: Optional[Dict] = None
 
