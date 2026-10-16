@@ -21,7 +21,7 @@ onnxruntime==1.28.0; python_version >= '3.14'
 # [server] extra -- MCP server stack. Required to run the MCP server.
 # Install with: pip install loreconvo[server]
 # Or launch via uvx with: uvx --from loreconvo[server]==<version> loreconvo
-mcp[cli]==1.28.1
+mcp[cli]==1.30.0
 starlette==1.3.1
 
 # [bridge] extra -- Anthropic bridge (memory_20250818 compatibility).
