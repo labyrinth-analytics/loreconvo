@@ -33,19 +33,14 @@ If that prints a version, you are good to go.
 
 ## Option A: Install as a Cowork Plugin (Recommended)
 
-The LoreConvo plugin is ready to install locally. First register the local marketplace,
-then install from it -- this is the same flow as the eventual public marketplace install:
+Add the Labyrinth Analytics plugin marketplace, then install LoreConvo from it:
 
 ```
-/plugin marketplace add ~/projects/side_hustle/marketplace/claude-plugins
+/plugin marketplace add labyrinth-analytics/claude-plugins
 /plugin install loreconvo@labyrinth-analytics-claude-plugins
 ```
 
-Then restart Cowork. LoreConvo MCP tools will be available in your next session.
-
-> **Anthropic marketplace:** Once the plugin is listed on the Anthropic marketplace,
-> the `/plugin marketplace add` step will not be needed -- install directly with the
-> second command.
+Then restart Claude Code or Cowork. LoreConvo MCP tools will be available in your next session.
 
 ---
 
