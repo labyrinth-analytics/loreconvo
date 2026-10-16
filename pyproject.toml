@@ -51,7 +51,7 @@ server = [
     # MCP server stack -- separated from core so the Hermes memory provider
     # can install the lean core without pulling in mcp (which conflicts with
     # Hermes's mcp==2.0.0 pin).
-    "mcp[cli]==1.28.1",
+    "mcp[cli]==1.30.0",
     "starlette==1.3.1",
 ]
 bridge = [
