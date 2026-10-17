@@ -1958,13 +1958,18 @@ class SessionDatabase:
         Links are stored in session_links with link_type='auto:cooccurrence'.
         Uses INSERT OR IGNORE so manual links are never overwritten.
         Caps at 20 new links per session to avoid link explosion.
+        Same-project scoping enforced (SH-104211): candidates must share the
+        source session's project, mirroring _auto_link_embeddings's policy.
         """
         candidates = self.conn.execute(
             """SELECT sc2.session_id, COUNT(*) as shared_count
                FROM session_cooccurrences sc1
                JOIN session_cooccurrences sc2 ON sc1.term = sc2.term
+               JOIN sessions s1 ON sc1.session_id = s1.id
+               JOIN sessions s2 ON sc2.session_id = s2.id
                WHERE sc1.session_id = ?
                  AND sc2.session_id != ?
+                 AND s2.project IS s1.project
                GROUP BY sc2.session_id
                HAVING COUNT(*) >= ?
                ORDER BY shared_count DESC
@@ -2318,7 +2323,7 @@ class SessionDatabase:
         Embedding links are excluded for free-tier callers.
         Total results never exceed `limit` (Max 50).
         """
-        # Co-occurrence results (unchanged from v1)
+        # Co-occurrence results (same-project scoping enforced, SH-104211)
         cooc_rows = self.conn.execute(
             """SELECT sc2.session_id,
                       COUNT(*) as shared_count,
@@ -2328,9 +2333,11 @@ class SessionDatabase:
                       s.summary
                FROM session_cooccurrences sc1
                JOIN session_cooccurrences sc2 ON sc1.term = sc2.term
+               JOIN sessions s1 ON sc1.session_id = s1.id
                JOIN sessions s ON sc2.session_id = s.id
                WHERE sc1.session_id = ?
                  AND sc2.session_id != ?
+                 AND s.project IS s1.project
                  AND (s.source IS NULL OR s.source NOT IN ('periodic', 'file_memory'))
                GROUP BY sc2.session_id
                HAVING COUNT(*) >= ?
