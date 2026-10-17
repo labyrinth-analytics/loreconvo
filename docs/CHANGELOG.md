@@ -4,6 +4,19 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.10.18 (2026-10-16)
+
+### Security
+
+- Updated the MCP library (`mcp[cli]`) from 1.28.1 to 1.30.0 to fix
+  CVE-2026-59951. The startup compatibility check now expects 1.30.0, so
+  correctly updated installs no longer show a false version-mismatch warning.
+
+### Docs
+
+- INSTALL now points to the public plugin marketplace and lists the correct
+  tool count (40).
+
 ## v0.10.17 (2026-10-15)
 
 ### Improved: rebuild_index no longer blocks the server
