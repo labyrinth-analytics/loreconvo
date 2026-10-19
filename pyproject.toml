@@ -21,9 +21,15 @@ classifiers = [
 ]
 
 dependencies = [
-    "click==8.4.2",
-    "cryptography==50.0.1",
-    "packaging==26.0",
+    # Bounded ranges for deps shared with Hermes core (SH-104370).
+    # The Hermes memory provider installs loreconvo INTO Hermes's env, so
+    # exact pins on these packages break the catalog install every time
+    # Hermes bumps one. Floor = current tested pin; ceiling = next major.
+    # Per-dep `# allow-range` bypasses safe_git Step 0e for these only.
+    # Non-shared deps stay exact-pinned per the repo-wide rule.
+    "click>=8.4.2,<9",  # allow-range: click SH-104370
+    "cryptography>=50.0.1,<51",  # allow-range: cryptography SH-104370
+    "packaging>=26.0,<27",  # allow-range: packaging SH-104370
     # Semantic search moved from the [pro] extra to base on 2026-07-25
     # (spec amendment A1). fastembed runs BAAI/bge-small-en-v1.5 on
     # onnxruntime instead of torch: same 384-dim vectors, ~130MB instead
