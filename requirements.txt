@@ -1,9 +1,16 @@
-# LoreConvo v0.10.16 - Pinned direct dependencies
+# LoreConvo v0.10.18 - Pinned direct dependencies
 # Exact versions required for Anthropic marketplace compliance.
 # Mirrors pyproject.toml [project] dependencies and [project.optional-dependencies].
 # The MCP server stack (mcp[cli], starlette) is in the [server] extra -- see
 # the [server] section below. Base install is lean core (no mcp) for the Hermes
 # memory provider and other non-MCP embeds (SH-103398).
+#
+# POLICY (SH-104370): requirements.txt stays exact-pinned for reproducible
+# marketplace/user installs. pyproject.toml uses bounded ranges for the three
+# deps shared with Hermes core (click, cryptography, packaging) so that Hermes
+# catalog installs don't break on every Hermes dep bump. requirements.txt
+# anchors the tested floor; the ranges in pyproject.toml admit newer versions
+# up to the next major for Hermes compatibility.
 click==8.4.2
 cryptography==50.0.1
 packaging==26.0
