@@ -1,5 +1,7 @@
 # LoreConvo v0.10.18
 
+[![LoreConvo MCP server](https://mcprush.com/badge/loreconvo-mcp/card.svg)](https://mcprush.com/to/loreconvo-mcp?ref=badge)
+
 Your memory follows your identity, not your tool — with your consent.
 
 LoreConvo is the only AI memory that carries your context across Claude Code, Cowork, Codex, Cursor, and Hermes Agent. One install, one memory, everywhere you code.
