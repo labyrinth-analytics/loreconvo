@@ -4,6 +4,15 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## Unreleased
+
+### Fixed
+
+- Links created automatically from the LoreDocs side (for example, when a
+  LoreDocs document save links it to a related session) now appear in
+  `get_docs_for_session` and `graph_session_map`. Previously only links
+  created from the LoreConvo side were shown. (Pro, SH-104576)
+
 ## v0.10.18 (2026-10-16)
 
 ### Security
