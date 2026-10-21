@@ -205,7 +205,10 @@ def get_cross_product_links(
     limit: int = 5,
     is_pro: bool = False,
 ) -> Dict[str, Any]:
-    """Return cross-product links for a source entity.
+    """Return cross-product links for a source entity (bidirectional).
+
+    Matches links where the entity is the stored source OR target, so links
+    written by LoreDocs (cross_link_doc) are visible from the session side.
 
     Filters stale-model links (marks them is_stale=True, still returned so
     callers can surface an upgrade message). Manual links bypass model check.
@@ -228,20 +231,36 @@ def get_cross_product_links(
     with _connect_readonly(db_path) as conn:
         _verify_schema(conn)
         rows = conn.execute(
-            """SELECT target_product, target_id, similarity_score,
-                      embedding_model, embedding_dim, link_type, created_at
-               FROM cross_product_links
-               WHERE source_product = ? AND source_id = ?
+            """SELECT
+                 target_product, target_id, similarity_score,
+                 embedding_model, embedding_dim, link_type, created_at
+               FROM (
+                 SELECT target_product, target_id, similarity_score,
+                        embedding_model, embedding_dim, link_type, created_at
+                 FROM cross_product_links
+                 WHERE source_product = ? AND source_id = ?
+                 UNION ALL
+                 SELECT source_product AS target_product, source_id AS target_id,
+                        similarity_score, embedding_model, embedding_dim, link_type, created_at
+                 FROM cross_product_links
+                 WHERE target_product = ? AND target_id = ?
+               ) AS combined
                ORDER BY
                  CASE link_type WHEN 'manual' THEN 0 ELSE 1 END,
                  CASE WHEN embedding_model = ? THEN 0 ELSE 1 END,
                  similarity_score DESC
                LIMIT ?""",
-            (source_product, source_id, current_embedding_model, limit),
+            (source_product, source_id, source_product, source_id,
+             current_embedding_model, limit),
         ).fetchall()
 
+    seen: set = set()
     links: List[Dict[str, Any]] = []
     for row in rows:
+        link_key = (row["target_product"], row["target_id"])
+        if link_key in seen:
+            continue
+        seen.add(link_key)
         is_stale = (
             row["link_type"] != "manual"
             and row["embedding_model"] != current_embedding_model
