@@ -280,7 +280,12 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
     # -- Tools ----------------------------------------------------------------
 
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
-        return [
+        # Filter hand-written tools by enabled tool-group membership.
+        # Resolves the same config the MCP server uses (env var > config.json
+        # > all on) and omits any tool whose group is disabled.
+        enabled_groups = self._resolve_enabled_groups()
+
+        all_schemas = [
             {
                 "name": "loreconvo_search_sessions",
                 "description": (
@@ -308,6 +313,7 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
                     },
                     "required": ["query"],
                 },
+                "_tool_group": "core",
             },
             {
                 "name": "loreconvo_get_context",
@@ -332,6 +338,7 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
                     },
                     "required": ["topic"],
                 },
+                "_tool_group": "core",
             },
             {
                 "name": "loreconvo_save_memory",
@@ -363,8 +370,38 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
                     },
                     "required": ["title", "content"],
                 },
+                "_tool_group": "memory",
             },
         ]
+
+        # Strip the internal _tool_group key and filter by enabled groups.
+        result = []
+        for schema in all_schemas:
+            group = schema.pop("_tool_group", None)
+            if group is None or group in enabled_groups:
+                result.append(schema)
+        return result
+
+    def _resolve_enabled_groups(self) -> set:
+        """Resolve enabled tool groups the same way the MCP server does.
+
+        Cached once at first call (matching the existing pattern where
+        Hermes holds a long-lived SessionDatabase handle).
+        """
+        if hasattr(self, "_cached_enabled_groups"):
+            return self._cached_enabled_groups
+
+        try:
+            tool_groups_mod = _import_loreconvo("tool_groups")
+            config_dir = Path.home() / ".loreconvo"
+            config_path = config_dir / "config.json"
+            groups = tool_groups_mod.resolve_enabled_groups(config_path)
+        except Exception:
+            # If anything fails, default to all-on (safe fallback).
+            groups = {"core", "memory", "graph", "agents", "admin"}
+
+        self._cached_enabled_groups = groups
+        return groups
 
     def handle_tool_call(self, tool_name: str, args: Dict[str, Any], **kwargs: Any) -> str:
         if not self._initialized or not self._db:

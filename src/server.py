@@ -44,7 +44,13 @@ from core.loredocs_bridge import (
     get_cross_product_links,
     link_session_to_doc,
 )
-from core.config import Config, set_tier as _set_tier_config
+from core.config import Config, set_tier as _set_tier_config, save_tool_groups as _save_tool_groups
+from core.tool_groups import (
+    TOOL_GROUPS as _TOOL_GROUPS,
+    ALWAYS_ON as _ALWAYS_ON,
+    classify_tool as _classify_tool,
+    resolve_enabled_groups as _resolve_enabled_groups,
+)
 from core.license import get_license_status, LORECONVO_UPGRADE_URL
 from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onboard_config_path
 from core.timeutil import parse_iso_utc
@@ -2019,6 +2025,105 @@ def update_memory_item(
     )
 
 
+@mcp.tool(title="Configure Tool Groups")
+async def configure_tools(groups: list[str] | None = None) -> str:
+    """List or set enabled MCP tool groups.
+
+    Called with no arguments: lists every group name, its tool count, and
+    whether it is currently enabled.
+
+    Called with a list of group names: validates and persists the selection
+    to config.json.  The change takes effect on server restart -- already-
+    connected clients may continue to see removed tools in their cached schema
+    until they reconnect, and calls to a removed tool after restart return a
+    standard 'unknown tool' protocol error.
+
+    If the LORECONVO_TOOL_GROUPS environment variable is set, this tool
+    returns an error instead of writing (the env var overrides config).
+    """
+    import os
+
+    env_var = os.environ.get("LORECONVO_TOOL_GROUPS")
+    if env_var is not None:
+        return json.dumps({
+            "error": (
+                "LORECONVO_TOOL_GROUPS env var is set and overrides config. "
+                "Unset it and restart to use configure_tools."
+            ),
+        })
+
+    config = Config()
+    config_path = config.config_path
+
+    if groups is None:
+        # List mode
+        enabled = _resolve_enabled_groups(config_path)
+        group_info = []
+        for gname in sorted(_TOOL_GROUPS.keys()):
+            group_info.append({
+                "group": gname,
+                "tool_count": len(_TOOL_GROUPS[gname]),
+                "enabled": gname in enabled,
+            })
+        return json.dumps({
+            "groups": group_info,
+            "always_on": sorted(_ALWAYS_ON),
+            "note": (
+                "Changes take effect on server restart. Set groups to a list "
+                "of group names to enable. 'core' is always enabled."
+            ),
+        }, indent=2)
+
+    # Write mode
+    try:
+        db_dir = Path(config.db_path).parent
+        _save_tool_groups(db_dir, groups)
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+    except TimeoutError as exc:
+        return json.dumps({"error": str(exc)})
+
+    return json.dumps({
+        "status": "saved",
+        "groups": groups,
+        "note": (
+            "Restart the MCP server for the change to take effect. "
+            "Already-connected clients may see stale tool schemas until "
+            "they reconnect."
+        ),
+    })
+
+
+def _apply_tool_group_gating() -> None:
+    """Remove tools whose group is not in the enabled set.
+
+    Runs at server startup after all @mcp.tool decorators have registered.
+    Tools in ALWAYS_ON are never removed.  A tool with no group assignment
+    raises KeyError and fails startup (fail-closed).
+    """
+    config = Config()
+    enabled = _resolve_enabled_groups(config.config_path)
+
+    import asyncio
+    live_tools = asyncio.run(mcp.list_tools())
+    live_names = {t.name for t in live_tools}
+
+    removed = []
+    for name in sorted(live_names):
+        if name in _ALWAYS_ON:
+            continue
+        group = _classify_tool(name)  # raises if no assignment
+        if group not in enabled:
+            mcp.remove_tool(name)
+            removed.append(name)
+
+    if removed:
+        logger.info(
+            "Tool group gating: removed %d tools (enabled groups: %s)",
+            len(removed), sorted(enabled),
+        )
+
+
 def main():
     """Entry point for uvx / console script execution."""
     import argparse
@@ -2039,6 +2144,9 @@ def main():
 
     _compat_emit(_compat_check())
     _check_egg_info_conflict()
+
+    # Apply tool group gating before starting the server.
+    _apply_tool_group_gating()
 
     # Startup guard: warn if Lance index coverage is critically low (SH-103940).
     # This catches the silent degradation that left 85% of sessions unindexed
