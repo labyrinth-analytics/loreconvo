@@ -1,13 +1,28 @@
 # LoreConvo Changelog
 
-## Unreleased
+## v0.10.19 (2026-10-23)
+
+### Security
+
+- SH-104211: `_auto_link_cooccurrences` and the `get_related_sessions`
+  `cooc_rows` query joined `session_cooccurrences` on shared term with no
+  project filter, unlike `_auto_link_embeddings`. Both now join `sessions`
+  on both sides and require `s2.project IS s1.project` (NULL-safe). Existing
+  cross-project `auto:cooccurrence` rows in `session_links` are NOT migrated
+  or deleted.
 
 ### Fixed
 
-- Links created automatically from the LoreDocs side (for example, when a
-  LoreDocs document save links it to a related session) now appear in
-  `get_docs_for_session` and `graph_session_map`. Previously only links
-  created from the LoreConvo side were shown. (Pro, SH-104576)
+- SH-104576 / SH-104634: bridge cross-product link query is now
+  bidirectional (links created from the LoreDocs side were not returned).
+
+### Changed
+
+- SH-104370: `click`, `cryptography`, `packaging` moved from exact pins to
+  bounded ranges (`>=floor,<next-major`) in `pyproject.toml` with per-dep
+  `# allow-range` markers. `requirements.txt` stays exact-pinned. Reason: the
+  Hermes memory provider installs loreconvo into Hermes's environment, so
+  exact pins on shared packages broke catalog installs on every Hermes bump.
 
 ## v0.10.18 (2026-10-16)
 

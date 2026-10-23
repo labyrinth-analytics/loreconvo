@@ -1,9 +1,9 @@
 [project]
 name = "hermes-plugin-loreconvo"
-version = "0.10.18"
+version = "0.10.19"
 description = "Hermes memory provider plugin for LoreConvo — cross-surface persistent session memory with search, recall, and structured memory items."
 dependencies = [
-    "loreconvo==0.10.18",
+    "loreconvo==0.10.19",
 ]
 
 [tool.uv.exclude-newer-package]

@@ -1,4 +1,4 @@
-# LoreConvo v0.10.18
+# LoreConvo v0.10.19
 
 [![LoreConvo MCP server](https://mcprush.com/badge/loreconvo-mcp/card.svg)](https://mcprush.com/to/loreconvo-mcp?ref=badge)
 
@@ -417,18 +417,28 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.18 (2026-10-16)
+## v0.10.19 (2026-10-23)
 
-### Security
+### Fixed
 
-- Updated the MCP library (`mcp[cli]`) from 1.28.1 to 1.30.0 to fix
-  CVE-2026-59951. The startup compatibility check now expects 1.30.0, so
-  correctly updated installs no longer show a false version-mismatch warning.
+- Related-session suggestions and automatic links no longer connect sessions
+  from different projects. Before this fix, two sessions in different projects
+  that happened to share several keywords could be linked, which exposed that
+  a session existed and what it was about across projects (for example,
+  separate client engagements). `get_related_sessions` (Pro) and the
+  knowledge-graph export now only relate sessions within the same project.
+  Automatic links already created before this update are not removed.
+- Links created automatically from the LoreDocs side (for example, when a
+  LoreDocs document save links it to a related session) now appear in
+  `get_docs_for_session` and `graph_session_map`. Previously only links
+  created from the LoreConvo side were shown. (Pro)
 
-### Docs
+### Improved
 
-- INSTALL now points to the public plugin marketplace and lists the correct
-  tool count (40).
+- Installing LoreConvo as a Hermes memory provider no longer breaks when
+  Hermes updates `click`, `cryptography` or `packaging`. These three
+  dependencies now accept newer compatible versions instead of one exact
+  version.
 
 <!-- WHATS_NEW:END -->
 
