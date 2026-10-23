@@ -4,14 +4,28 @@ What changed in each release, written for users (not developers).
 
 ---
 
-## Unreleased
+## v0.10.19 (2026-10-23)
 
 ### Fixed
 
+- Related-session suggestions and automatic links no longer connect sessions
+  from different projects. Before this fix, two sessions in different projects
+  that happened to share several keywords could be linked, which exposed that
+  a session existed and what it was about across projects (for example,
+  separate client engagements). `get_related_sessions` (Pro) and the
+  knowledge-graph export now only relate sessions within the same project.
+  Automatic links already created before this update are not removed.
 - Links created automatically from the LoreDocs side (for example, when a
   LoreDocs document save links it to a related session) now appear in
   `get_docs_for_session` and `graph_session_map`. Previously only links
-  created from the LoreConvo side were shown. (Pro, SH-104576)
+  created from the LoreConvo side were shown. (Pro)
+
+### Improved
+
+- Installing LoreConvo as a Hermes memory provider no longer breaks when
+  Hermes updates `click`, `cryptography` or `packaging`. These three
+  dependencies now accept newer compatible versions instead of one exact
+  version.
 
 ## v0.10.18 (2026-10-16)
 
