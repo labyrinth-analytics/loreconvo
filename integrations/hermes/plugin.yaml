@@ -8,3 +8,7 @@ requires_env:
     description: "Default project name for LoreConvo sessions created by Hermes"
     required: false
     default: "hermes"
+  - name: LORECONVO_PRO
+    description: "Pro license key (LAB-... format).  Activate Pro tier for Hermes-native access to Pro-only tools (semantic search, export, etc.)."
+    required: false
+    default: ""
