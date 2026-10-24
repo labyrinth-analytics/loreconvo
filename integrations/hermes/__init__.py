@@ -20,6 +20,24 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Tool names where the generic DB-dispatch fallback would miss because the
+# Hermes tool name differs from the SessionDatabase method name. Each target
+# method is a pure pass-through used by the matching MCP tool in server.py
+# (SH-104903/SH-104905).
+TOOL_NAME_ALIASES: Dict[str, str] = {
+    "consolidate_memories": "consolidate_memories_payload",
+    "graph_session_map": "build_graph_map_payload",
+    "vault_suggest": "get_suggestions",
+    "import_sessions": "import_export_file",
+    "rebuild_index": "rebuild_lance_index",
+}
+
+# Tools with no Hermes-native dispatch path. Disclosed, not silent: the
+# business logic lives only in server.py (async config writes, multi-branch
+# fan-out search with trust-framing) and duplicating it here would be a
+# single-source-of-truth violation. Available via MCP/CLI. (SH-104903)
+MCP_ONLY_TOOLS = {"inject_agent_context", "configure_tools"}
+
 # -- LoreConvo imports (pip-installed package or source-tree fallback) --------
 
 def _import_loreconvo(module: str):
@@ -361,6 +379,12 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
         if is_pro_tool(tool_name) and not self._resolve_license():
             return upgrade_message()
 
+        if tool_name in MCP_ONLY_TOOLS:
+            return json.dumps({
+                "error": f"Tool '{tool_name}' is not implemented in Hermes-native dispatch.",
+                "note": "Available via the LoreConvo MCP server or CLI. Scope documented in SH-104903/SH-104905.",
+            })
+
         # Build dispatch table from both hand-coded handlers and generic DB dispatchers.
         handlers: Dict[str, Any] = {
             "search_sessions": self._handle_search,
@@ -379,6 +403,15 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
             "set_session_expiry": self._handle_set_expiry,
             "tag_session": self._handle_tag_session,
             "inspect_sessions": self._handle_inspect_sessions,
+            "get_dream_log": self._handle_dream_log,
+            "loreconvo_onboard": self._handle_onboard,
+            "vault_set_tier": self._handle_set_tier,
+            "export_sessions": self._handle_export_sessions,
+            "export_for_anthropic": self._handle_export_for_anthropic,
+            "get_docs_for_session": self._handle_get_docs_for_session,
+            "session_link_doc": self._handle_session_link_doc,
+            "tag_as_anti_pattern": self._handle_tag_anti_pattern,
+            "untag_anti_pattern": self._handle_untag_anti_pattern,
         }
 
         handler = handlers.get(tool_name)
@@ -389,9 +422,12 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
                 logger.debug("LoreConvo tool %s failed: %s", tool_name, exc)
                 return json.dumps({"error": str(exc)})
 
-        # Generic DB-dispatch fallback: tool name matches a SessionDatabase method.
+        # Generic DB-dispatch fallback: tool name matches a SessionDatabase
+        # method, resolving through TOOL_NAME_ALIASES when the Hermes tool
+        # name differs from the method name.
+        db_method_name = TOOL_NAME_ALIASES.get(tool_name, tool_name)
         try:
-            db_method = getattr(self._db, tool_name, None)
+            db_method = getattr(self._db, db_method_name, None)
             if callable(db_method):
                 result = db_method(**args)
                 return json.dumps(result, default=str)
@@ -651,6 +687,147 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
             return json.dumps(result, default=str)
         except Exception as exc:
             return json.dumps({"error": str(exc)})
+
+    def _handle_dream_log(self, args: Dict[str, Any]) -> str:
+        project = args.get("project")
+        surface = args.get("surface")
+        limit = int(args.get("limit", 10))
+        entries, digest = self._db.get_dream_log_entries(
+            project=project, surface=surface, limit=limit
+        )
+        return json.dumps({
+            "status": "ok", "project": project, "surface": surface,
+            "entries": entries, "digest_status": digest,
+        }, default=str)
+
+    def _handle_onboard(self, args: Dict[str, Any]) -> str:
+        tag_style = args.get("tag_style", "simple")
+        if tag_style not in ("simple", "detailed"):
+            return json.dumps({"error": "tag_style must be 'simple' or 'detailed'"})
+        run_onboard = _import_loreconvo("onboard_tool").run_onboard
+        result = run_onboard(
+            self._db, name=args.get("name"), projects=args.get("projects"),
+            agents=args.get("agents"), tag_style=tag_style,
+        )
+        return json.dumps(result, default=str)
+
+    def _handle_set_tier(self, args: Dict[str, Any]) -> str:
+        params = args.get("params") or {}
+        tier = params.get("tier", "")
+        if tier not in ("free", "pro"):
+            return json.dumps({"error": "tier must be 'free' or 'pro'"})
+        if tier == "pro" and not self._resolve_license():
+            return json.dumps({
+                "error": "No valid Pro license key found. Set LORECONVO_PRO=<key> and restart.",
+            })
+        set_tier = _import_loreconvo("config").set_tier
+        db_dir = Path(self._db.config.db_path).parent
+        try:
+            set_tier(db_dir, tier)
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)})
+        return json.dumps({"status": "ok", "tier": tier})
+
+    def _handle_export_sessions(self, args: Dict[str, Any]) -> str:
+        if args.get("output_path"):
+            return json.dumps({
+                "error": "output_path file-write is not supported via Hermes dispatch.",
+                "note": "Omit output_path for inline data, or use the MCP server/CLI for file export.",
+                "status": "unsupported_in_hermes",
+            })
+        payload = self._db.export_payload(
+            project=args.get("project"), tags=args.get("tags"),
+            days_back=args.get("days_back"), limit=int(args.get("limit", 1000)),
+            fmt=args.get("format", "json"),
+        )
+        return json.dumps({
+            "status": "exported", "session_count": payload["session_count"],
+            "format": args.get("format", "json"), "data": payload["data"],
+        })
+
+    def _handle_export_for_anthropic(self, args: Dict[str, Any]) -> str:
+        if args.get("output_path"):
+            return json.dumps({
+                "error": "output_path file-write is not supported via Hermes dispatch.",
+                "note": "Omit output_path for inline data, or use the MCP server/CLI for file export.",
+                "status": "unsupported_in_hermes",
+            })
+        payload = self._db.anthropic_export_payload(
+            project=args.get("project"), session_ids=args.get("session_ids"),
+            days_back=args.get("days_back"),
+        )
+        if "error" in payload:
+            return json.dumps({"error": payload["error"]})
+        return json.dumps({
+            "status": "exported", "format": "anthropic-memory-v1",
+            "entry_count": payload["entry_count"], "data": payload["data"],
+        })
+
+    def _handle_get_docs_for_session(self, args: Dict[str, Any]) -> str:
+        bridge = _import_loreconvo("loredocs_bridge")
+        try:
+            ld_db = bridge.discover_loredocs_db()
+        except bridge.LoreDocsAccessError as exc:
+            return json.dumps({
+                "schema_version": 0, "cross_product_available": False,
+                "reason": f"LoreDocs installed but unreachable: {exc}", "links": [],
+            })
+        if ld_db is None:
+            return json.dumps({
+                "schema_version": 0, "cross_product_available": False,
+                "reason": "LoreDocs not installed", "links": [],
+            })
+        try:
+            result = bridge.get_cross_product_links(
+                ld_db, source_product="loreconvo", source_id=args.get("session_id", ""),
+                current_embedding_model=bridge.CROSS_LINK_EMBEDDING_MODEL,
+                limit=int(args.get("limit", 5)), is_pro=self._resolve_license(),
+            )
+            return json.dumps(result, default=str)
+        except bridge.LoreDocsSchemaError as exc:
+            return json.dumps({
+                "schema_version": 0, "cross_product_available": False,
+                "reason": f"LoreDocs schema too old: {exc}", "links": [],
+            })
+
+    def _handle_session_link_doc(self, args: Dict[str, Any]) -> str:
+        bridge = _import_loreconvo("loredocs_bridge")
+        try:
+            ld_db = bridge.discover_loredocs_db()
+        except bridge.LoreDocsAccessError as exc:
+            return json.dumps({"ok": False, "reason": f"LoreDocs installed but unreachable: {exc}"})
+        if ld_db is None:
+            return json.dumps({"ok": False, "reason": "LoreDocs not installed"})
+        try:
+            result = bridge.link_session_to_doc(
+                ld_db, session_id=args.get("session_id", ""), doc_id=args.get("doc_id", ""),
+                vault_id=args.get("vault_id", ""), link_type="manual", is_pro=self._resolve_license(),
+            )
+            return json.dumps(result, default=str)
+        except bridge.LoreDocsSchemaError as exc:
+            return json.dumps({"ok": False, "reason": f"LoreDocs schema too old: {exc}"})
+
+    def _handle_tag_anti_pattern(self, args: Dict[str, Any]) -> str:
+        session_id = args.get("session_id", "")
+        try:
+            result = self._db.mark_anti_pattern(
+                session_id, source=args.get("source", "unknown"), reason=args.get("reason", "")
+            )
+            return json.dumps({"status": result, "session_id": session_id})
+        except (ValueError, LookupError) as exc:
+            return json.dumps({"status": "error", "error": str(exc)})
+        except RuntimeError as exc:
+            return json.dumps({"status": "error", "error": str(exc), "error_code": "rate_limit_exceeded"})
+
+    def _handle_untag_anti_pattern(self, args: Dict[str, Any]) -> str:
+        session_id = args.get("session_id", "")
+        try:
+            result = self._db.remove_anti_pattern(
+                session_id, source=args.get("source", "unknown"), reason=args.get("reason", "")
+            )
+            return json.dumps({"status": result, "session_id": session_id})
+        except ValueError as exc:
+            return json.dumps({"status": "error", "error": str(exc)})
 
     # -- Helpers --------------------------------------------------------------
 
