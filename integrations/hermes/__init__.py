@@ -277,110 +277,55 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
         t = threading.Thread(target=_save, daemon=True)
         t.start()
 
+    # -- License ---------------------------------------------------------------
+
+    def _resolve_license(self) -> bool:
+        """Return True if a valid Pro license is present.
+
+        Checks LORECONVO_PRO env var (set in plugin.yaml requires_env or by the
+        user), then the durable license store on disk.  Cached once per process.
+        """
+        if hasattr(self, "_cached_is_pro"):
+            return self._cached_is_pro
+
+        is_pro = False
+        try:
+            key = os.environ.get("LORECONVO_PRO")
+            if not key:
+                try:
+                    license_store = _import_loreconvo("license_store")
+                    key = license_store.read_key("loreconvo")
+                except Exception:
+                    pass
+            if key:
+                license_mod = _import_loreconvo("license")
+                try:
+                    license_mod.validate_license_key(key)
+                    is_pro = True
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        self._cached_is_pro = is_pro
+        return is_pro
+
     # -- Tools ----------------------------------------------------------------
 
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
-        # Filter hand-written tools by enabled tool-group membership.
-        # Resolves the same config the MCP server uses (env var > config.json
-        # > all on) and omits any tool whose group is disabled.
+        """Return Hermes-format tool schemas derived from the MCP server registry.
+
+        Loads from the build-time-generated hermes_tool_schemas.json, filtered
+        by the shared tool-group config.  Schemas are derived, not hand-written.
+        """
         enabled_groups = self._resolve_enabled_groups()
 
-        all_schemas = [
-            {
-                "name": "loreconvo_search_sessions",
-                "description": (
-                    "Search past LoreConvo sessions by keyword. "
-                    "Returns matching sessions with titles, dates, and summaries."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Search query — keywords to find in session titles and summaries",
-                        },
-                        "project": {
-                            "type": "string",
-                            "description": f"Filter by project (default: {self._project})",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum results (default: 10, max: 25)",
-                            "default": 10,
-                            "minimum": 1,
-                            "maximum": 25,
-                        },
-                    },
-                    "required": ["query"],
-                },
-                "_tool_group": "core",
-            },
-            {
-                "name": "loreconvo_get_context",
-                "description": (
-                    "Get relevant past sessions for a topic. "
-                    "Returns matching sessions with summaries and decisions."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "topic": {
-                            "type": "string",
-                            "description": "The topic or question to find context for",
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum results (default: 5, max: 15)",
-                            "default": 5,
-                            "minimum": 1,
-                            "maximum": 15,
-                        },
-                    },
-                    "required": ["topic"],
-                },
-                "_tool_group": "core",
-            },
-            {
-                "name": "loreconvo_save_memory",
-                "description": (
-                    "Save a structured memory item — a decision, question, artifact, or note — "
-                    "to LoreConvo for future recall."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "title": {
-                            "type": "string",
-                            "description": "Short title for this memory item",
-                        },
-                        "content": {
-                            "type": "string",
-                            "description": "Full content of the memory item",
-                        },
-                        "item_type": {
-                            "type": "string",
-                            "enum": ["decision", "open_question", "artifact"],
-                            "description": "Type of memory item",
-                        },
-                        "tags": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Tags for categorization (e.g. [\"architecture\", \"p0\"])",
-                        },
-                    },
-                    "required": ["title", "content"],
-                },
-                "_tool_group": "memory",
-            },
-        ]
-
-        # Strip the internal _tool_group key and filter by enabled groups.
-        result = []
-        for schema in all_schemas:
-            group = schema.pop("_tool_group", None)
-            if group is None or group in enabled_groups:
-                result.append(schema)
-        return result
+        try:
+            from loreconvo.core.hermes_tool_loader import load_schemas_for_groups
+            return load_schemas_for_groups(enabled_groups)
+        except ImportError:
+            logger.warning("hermes_tool_loader not available -- falling back to empty schema list")
+            return []
 
     def _resolve_enabled_groups(self) -> set:
         """Resolve enabled tool groups the same way the MCP server does.
@@ -397,7 +342,6 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
             config_path = config_dir / "config.json"
             groups = tool_groups_mod.resolve_enabled_groups(config_path)
         except Exception:
-            # If anything fails, default to all-on (safe fallback).
             groups = {"core", "memory", "graph", "agents", "admin"}
 
         self._cached_enabled_groups = groups
@@ -407,20 +351,58 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
         if not self._initialized or not self._db:
             return json.dumps({"error": "LoreConvo is not available"})
 
-        handlers = {
-            "loreconvo_search_sessions": self._handle_search,
-            "loreconvo_get_context": self._handle_context,
-            "loreconvo_save_memory": self._handle_save_memory,
-        }
-        handler = handlers.get(tool_name)
-        if handler is None:
-            return json.dumps({"error": f"Unknown tool: {tool_name}"})
-
+        # Pro gating (matches MCP server behavior).
         try:
-            return handler(args)
+            from loreconvo.core.hermes_tool_loader import is_pro_tool, upgrade_message
+        except ImportError:
+            is_pro_tool = lambda n: False  # type: ignore
+            upgrade_message = lambda: json.dumps({"error": "Pro check unavailable"})  # type: ignore
+
+        if is_pro_tool(tool_name) and not self._resolve_license():
+            return upgrade_message()
+
+        # Build dispatch table from both hand-coded handlers and generic DB dispatchers.
+        handlers: Dict[str, Any] = {
+            "search_sessions": self._handle_search,
+            "get_context_for": self._handle_context,
+            "save_memory_item": self._handle_save_memory,
+            "save_session": self._handle_save_session,
+            "get_recent_sessions": self._handle_recent_sessions,
+            "get_session": self._handle_get_session,
+            "get_project": self._handle_get_project,
+            "list_projects": self._handle_list_projects,
+            "get_stats": self._handle_stats,
+            "get_tier": self._handle_tier,
+            "get_server_info": self._handle_server_info,
+            "get_memory_digest": self._handle_memory_digest,
+            "pin_session": self._handle_pin_session,
+            "set_session_expiry": self._handle_set_expiry,
+            "tag_session": self._handle_tag_session,
+            "inspect_sessions": self._handle_inspect_sessions,
+        }
+
+        handler = handlers.get(tool_name)
+        if handler is not None:
+            try:
+                return handler(args)
+            except Exception as exc:
+                logger.debug("LoreConvo tool %s failed: %s", tool_name, exc)
+                return json.dumps({"error": str(exc)})
+
+        # Generic DB-dispatch fallback: tool name matches a SessionDatabase method.
+        try:
+            db_method = getattr(self._db, tool_name, None)
+            if callable(db_method):
+                result = db_method(**args)
+                return json.dumps(result, default=str)
         except Exception as exc:
-            logger.debug("LoreConvo tool %s failed: %s", tool_name, exc)
+            logger.debug("LoreConvo tool %s dispatch failed: %s", tool_name, exc)
             return json.dumps({"error": str(exc)})
+
+        return json.dumps({
+            "error": f"Hermes-native handler not yet implemented for {tool_name}.",
+            "note": "This tool is available via MCP. Hermes parity build is in progress (SH-103849).",
+        })
 
     def _handle_search(self, args: Dict[str, Any]) -> str:
         query = args.get("query", "")
@@ -526,6 +508,149 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
             "title": title,
             "item_type": item_type,
         })
+
+    # -- Additional Hermes tool handlers ---------------------------------------
+
+    def _handle_save_session(self, args: Dict[str, Any]) -> str:
+        """Handle save_session tool call."""
+        title = args.get("title", "")
+        summary = args.get("summary", "")
+        project = args.get("project") or self._project
+        surface = args.get("surface", "code")
+        tags = args.get("tags", [])
+        try:
+            Session = _import_loreconvo("models").Session
+            now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            session = Session(
+                title=title, surface=surface, project=project,
+                start_date=now, end_date=now, summary=summary,
+                tags=tags + ["hermes"], source="hermes",
+            )
+            self._db.save_session(session)
+            return json.dumps({"saved": True, "title": title})
+        except Exception as exc:
+            return json.dumps({"error": str(exc)})
+
+    def _handle_recent_sessions(self, args: Dict[str, Any]) -> str:
+        project = args.get("project") or self._project
+        limit = min(int(args.get("limit", 10)), 25)
+        surface = args.get("surface")
+        results = self._db.get_recent_sessions(project=project, limit=limit, surface=surface)
+        sessions = []
+        for s in results:
+            sessions.append({
+                "id": getattr(s, "id", ""),
+                "title": getattr(s, "title", ""),
+                "date": getattr(s, "start_date", ""),
+                "surface": getattr(s, "surface", ""),
+                "summary": (getattr(s, "summary", "") or "")[:300],
+                "tags": getattr(s, "tags", []),
+            })
+        return json.dumps({"project": project, "count": len(sessions), "sessions": sessions})
+
+    def _handle_get_session(self, args: Dict[str, Any]) -> str:
+        session_id = args.get("session_id", "")
+        if not session_id:
+            return json.dumps({"error": "session_id is required"})
+        s = self._db.get_session(session_id)
+        if s is None:
+            return json.dumps({"found": False, "session_id": session_id})
+        return json.dumps({
+            "found": True,
+            "id": getattr(s, "id", ""),
+            "title": getattr(s, "title", ""),
+            "date": getattr(s, "start_date", ""),
+            "surface": getattr(s, "surface", ""),
+            "summary": (getattr(s, "summary", "") or "")[:500],
+            "decisions": getattr(s, "decisions", []),
+            "tags": getattr(s, "tags", []),
+            "project": getattr(s, "project", ""),
+        })
+
+    def _handle_get_project(self, args: Dict[str, Any]) -> str:
+        project = args.get("project") or self._project
+        result = self._db.get_project(project)
+        return json.dumps(result, default=str)
+
+    def _handle_list_projects(self, args: Dict[str, Any]) -> str:
+        result = self._db.list_projects()
+        return json.dumps(result, default=str)
+
+    def _handle_stats(self, args: Dict[str, Any]) -> str:
+        try:
+            status = self._db.get_stats()
+            return json.dumps(status, default=str)
+        except Exception as exc:
+            return json.dumps({"error": str(exc)})
+
+    def _handle_tier(self, args: Dict[str, Any]) -> str:
+        is_pro = self._resolve_license()
+        return json.dumps({
+            "product": "loreconvo",
+            "tier": "pro" if is_pro else "free",
+            "is_pro": is_pro,
+        })
+
+    def _handle_server_info(self, args: Dict[str, Any]) -> str:
+        import importlib.metadata
+        try:
+            version = importlib.metadata.version("loreconvo")
+        except Exception:
+            version = "unknown"
+        return json.dumps({
+            "product": "loreconvo",
+            "version": version,
+            "protocol": "mcp",
+            "hermes_mode": True,
+        })
+
+    def _handle_memory_digest(self, args: Dict[str, Any]) -> str:
+        project = args.get("project") or self._project
+        try:
+            digest = self._db.get_memory_digest(project=project)
+            return json.dumps(digest, default=str)
+        except Exception as exc:
+            return json.dumps({"error": str(exc)})
+
+    def _handle_pin_session(self, args: Dict[str, Any]) -> str:
+        session_id = args.get("session_id", "")
+        keep_forever = bool(args.get("keep_forever", True))
+        if not session_id:
+            return json.dumps({"error": "session_id is required"})
+        try:
+            self._db.set_session_pin(session_id, keep_forever=keep_forever)
+            return json.dumps({"pinned": keep_forever, "session_id": session_id})
+        except Exception as exc:
+            return json.dumps({"error": str(exc)})
+
+    def _handle_set_expiry(self, args: Dict[str, Any]) -> str:
+        session_id = args.get("session_id", "")
+        expires_at = args.get("expires_at")
+        if not session_id:
+            return json.dumps({"error": "session_id is required"})
+        try:
+            self._db.set_session_expiry(session_id, expires_at)
+            return json.dumps({"ok": True, "session_id": session_id, "expires_at": expires_at})
+        except Exception as exc:
+            return json.dumps({"error": str(exc)})
+
+    def _handle_tag_session(self, args: Dict[str, Any]) -> str:
+        session_id = args.get("session_id", "")
+        tag = args.get("tag", "")
+        if not session_id or not tag:
+            return json.dumps({"error": "session_id and tag are required"})
+        try:
+            self._db.tag_session(session_id, tag)
+            return json.dumps({"ok": True, "session_id": session_id, "tag": tag})
+        except Exception as exc:
+            return json.dumps({"error": str(exc)})
+
+    def _handle_inspect_sessions(self, args: Dict[str, Any]) -> str:
+        try:
+            result = self._db.inspect_sessions(**args)
+            return json.dumps(result, default=str)
+        except Exception as exc:
+            return json.dumps({"error": str(exc)})
 
     # -- Helpers --------------------------------------------------------------
 
