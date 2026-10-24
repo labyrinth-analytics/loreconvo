@@ -7,13 +7,13 @@
     "url": "https://github.com/labyrinth-analytics/loreconvo",
     "source": "github"
   },
-  "version": "0.10.12",
+  "version": "0.10.19",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "loreconvo",
-      "version": "0.10.12",
+      "version": "0.10.19",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
