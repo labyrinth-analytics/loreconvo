@@ -30,6 +30,7 @@ TOOL_NAME_ALIASES: Dict[str, str] = {
     "vault_suggest": "get_suggestions",
     "import_sessions": "import_export_file",
     "rebuild_index": "rebuild_lance_index",
+    "get_related_sessions": "related_sessions_payload",
 }
 
 # Tools with no Hermes-native dispatch path. Disclosed, not silent: the
