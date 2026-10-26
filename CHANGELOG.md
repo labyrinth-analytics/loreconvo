@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Security
+
+- SH-104737 (2026-10-25): startup migration removes existing `auto:cooccurrence`
+  `session_links` rows that join sessions with different `project` values.
+  SH-104211 (v0.10.19) stopped new cross-project cooccurrence links from being
+  created but did not touch rows already written by the old code, so the
+  original cross-project exposure remained for existing databases. Manual
+  links and `auto:embedding` links are not affected. Idempotent; runs
+  automatically on next startup, no action required.
+
 ### Changed
 
 - SH-105079 (2026-10-25): `save_session(summarize=True)` and the post-turn
