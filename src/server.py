@@ -44,7 +44,12 @@ from core.loredocs_bridge import (
     get_cross_product_links,
     link_session_to_doc,
 )
-from core.config import Config, set_tier as _set_tier_config, save_tool_groups as _save_tool_groups
+from core.config import (
+    Config,
+    get_summarizer_api_key,
+    set_tier as _set_tier_config,
+    save_tool_groups as _save_tool_groups,
+)
 from core.tool_groups import (
     TOOL_GROUPS as _TOOL_GROUPS,
     ALWAYS_ON as _ALWAYS_ON,
@@ -146,7 +151,7 @@ mcp = FastMCP(
 
 def _compress_summary(raw_summary: str) -> str:
     """Compress raw_summary via Claude API. Returns raw on any failure (no key, import error, API error)."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = get_summarizer_api_key()
     if not api_key:
         return raw_summary
     try:
@@ -245,7 +250,7 @@ def save_session(
         reasoning_notes: Optional free-form text capturing the reasoning chain
             or thought process behind decisions. Blank or None leaves the
             field empty. Capped at 15000 chars.
-        summarize: If True and ANTHROPIC_API_KEY is set, send the summary to
+        summarize: If True and LORECONVO_ANTHROPIC_API_KEY is set, send the summary to
             Claude API (Haiku) for compression before saving. Opt-in only;
             defaults to False. Falls back to the raw summary on any API error
             or if the key is absent. See INSTALL.md Privacy Note.

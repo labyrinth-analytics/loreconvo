@@ -87,7 +87,11 @@ def _get_db_path() -> str:
 
 def _get_api_key() -> str:
     """Return LORECONVO_ANTHROPIC_API_KEY. No fallback to ANTHROPIC_API_KEY (R6 CRITICAL)."""
-    return os.environ.get("LORECONVO_ANTHROPIC_API_KEY", "")
+    try:
+        from .core.config import get_summarizer_api_key
+    except ImportError:
+        from core.config import get_summarizer_api_key
+    return get_summarizer_api_key()
 
 
 def _get_daily_cap() -> int:

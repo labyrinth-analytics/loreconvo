@@ -1,5 +1,18 @@
 # LoreConvo Changelog
 
+## Unreleased
+
+### Changed
+
+- SH-105079 (2026-10-25): `save_session(summarize=True)` and the post-turn
+  capture worker now read `LORECONVO_ANTHROPIC_API_KEY`, the same key the
+  async session summarizer already used. They previously read the generic
+  `ANTHROPIC_API_KEY`, so a key exported for other tools could send data to
+  the Anthropic API even with LoreConvo's own key unset, contradicting the
+  README privacy statement. **Action for users of either feature:** set
+  `LORECONVO_ANTHROPIC_API_KEY`; without it both fall back to local-only
+  behavior (raw summary / no capture summarization).
+
 ## v0.10.19 (2026-10-23)
 
 ### Security

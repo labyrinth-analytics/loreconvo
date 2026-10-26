@@ -9,6 +9,16 @@ from pathlib import Path
 
 _VALID_TIERS = {"free", "pro"}
 
+# Every LLM summarization path reads this key and nothing else. Never fall
+# back to ANTHROPIC_API_KEY: the README promises that leaving this unset keeps
+# all data local (SH-105079).
+SUMMARIZER_API_KEY_ENV = "LORECONVO_ANTHROPIC_API_KEY"
+
+
+def get_summarizer_api_key() -> str:
+    """Return the LoreConvo summarizer API key, or '' when unset."""
+    return os.environ.get(SUMMARIZER_API_KEY_ENV, "")
+
 
 def _locked_config_update(
     config_path: Path,

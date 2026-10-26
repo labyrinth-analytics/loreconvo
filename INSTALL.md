@@ -109,7 +109,7 @@ The `--env=LORECONVO_PRO=<your-license-key>` flag is optional -- omit it if you 
 | `LORECONVO_DB_PATH` | Path to your session memory database (optional) | `--env=LORECONVO_DB_PATH=/path/to/sessions.db` in the command |
 | `LORECONVO_PROJECT_PATH` | Directory to scan for MEMORY.md at session start (optional) | `--env=LORECONVO_PROJECT_PATH=/path/to/project` in the command |
 | `LORECONVO_DREAM_INJECT` | Controls whether the memory digest is injected at session start (optional) | Set to `false` to disable digest injection globally: `--env=LORECONVO_DREAM_INJECT=false` |
-| `LORECONVO_ANTHROPIC_API_KEY` | Anthropic API key for async LLM session summarization -- Pro only, optional | `--env=LORECONVO_ANTHROPIC_API_KEY=<key>` in the `claude mcp add` command. Note: this is separate from `ANTHROPIC_API_KEY`; LoreConvo uses its own key so it never interferes with your main Claude session budget. |
+| `LORECONVO_ANTHROPIC_API_KEY` | Anthropic API key for all LLM summarization: async session summaries (Pro), post-turn capture (Pro), and `save_session(summarize=True)` -- optional | `--env=LORECONVO_ANTHROPIC_API_KEY=<key>` in the `claude mcp add` command. Note: this is separate from `ANTHROPIC_API_KEY`; LoreConvo uses its own key so it never interferes with your main Claude session budget. |
 | `LORECONVO_SUMMARIZER_DAILY_CAP` | Maximum sessions to upgrade via LLM summarization per day (optional, default: 100) -- Pro only | `--env=LORECONVO_SUMMARIZER_DAILY_CAP=50` to reduce API spend |
 | `LORECONVO_EMBEDDING_LINKS` | Disable embedding-based session auto-links (optional) -- Pro only | Set to `0` to use keyword co-occurrence links only: `--env=LORECONVO_EMBEDDING_LINKS=0` |
 | `HF_HUB_OFFLINE` | Blocks HuggingFace Hub network calls after the initial model download (Pro tier only, optional) | Set to `1` to prevent all post-download hub requests: `--env=HF_HUB_OFFLINE=1` |
@@ -402,7 +402,7 @@ claude mcp add --scope user \
 - **Pro license required.** The worker checks your Pro license before making API calls.
 - **`anthropic` package required.** Install it with: `pip install anthropic`
   The `anthropic` package is not included in the base LoreConvo install. If it is not installed, the worker skips API calls silently.
-- **API key required.** Set `ANTHROPIC_API_KEY` in your environment.
+- **API key required.** Set `LORECONVO_ANTHROPIC_API_KEY` in your environment. The generic `ANTHROPIC_API_KEY` is not used.
 
 **Queue cleanup:** Queue entries older than 7 days are discarded automatically. If the daily cap is reached, remaining queue entries are held until the next day.
 
@@ -575,13 +575,13 @@ to any cloud service. You own your data.
 
 By default, LoreConvo stores session data locally with no external network calls.
 If you pass `summarize=True` to `save_session`, LoreConvo sends the session summary
-to the Anthropic API (using your `ANTHROPIC_API_KEY`) to produce a compressed version
+to the Anthropic API (using your `LORECONVO_ANTHROPIC_API_KEY`) to produce a compressed version
 before saving locally. This is opt-in and disabled by default.
 
 When `summarize=True`:
 - Your session summary is transmitted to Anthropic and is subject to Anthropic's
   [Privacy Policy](https://www.anthropic.com/legal/privacy).
-- If `ANTHROPIC_API_KEY` is not set, or the API call fails for any reason, LoreConvo
+- If `LORECONVO_ANTHROPIC_API_KEY` is not set, or the API call fails for any reason, LoreConvo
   falls back to saving the raw summary. Session saves never fail due to this feature.
 - The `anthropic` package must be installed: `pip install loreconvo[bridge]`
 
