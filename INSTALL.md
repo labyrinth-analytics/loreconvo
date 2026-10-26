@@ -700,5 +700,5 @@ index it at the start of each session.
 
 - [Quickstart Guide](docs/quickstart.md) -- get up and running in 5 minutes
 - [CLI Reference](docs/cli_reference.md) -- manage sessions from the terminal
-- [MCP Tool Catalog](docs/mcp_tool_catalog.md) -- all 26 tools explained in plain English
+- [MCP Tool Catalog](docs/mcp_tool_catalog.md) -- all 40 tools explained in plain English
 - [Changelog](docs/CHANGELOG.md) -- what changed in each release
