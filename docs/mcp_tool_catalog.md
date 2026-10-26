@@ -29,7 +29,7 @@ Save a session summary to persistent memory. Claude calls this at the end of a s
 | `project` | text | no | Project name to associate with |
 | `start_date` | text | no | ISO 8601 start time (defaults to now) |
 | `end_date` | text | no | ISO 8601 end time |
-| `summarize` | boolean | no | Pass `true` to compress the summary via the Claude Haiku API before saving. Requires `ANTHROPIC_API_KEY` and `pip install loreconvo[bridge]`. Defaults to `false`. Falls back to saving the raw summary if the API call fails. |
+| `summarize` | boolean | no | Pass `true` to compress the summary via the Claude Haiku API before saving. Requires `LORECONVO_ANTHROPIC_API_KEY` (the generic `ANTHROPIC_API_KEY` is not used) and `pip install loreconvo[bridge]`. Defaults to `false`. Falls back to saving the raw summary if the API call fails. |
 | `reasoning_notes` | text | no | Optional free-form text capturing the reasoning chain behind key decisions in this session -- why you made a particular choice, what alternatives were considered, or what constraints shaped the outcome. Stored separately from the summary. Not indexed for search. |
 
 **Note on `start_date`:** When updating an existing session, omitting `start_date` preserves the original value. Pass an explicit `start_date` only if you need to overwrite it.

@@ -30,7 +30,7 @@ Every memory shows you exactly where it came from — which surface captured it,
 
 ### Your memory stays on your machine
 
-LoreConvo stores everything in a SQLite database on your own machine. Your data stays local unless you explicitly enable the optional AI summarization feature (Pro, off by default), which sends a transcript excerpt to the Anthropic API using your own key. No cloud accounts. No vendor with access to your session history.
+LoreConvo stores everything in a SQLite database on your own machine. Your data stays local unless you explicitly enable optional AI summarization (off by default) by setting `LORECONVO_ANTHROPIC_API_KEY`, which sends a transcript excerpt or summary to the Anthropic API using that key. LoreConvo never reads the generic `ANTHROPIC_API_KEY`. No cloud accounts. No vendor with access to your session history.
 
 Your sessions live in `~/.loreconvo/sessions.db` -- a file you own, can back up, and can delete whenever you want.
 
@@ -372,7 +372,7 @@ LoreConvo is **local-first**. All data lives in `~/.loreconvo/sessions.db` on yo
 
 - **Data collected:** Session titles, summaries, tags, surface identifiers, project names, and skill names you provide when saving. No telemetry, usage analytics, or identifiers are collected automatically.
 - **Storage:** SQLite database at `~/.loreconvo/sessions.db`. No cloud storage. Override the path with the `LORECONVO_DB` environment variable.
-- **Third-party sharing:** None by default. Data leaves your machine only if you enable optional AI summarization (Pro) by setting `LORECONVO_ANTHROPIC_API_KEY`, which sends a bounded transcript excerpt to the Anthropic API under your own key. Leave the key unset and everything stays local.
+- **Third-party sharing:** None by default. Data leaves your machine only if you enable optional AI summarization by setting `LORECONVO_ANTHROPIC_API_KEY`, which sends a bounded transcript excerpt or summary to the Anthropic API under that key. Every summarization path (background summaries (Pro), post-turn capture (Pro), and `save_session(summarize=True)`) uses only this key; the generic `ANTHROPIC_API_KEY` is never read. Leave it unset and everything stays local.
 - **Retention:** Data is retained until you delete it via `delete_session` or remove the database file manually. No automatic expiry.
 - **Contact:** info@labyrinthanalyticsconsulting.com
 

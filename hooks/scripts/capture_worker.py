@@ -71,8 +71,19 @@ def get_daily_limit():
         return 100
 
 
+def get_api_key():
+    try:
+        from core.config import get_summarizer_api_key
+    except ImportError:
+        try:
+            from loreconvo.core.config import get_summarizer_api_key
+        except ImportError:
+            return ''
+    return get_summarizer_api_key()
+
+
 def haiku_available():
-    if not os.environ.get('ANTHROPIC_API_KEY'):
+    if not get_api_key():
         return False
     try:
         from anthropic import Anthropic  # noqa: F401
@@ -87,7 +98,7 @@ def call_haiku(excerpt):
     except ImportError:
         return excerpt
 
-    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    api_key = get_api_key()
     if not api_key:
         return excerpt
 
