@@ -591,6 +591,7 @@ class SessionDatabase:
         _validate_anti_pattern_schema(self.conn)
         self._sweep_anti_pattern_orphans()
         self._sweep_cooccurrence_orphans()
+        self._sweep_cross_project_cooccurrence_links()
         self._ensure_keep_forever_schema()
         self._migrate_add_agent_context_configs()
         self._migrate_add_memory_items_table()
@@ -1635,6 +1636,49 @@ class SessionDatabase:
                 "_open_conn(). No new orphans should accumulate through the "
                 "supported path.",
                 orphan_count,
+            )
+
+    def _sweep_cross_project_cooccurrence_links(self):
+        """Startup cleanup: remove stale cross-project auto:cooccurrence links (SH-104737).
+
+        SH-104211 stopped _auto_link_cooccurrences and the get_related_sessions
+        cooc_rows query from creating or surfacing links between sessions in
+        different projects, but it was a forward fix only: session_links rows
+        already written by the old code stay in the database. This sweep
+        deletes those existing rows. NULL-safe: uses the same `IS` comparison
+        as the SH-104211 fix, so two NULL-project sessions are treated as the
+        same project (not cross-project) and are left alone. Manual links and
+        auto:embedding links are untouched regardless of project. Idempotent:
+        a second run deletes 0 rows and does not error.
+        """
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            self.conn.execute("""
+                DELETE FROM session_links
+                WHERE link_type = 'auto:cooccurrence'
+                  AND rowid IN (
+                      SELECT sl.rowid
+                      FROM session_links sl
+                      JOIN sessions s1 ON sl.from_session_id = s1.id
+                      JOIN sessions s2 ON sl.to_session_id = s2.id
+                      WHERE sl.link_type = 'auto:cooccurrence'
+                        AND NOT (s2.project IS s1.project)
+                  )
+            """)
+            removed_count = self.conn.execute("SELECT changes()").fetchone()[0]
+            self.conn.execute("COMMIT")
+        except Exception:
+            self.conn.execute("ROLLBACK")
+            raise
+
+        if removed_count > 0:
+            logger.warning(
+                "Startup sweep removed %d stale cross-project auto:cooccurrence "
+                "session_links rows (SH-104737). These were written before "
+                "SH-104211 scoped cooccurrence auto-linking to same-project "
+                "sessions; no new cross-project auto:cooccurrence links should "
+                "accumulate through the supported path.",
+                removed_count,
             )
 
     def _check_rate_limit_db(self, conn) -> bool:
