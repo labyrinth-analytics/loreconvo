@@ -136,9 +136,9 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
             return ""
         return (
             "LoreConvo session memory is active. Past sessions across Claude surfaces "
-            "(Code, Cowork, Chat) are searchable. Use loreconvo_search_sessions to find "
-            "prior work, loreconvo_get_context to recall project context, and "
-            "loreconvo_save_memory to persist decisions, questions, or artifacts."
+            "(Code, Cowork, Chat) are searchable. Use search_sessions to find "
+            "prior work, get_context_for to recall project context, and "
+            "save_memory_item to persist decisions, questions, or artifacts."
         )
 
     # -- Recall / prefetch ----------------------------------------------------
