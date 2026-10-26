@@ -617,6 +617,59 @@ LoreConvo and LoreDocs from separate marketplace installs is sufficient.
 
 ---
 
+## Tool Groups (v0.10.20+)
+
+You can choose which of the 40 tools your AI assistant sees. Fewer tools means
+a shorter tool list for the assistant to read and less context used. Available
+on all tiers. By default every group is on, so nothing changes unless you opt in.
+
+| Group | What it covers |
+|-------|----------------|
+| `core` | Saving, searching, and loading sessions. Always on. |
+| `memory` | Recall/consolidation, structured memory items, tagging and anti-patterns, pinning and expiry, skill history, suggestions, the semantic index, LoreDocs linking |
+| `graph` | Session links, related sessions, and the knowledge-graph export |
+| `agents` | Agent context configuration and injection |
+| `admin` | Projects, export/import, tier and licence, stats, inspection, onboarding |
+
+Call `configure_tools` with no arguments to see each group's tool count and
+whether it is enabled.
+
+Three ways to choose groups (first match wins):
+
+1. The `LORECONVO_TOOL_GROUPS` environment variable, comma-separated, for
+   example `LORECONVO_TOOL_GROUPS=memory,graph`.
+2. A `tool_groups` list in `~/.loreconvo/config.json`, for example
+   `"tool_groups": ["memory", "graph"]`. The `configure_tools` tool writes this
+   for you.
+3. Neither set: all groups on.
+
+`core` is always included. Changes take effect when the LoreConvo server
+restarts; a client that is already connected may keep showing the old tool
+list until it reconnects. If the setting contains an unknown group name or is
+malformed, LoreConvo loads only `core` (plus the two always-available tools
+below) rather than guessing.
+
+### `configure_tools`
+
+Lists or sets the enabled tool groups. Always available, whatever groups are
+selected, and not counted in the 40 tools (like the `get_server_info`
+diagnostic).
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `groups` | list of strings | No | Group names to enable. Omit to list every group, its tool count, and whether it is enabled. |
+
+With `groups`, the selection is validated and saved to `config.json`; restart
+the server to apply it. If `LORECONVO_TOOL_GROUPS` is set, the tool returns an
+error instead of saving, because the environment variable overrides the file.
+
+**Example prompt:** "Show me which LoreConvo tool groups are enabled" or
+"Only load LoreConvo's core and memory tools."
+
+---
+
 ## Quick Reference
 
 | Tool | One-line summary |

@@ -292,6 +292,7 @@ Check your current tier and usage with `get_tier`. Activate a Pro license with
 - **LLM async session summarization (Pro)**: Auto-saved sessions are upgraded to LLM-quality summaries in the background using Claude Haiku. Opt in by setting `LORECONVO_ANTHROPIC_API_KEY`. A daily cap (`LORECONVO_SUMMARIZER_DAILY_CAP`, default 100) prevents runaway API spend. Pro tier only.
 - **Embedding-based related session discovery (Pro)**: `get_related_sessions` automatically discovers sessions with similar content using BGE-small-en-v1.5 embeddings (cosine >= 0.75). Up to 10 bidirectional auto-links per save, same-project scoped. Free tier gets keyword co-occurrence links. Set `LORECONVO_EMBEDDING_LINKS=0` to disable embedding links.
 - **Cross-product document linking (Pro)**: Automatically discovers and links the LoreDocs documents most relevant to any session, and vice versa. Uses two new tools: `get_docs_for_session` and `session_link_doc`. Requires both LoreConvo Pro and LoreDocs Pro.
+- **Configurable tool groups**: Choose which groups of tools your assistant sees (`core`, `memory`, `graph`, `agents`, `admin`) with the `configure_tools` tool or `LORECONVO_TOOL_GROUPS`. All groups are on by default. See [Tool Groups](docs/mcp_tool_catalog.md#tool-groups-v01020).
 - **Local-first**: SQLite database, no cloud dependency, zero API costs
 
 ## Tiers
