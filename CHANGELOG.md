@@ -35,6 +35,10 @@
   fallback commands no longer delete `hook_failure.json`.
 - SH-105346: `cli.py stats` prints `hook_saves_failing` via
   `usage_stats_with_hook_status()`.
+- SH-105354: fallback `--read` / `--search` (FTS, LIKE-degrade, `--semantic`)
+  apply `normalize_project_name` project filtering like MCP; `--inspect`
+  refuses `--project` (MCP `inspect_sessions` has no project filter) instead
+  of silently ignoring it.
 - SH-104903: Hermes `handle_tool_call` dispatch parity. 14 of 42 advertised
   Hermes tools had no working dispatch path. Added `TOOL_NAME_ALIASES` for 5
   name mismatches and explicit handlers for 9 tools that need wrapping.
