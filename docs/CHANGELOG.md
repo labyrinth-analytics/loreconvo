@@ -4,6 +4,38 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.10.20 (2026-10-26)
+
+### Added
+
+- You can now choose which groups of LoreConvo tools your AI assistant sees.
+  Fewer tools means less clutter in the assistant's tool list and less
+  context used. Use the new `configure_tools` tool, the
+  `LORECONVO_TOOL_GROUPS` environment variable, or a `tool_groups` setting in
+  `~/.loreconvo/config.json`. Changes apply after a restart. By default every
+  group stays on, so nothing changes unless you opt in.
+
+### Fixed
+
+- Related-session links created by earlier versions between sessions in
+  different projects are now removed automatically on first start. v0.10.19
+  stopped new cross-project links; this cleans up the old ones. Links you
+  created yourself are not touched. No action needed.
+- Hermes users: LoreConvo tools that previously failed when called from
+  Hermes now work, including export, onboarding, anti-pattern tagging and
+  related-session lookup. Hermes now tells you when a tool is only available
+  through the MCP server, and its built-in instructions use the current tool
+  names.
+
+### Changed
+
+- Automatic summaries (`save_session` with `summarize=True`) and turn capture
+  now use only `LORECONVO_ANTHROPIC_API_KEY`. Earlier versions also picked up
+  a general `ANTHROPIC_API_KEY` set for other tools, which could send session
+  text to the Anthropic API when you had not configured LoreConvo to do so.
+  **If you use either feature, set `LORECONVO_ANTHROPIC_API_KEY`.** Without it,
+  LoreConvo stays local-only.
+
 ## v0.10.19 (2026-10-23)
 
 ### Fixed
