@@ -1,6 +1,51 @@
 # LoreConvo Changelog
 
-## Unreleased
+## v0.10.20 (2026-10-26)
+
+### Added
+
+- SH-104672: configurable MCP tool groups. `src/core/tool_groups.py` is the
+  single group -> tool registry (`core`, `memory`, `graph`, `agents`,
+  `admin`). Resolution: `LORECONVO_TOOL_GROUPS` env var, then `tool_groups`
+  in `~/.loreconvo/config.json`, then all groups on (upgrade-safe default).
+  Disabled tools are removed from the FastMCP registry at startup via
+  `remove_tool()` (uncallable, not just hidden). Malformed config fails
+  closed to `core` + `ALWAYS_ON`. New always-on `configure_tools` tool lists
+  or persists groups (locked atomic config write); takes effect on restart.
+  Hermes integration filters its hand-written tools by group membership.
+
+### Fixed
+
+- SH-104903: Hermes `handle_tool_call` dispatch parity. 14 of 42 advertised
+  Hermes tools had no working dispatch path. Added `TOOL_NAME_ALIASES` for 5
+  name mismatches and explicit handlers for 9 tools that need wrapping.
+  `inject_agent_context` and `configure_tools` are disclosed as MCP-only
+  (`MCP_ONLY_TOOLS`) rather than silently failing.
+- SH-103849 / SH-105083: Hermes catalog tool set and Pro gating are derived
+  from the MCP registry (`src/core/hermes_tool_loader.py`,
+  `src/core/hermes_tool_schemas.json`); schemas regenerated after the
+  SH-105079 docstring change.
+- SH-104911: Hermes `get_related_sessions` fallback called the wrong DB
+  method; aliased to `related_sessions_payload`.
+- SH-105170: Hermes `system_prompt_block()` referenced retired
+  `loreconvo_*` tool names; updated to current names.
+- SH-105036: INSTALL.md tool count corrected (doc-sync check now detects all
+  tool-count phrasings).
+
+### Changed
+
+- SH-104850: `server.json` (MCP Registry) is a managed version surface,
+  bumped and verified by `release.sh` and published at release Step 10.
+- SH-104652: CVE monitor comments on the `fastembed` pins (no version
+  change; monitor-only disposition).
+- SH-105079 (2026-10-25): `save_session(summarize=True)` and the post-turn
+  capture worker now read `LORECONVO_ANTHROPIC_API_KEY`, the same key the
+  async session summarizer already used. They previously read the generic
+  `ANTHROPIC_API_KEY`, so a key exported for other tools could send data to
+  the Anthropic API even with LoreConvo's own key unset, contradicting the
+  README privacy statement. **Action for users of either feature:** set
+  `LORECONVO_ANTHROPIC_API_KEY`; without it both fall back to local-only
+  behavior (raw summary / no capture summarization).
 
 ### Security
 
@@ -11,17 +56,6 @@
   original cross-project exposure remained for existing databases. Manual
   links and `auto:embedding` links are not affected. Idempotent; runs
   automatically on next startup, no action required.
-
-### Changed
-
-- SH-105079 (2026-10-25): `save_session(summarize=True)` and the post-turn
-  capture worker now read `LORECONVO_ANTHROPIC_API_KEY`, the same key the
-  async session summarizer already used. They previously read the generic
-  `ANTHROPIC_API_KEY`, so a key exported for other tools could send data to
-  the Anthropic API even with LoreConvo's own key unset, contradicting the
-  README privacy statement. **Action for users of either feature:** set
-  `LORECONVO_ANTHROPIC_API_KEY`; without it both fall back to local-only
-  behavior (raw summary / no capture summarization).
 
 ## v0.10.19 (2026-10-23)
 

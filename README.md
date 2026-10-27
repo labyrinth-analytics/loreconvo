@@ -1,4 +1,4 @@
-# LoreConvo v0.10.19
+# LoreConvo v0.10.20
 
 [![LoreConvo MCP server](https://mcprush.com/badge/loreconvo-mcp/card.svg)](https://mcprush.com/to/loreconvo-mcp?ref=badge)
 
@@ -418,28 +418,37 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.19 (2026-10-23)
+## v0.10.20 (2026-10-26)
+
+### Added
+
+- You can now choose which groups of LoreConvo tools your AI assistant sees.
+  Fewer tools means less clutter in the assistant's tool list and less
+  context used. Use the new `configure_tools` tool, the
+  `LORECONVO_TOOL_GROUPS` environment variable, or a `tool_groups` setting in
+  `~/.loreconvo/config.json`. Changes apply after a restart. By default every
+  group stays on, so nothing changes unless you opt in.
 
 ### Fixed
 
-- Related-session suggestions and automatic links no longer connect sessions
-  from different projects. Before this fix, two sessions in different projects
-  that happened to share several keywords could be linked, which exposed that
-  a session existed and what it was about across projects (for example,
-  separate client engagements). `get_related_sessions` (Pro) and the
-  knowledge-graph export now only relate sessions within the same project.
-  Automatic links already created before this update are not removed.
-- Links created automatically from the LoreDocs side (for example, when a
-  LoreDocs document save links it to a related session) now appear in
-  `get_docs_for_session` and `graph_session_map`. Previously only links
-  created from the LoreConvo side were shown. (Pro)
+- Related-session links created by earlier versions between sessions in
+  different projects are now removed automatically on first start. v0.10.19
+  stopped new cross-project links; this cleans up the old ones. Links you
+  created yourself are not touched. No action needed.
+- Hermes users: LoreConvo tools that previously failed when called from
+  Hermes now work, including export, onboarding, anti-pattern tagging and
+  related-session lookup. Hermes now tells you when a tool is only available
+  through the MCP server, and its built-in instructions use the current tool
+  names.
 
-### Improved
+### Changed
 
-- Installing LoreConvo as a Hermes memory provider no longer breaks when
-  Hermes updates `click`, `cryptography` or `packaging`. These three
-  dependencies now accept newer compatible versions instead of one exact
-  version.
+- Automatic summaries (`save_session` with `summarize=True`) and turn capture
+  now use only `LORECONVO_ANTHROPIC_API_KEY`. Earlier versions also picked up
+  a general `ANTHROPIC_API_KEY` set for other tools, which could send session
+  text to the Anthropic API when you had not configured LoreConvo to do so.
+  **If you use either feature, set `LORECONVO_ANTHROPIC_API_KEY`.** Without it,
+  LoreConvo stays local-only.
 
 <!-- WHATS_NEW:END -->
 
