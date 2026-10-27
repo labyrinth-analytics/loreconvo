@@ -418,6 +418,9 @@ def stats():
     if recent:
         click.echo(f"Most recent: {recent[0].title} ({recent[0].start_date[:10]})")
 
+    failing = db.usage_stats_with_hook_status()["hook_saves_failing"]
+    click.echo(f"Hook saves failing: {'YES' if failing else 'no'}")
+
 
 @cli.command()
 @click.argument("session_id", required=False)
