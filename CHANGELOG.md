@@ -39,6 +39,16 @@
   apply `normalize_project_name` project filtering like MCP; `--inspect`
   refuses `--project` (MCP `inspect_sessions` has no project filter) instead
   of silently ignoring it.
+- SH-105355: async summarizer crashed on real Haiku responses -- the model
+  returns decisions/artifacts/open_questions as JSON arrays, which were bound
+  straight into SQLite (ProgrammingError, outside the API try/except, session
+  left `summary_pending`). Fields are normalized by `_as_list` and stored as
+  `json.dumps(list)` like every other writer; the prompt asks for arrays; an
+  apply failure marks the session heuristic (`apply_error:`).
+- SH-105356: the wheel and sdist omitted `loreconvo/core/hermes_tool_schemas.json`,
+  so the Hermes provider (which reads it from the installed package) exposed
+  zero tools. Added `[tool.setuptools.package-data]`; `clean_env_matrix.sh
+  --hermes` now asserts the installed provider's tool count.
 - SH-104903: Hermes `handle_tool_call` dispatch parity. 14 of 42 advertised
   Hermes tools had no working dispatch path. Added `TOOL_NAME_ALIASES` for 5
   name mismatches and explicit handlers for 9 tools that need wrapping.
