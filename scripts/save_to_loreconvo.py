@@ -50,8 +50,13 @@ _bootstrap_spec = importlib.util.spec_from_file_location(
 _bootstrap = importlib.util.module_from_spec(_bootstrap_spec)
 _bootstrap_spec.loader.exec_module(_bootstrap)
 
+# clear_breadcrumb=False everywhere in this script (SH-105345): the
+# hook_failure.json marker records that a HOOK save failed. Only a hook's own
+# successful bootstrap may clear it; a fallback command erasing it would make
+# --stats (and MCP get_stats) report hook_saves_failing=false while hooks are
+# still broken.
 try:
-    _storage = _bootstrap.resolve_storage_core(Path(__file__))
+    _storage = _bootstrap.resolve_storage_core(Path(__file__), clear_breadcrumb=False)
 except _bootstrap.BootstrapError as exc:
     print(f"ERROR: {exc}", file=sys.stderr)
     sys.exit(1)
@@ -60,6 +65,7 @@ _open_conn = _storage._open_conn
 ensure_schema = _storage.ensure_schema
 sanitize_fts_query = _storage.sanitize_fts_query
 discover_loreconvo_db = _storage.discover_loreconvo_db
+session_visibility_clause = _storage.session_visibility_clause
 
 
 # -- Tier enforcement (SH-100324: parity with MCP server's save_session) --
@@ -219,7 +225,7 @@ def save_session(args):
     """
 
     try:
-        core = _bootstrap.resolve_session_core(Path(__file__))
+        core = _bootstrap.resolve_session_core(Path(__file__), clear_breadcrumb=False)
         SessionDatabase = core.SessionDatabase
         SessionLimitReachedError = core.SessionLimitReachedError
         Config = core.Config
@@ -310,8 +316,14 @@ def save_session(args):
 # -- Read recent sessions --
 
 def read_sessions(args):
-    """Read recent sessions from LoreConvo DB."""
-    conn, db_path = _connect(args.db_path)
+    """Read recent sessions from LoreConvo DB.
+
+    Hides external-tool and expired sessions, same as MCP
+    get_recent_sessions (SH-105345). Opened through SessionDatabase so a
+    legacy database is migrated to have the columns that filter reads.
+    """
+    db = _session_database(args)
+    conn = db.conn
 
     conditions = []
     params = []
@@ -331,15 +343,18 @@ def read_sessions(args):
 
     base = (
         "SELECT id, surface, title, substr(summary, 1, 300) as summary_preview, "
-        "datetime(created_at) as created FROM sessions"
+        "datetime(created_at) as created FROM sessions WHERE 1=1"
     )
     if conditions:
-        base += " WHERE " + " AND ".join(conditions)
+        base += " AND " + " AND ".join(conditions)
+    base += session_visibility_clause()
     base += " ORDER BY created_at DESC LIMIT ?"
     params.append(args.limit)
 
-    rows = conn.execute(base, params).fetchall()
-    conn.close()
+    try:
+        rows = conn.execute(base, params).fetchall()
+    finally:
+        db.close()
 
     if not rows:
         print("No sessions found.")
@@ -407,8 +422,13 @@ def search_rows(args):
     as query syntax, so "SH-100406" raises "no such column: 100406". The
     sanitizer (shared with the MCP/CLI search path via storage_core) quotes
     each token, which is what makes ticket refs searchable at all.
+
+    External-tool and expired sessions are hidden unless --include-external /
+    --include-expired, same as MCP search_sessions (SH-105345).
     """
     conn, db_path = _connect(args.db_path)
+    include_external = getattr(args, "include_external", False)
+    include_expired = getattr(args, "include_expired", False)
 
     try:
         # Use FTS5 MATCH for performance and relevance
@@ -418,7 +438,9 @@ def search_rows(args):
                       datetime(s.created_at) as created
                FROM sessions_fts f
                JOIN sessions s ON s.rowid = f.rowid
-               WHERE sessions_fts MATCH ?
+               WHERE sessions_fts MATCH ?"""
+            + session_visibility_clause("s.", include_external, include_expired)
+            + """
                ORDER BY s.created_at DESC LIMIT ?""",
             (sanitize_fts_query(args.search), args.limit)
         ).fetchall()
@@ -444,7 +466,8 @@ def search_rows(args):
                        substr(summary, 1, 300) as summary_preview,
                        datetime(created_at) as created
                 FROM sessions
-                WHERE {where}
+                WHERE {where}{session_visibility_clause(
+                    "", include_external, include_expired)}
                 ORDER BY created_at DESC LIMIT ?""",
             params
         ).fetchall()
@@ -473,7 +496,7 @@ def _cmd_search_semantic(args):
         return False
 
     try:
-        core = _bootstrap.resolve_session_core(Path(__file__))
+        core = _bootstrap.resolve_session_core(Path(__file__), clear_breadcrumb=False)
     except _bootstrap.BootstrapError as exc:
         print(tip, file=sys.stderr)
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -486,7 +509,11 @@ def _cmd_search_semantic(args):
 
     db = core.SessionDatabase(core.Config(db_path=db_path))
     try:
-        results = db.search_sessions(args.search, limit=args.limit, semantic=True)
+        results = db.search_sessions(
+            args.search, limit=args.limit, semantic=True,
+            include_external=getattr(args, "include_external", False),
+            include_expired=getattr(args, "include_expired", False),
+        )
     finally:
         db.close()
 
@@ -540,7 +567,7 @@ def _session_database(args):
     distribution -- the Hermes ceremony path).
     """
     try:
-        core = _bootstrap.resolve_session_core(Path(__file__))
+        core = _bootstrap.resolve_session_core(Path(__file__), clear_breadcrumb=False)
     except _bootstrap.BootstrapError as exc:
         print(
             f"ERROR: {exc}",
@@ -842,10 +869,17 @@ def cmd_link_session(args):
 
 
 def cmd_set_session_expiry(args):
-    """Set or clear session expiry (set_session_expiry)."""
+    """Set or clear session expiry (set_session_expiry).
+
+    '--expires-at clear' (as --help advertises) maps to None, the value MCP
+    set_session_expiry takes to clear an expiry (SH-105345).
+    """
+    expires_at = args.expires_at
+    if expires_at is not None and expires_at.strip().lower() == "clear":
+        expires_at = None
     db = _session_database(args)
     try:
-        result = db.set_session_expiry(args.expiry_session_id, args.expires_at)
+        result = db.set_session_expiry(args.expiry_session_id, expires_at)
     finally:
         db.close()
     if not result.get("ok"):
@@ -1131,7 +1165,9 @@ def main():
     parser.add_argument("--context-topic", type=str, dest="context_topic",
                         help="With --context-for: the topic to find context for")
     parser.add_argument("--include-external", action="store_true", dest="include_external",
-                        help="With --context-for: include external-tool sessions")
+                        help="With --context-for or --search: include external-tool sessions")
+    parser.add_argument("--include-expired", action="store_true", dest="include_expired",
+                        help="With --search: include sessions whose expiry has passed")
     parser.add_argument("--max-results", type=int, dest="max_results", default=5,
                         help="With --context-for: max excerpts (default 5)")
 

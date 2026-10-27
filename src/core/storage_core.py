@@ -681,3 +681,36 @@ def normalize_project_name(project: str | None) -> str | None:
     # Collapse runs of underscores and strip leading/trailing
     collapsed = re.sub(r'_+', '_', canonical).strip('_')
     return collapsed if collapsed else None
+
+
+def session_visibility_clause(
+    alias: str = "",
+    include_external: bool = False,
+    include_expired: bool = False,
+) -> str:
+    """Return the ' AND ...' SQL fragment that hides non-recallable sessions.
+
+    The default-visibility rule the MCP read tools apply (SH-105345):
+      - external-tool sessions are hidden unless include_external is True or
+        LORECONVO_EXTERNAL_TOOL_EXCLUSION=0 disables the exclusion globally;
+      - sessions whose expires_at is in the past are hidden unless
+        include_expired is True.
+
+    alias is the table alias prefix (e.g. "s.") for joined queries. Returns
+    "" when nothing is filtered. The fragment takes no bind parameters.
+    """
+    clause = ""
+    exclusion_enabled = (
+        os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
+    )
+    if exclusion_enabled and not include_external:
+        clause += (
+            f" AND ({alias}external_tool_session IS NULL "
+            f"OR {alias}external_tool_session = 0)"
+        )
+    if not include_expired:
+        clause += (
+            f" AND ({alias}expires_at IS NULL "
+            f"OR julianday({alias}expires_at) > julianday('now'))"
+        )
+    return clause

@@ -169,11 +169,15 @@ def _unsupported_layout_message(probed, broken_pkg):
     return "\n".join(parts)
 
 
-def resolve_storage_core(origin):
+def resolve_storage_core(origin, clear_breadcrumb=True):
     """Resolve the storage_core module for a non-package caller.
 
     Args:
         origin: Path(__file__) of the calling script.
+        clear_breadcrumb: delete a stale hook_failure.json on success.
+            Hooks keep the default; the fallback script passes False so a
+            non-hook command never erases evidence that hook saves are
+            failing (SH-105345).
 
     Returns:
         The storage_core module object.
@@ -193,14 +197,16 @@ def resolve_storage_core(origin):
                 # discover_loreconvo_db). Treat as broken and fall back to
                 # source if validation fails.
                 _required_attrs = ("discover_loreconvo_db", "ensure_schema",
-                                   "sanitize_fts_query", "_open_conn")
+                                   "sanitize_fts_query", "_open_conn",
+                                   "session_visibility_clause")
                 missing = [attr for attr in _required_attrs
                            if not hasattr(storage_core, attr)]
                 if missing:
                     broken_pkg = AttributeError(
                         f"storage_core missing attributes: {missing}")
                 else:
-                    _clear_breadcrumb()
+                    if clear_breadcrumb:
+                        _clear_breadcrumb()
                     return storage_core
             except Exception as exc:
                 broken_pkg = exc  # remembered, NOT fatal -- see path 2
@@ -227,7 +233,8 @@ def resolve_storage_core(origin):
             if cand.is_file():
                 if broken_pkg is not None:
                     _warn_once_degraded(cand, broken_pkg)
-                _clear_breadcrumb()
+                if clear_breadcrumb:
+                    _clear_breadcrumb()
                 return _load_by_path(cand)
 
     # Both paths failed -- raise with full diagnostics.
@@ -336,7 +343,7 @@ def resolve_timeutil(origin):
 # replaced, not kept.
 
 
-def _synthesize_session_core(src_root, broken_pkg):
+def _synthesize_session_core(src_root, broken_pkg, clear_breadcrumb=True):
     """Synthesize the loreconvo package and load the session-core closure.
 
     Registers 'loreconvo' and 'loreconvo.core' as package objects whose
@@ -392,7 +399,8 @@ def _synthesize_session_core(src_root, broken_pkg):
 
     if broken_pkg is not None:
         _warn_once_degraded(str(src_root), broken_pkg)
-    _clear_breadcrumb()
+    if clear_breadcrumb:
+        _clear_breadcrumb()
 
 
 def _raise_synth_failed(src_root, broken_pkg, exc):
@@ -410,11 +418,12 @@ def _raise_synth_failed(src_root, broken_pkg, exc):
     return BootstrapError("\n".join(parts))
 
 
-def resolve_session_core(origin):
+def resolve_session_core(origin, clear_breadcrumb=True):
     """Resolve the SessionDatabase/Config/Session triad for non-package callers.
 
     Args:
         origin: Path(__file__) of the calling script.
+        clear_breadcrumb: see resolve_storage_core.
 
     Returns:
         A SimpleNamespace with attributes SessionDatabase,
@@ -435,7 +444,8 @@ def resolve_session_core(origin):
                 )
                 from loreconvo.core.config import Config
                 from loreconvo.core.models import Session
-                _clear_breadcrumb()
+                if clear_breadcrumb:
+                    _clear_breadcrumb()
                 return types.SimpleNamespace(
                     SessionDatabase=SessionDatabase,
                     SessionLimitReachedError=SessionLimitReachedError,
@@ -458,7 +468,7 @@ def resolve_session_core(origin):
         root = base.parents[level - 1] if level else base
         src_root = root / _SRC_REL
         if src_root.is_dir():
-            _synthesize_session_core(src_root, broken_pkg)
+            _synthesize_session_core(src_root, broken_pkg, clear_breadcrumb)
             from loreconvo.core.database import (
                 SessionDatabase,
                 SessionLimitReachedError,
