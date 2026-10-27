@@ -559,9 +559,26 @@ class SessionDatabase:
         the `conn` property / _write_context.
         """
         with self._write_lock:
-            if self._conn is not None:
-                self._conn.close()
-                self._conn = None
+            self._checkpoint_and_close_locked()
+
+    def _checkpoint_and_close_locked(self) -> None:
+        """Checkpoint the WAL into sessions.db, then close the connection.
+
+        Caller must hold self._write_lock. SH-105344: without the explicit
+        TRUNCATE checkpoint, data stays in sessions.db-wal whenever another
+        connection keeps the DB open (SQLite only auto-checkpoints on the
+        LAST close), so copying sessions.db alone is not portable. A failed
+        checkpoint (e.g. a concurrent reader) is non-fatal: the WAL is intact
+        and the next checkpoint folds it in.
+        """
+        if self._conn is None:
+            return
+        try:
+            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except sqlite3.Error as exc:
+            logger.warning("WAL checkpoint before close failed: %s", exc)
+        self._conn.close()
+        self._conn = None
 
     def _init_schema(self):
         self.conn.executescript(SCHEMA_SQL)
@@ -1168,6 +1185,16 @@ class SessionDatabase:
                 to_version      TEXT
             );
         """)
+
+        # SH-105343: record the marker session_summarizer._check_schema_ready
+        # gates on -- the columns above are now guaranteed present. OR IGNORE
+        # keeps a row already written by scripts/loreconvo_migrate_v06_v07.py.
+        self.conn.execute(
+            "INSERT OR IGNORE INTO schema_migration_log "
+            "(migration_name, from_version, to_version) VALUES (?, ?, ?)",
+            ("v06_v07", "0.6.x", "0.7.0"),
+        )
+        self.conn.commit()
 
     def _migrate_add_cross_product_columns(self):
         """Add Phase 2b cross-product linking columns to sessions (SH-10727, v0.7.1).
@@ -3012,9 +3039,7 @@ class SessionDatabase:
     def close(self):
         with self._write_lock:
             self._closed = True
-            if self._conn is not None:
-                self._conn.close()
-                self._conn = None
+            self._checkpoint_and_close_locked()
             # SH-104068: drop the LanceIndex (and the ~120 MB embedding model
             # it holds). A closed DB that is still referenced -- e.g. by a
             # pytest class instance that outlives the test -- otherwise pins

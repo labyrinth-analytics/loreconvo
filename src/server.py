@@ -2129,6 +2129,29 @@ def _apply_tool_group_gating() -> None:
         )
 
 
+def _close_db_and_exit(exit_code: int) -> None:
+    try:
+        if _db is not None:
+            _db.close()
+    finally:
+        os._exit(exit_code)
+
+
+def _shutdown_on_sigterm(signum, _frame):
+    """Close (and WAL-checkpoint) the DB, then exit (SH-105344).
+
+    Runs the close on a separate thread: the handler executes on the main
+    thread, which may be mid-write holding SessionDatabase._write_lock, so
+    closing inline could deadlock. The thread waits for that write to finish.
+    Raising SystemExit instead does not work -- the stdio transport's stdin
+    reader thread blocks event-loop shutdown until the pipe closes.
+    """
+    import threading
+    threading.Thread(
+        target=_close_db_and_exit, args=(128 + signum,), daemon=True,
+    ).start()
+
+
 def main():
     """Entry point for uvx / console script execution."""
     import argparse
@@ -2173,7 +2196,14 @@ def main():
         release_func=_get_db().release_idle_connection,
         backstop_env_var="LORECONVO_IDLE_BACKSTOP_TIMEOUT",
     )
-    mcp.run(transport="stdio")
+    # SH-105344: checkpoint the WAL into sessions.db on both clean stdin EOF
+    # (the finally below) and SIGTERM, so sessions.db alone stays portable.
+    signal.signal(signal.SIGTERM, _shutdown_on_sigterm)
+    try:
+        mcp.run(transport="stdio")
+    finally:
+        if _db is not None:
+            _db.close()
 
 
 if __name__ == "__main__":
