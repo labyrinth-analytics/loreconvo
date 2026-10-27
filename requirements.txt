@@ -19,15 +19,15 @@ packaging==26.0
 # so there is one install path for every tier and Pro is a license flag.
 lancedb==0.34.0
 pyarrow==24.0.0
-fastembed==0.8.0
-# CVE MONITOR (SH-104652/SH-104588): fastembed 0.8.0-0.9.0 cap pillow <13.0;
-# pillow 12.3.0 has 8 unresolved CVEs (fix only in 13.0.0). Our usage is
-# text-only (TextEmbedding only) so the vulnerable Pillow code path is
-# unreachable. When bumping fastembed, re-run: pip-audit (bare, no -r flag)
-# to check whether the pillow CVEs still apply to the resolved version.
+fastembed==0.9.1
+# pillow is a fastembed transitive dep, pinned explicitly (SH-105341): 12.3.0
+# carried 37 advisories fixed only in 13.0.0, which needs Python >=3.11 --
+# hence requires-python >=3.11. Usage is text-only (TextEmbedding), but
+# importing fastembed loads PIL. Re-run pip-audit on every fastembed bump.
 # If adding ImageEmbedding/multimodal usage, link SH-104652 as blocking dep-risk.
-# fastembed 0.8.0 caps onnxruntime <1.24 on Python <=3.13 but requires >=1.24.2
-# on 3.14, so no single pin covers requires-python >=3.10.
+pillow==13.0.0
+# fastembed caps onnxruntime <1.24 on Python <=3.13 but requires >=1.24.2
+# on 3.14, so no single pin covers requires-python >=3.11.
 onnxruntime==1.23.2; python_version < '3.14'
 onnxruntime==1.28.0; python_version >= '3.14'
 

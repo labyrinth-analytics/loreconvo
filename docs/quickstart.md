@@ -6,7 +6,7 @@ Get LoreConvo running in under 5 minutes. By the end, you will have persistent s
 
 ## Prerequisites
 
-- Python 3.10 or newer
+- Python 3.11 or newer
 - macOS or Linux
 - Claude Code or Cowork installed
 
@@ -14,10 +14,10 @@ Check your Python version:
 
 ```
 $ python3 --version
-Python 3.10.12
+Python 3.11.9
 ```
 
-If you see 3.10 or higher, you are good to go.
+If you see 3.11 or higher, you are good to go.
 
 ---
 
