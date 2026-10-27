@@ -363,7 +363,7 @@ The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - macOS or Linux
 - `mcp` and `click` (auto-installed by `install.sh`)
 

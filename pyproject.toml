@@ -5,7 +5,7 @@ description = "Cross-surface persistent memory for Claude sessions. Vault conver
 readme = "README.md"
 license = "BUSL-1.1"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Labyrinth Analytics Consulting" }
 ]
@@ -14,7 +14,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Communications",
@@ -36,9 +35,12 @@ dependencies = [
     # of ~300MB, one install path for every tier. Pro is a license flag.
     "lancedb==0.34.0",
     "pyarrow==24.0.0",
-    "fastembed==0.8.0",
-    # fastembed 0.8.0 caps onnxruntime <1.24 on Python <=3.13 but requires
-    # >=1.24.2 on 3.14, so no single pin covers requires-python >=3.10.
+    "fastembed==0.9.1",
+    # Explicit pin on fastembed's transitive pillow (SH-105341): 13.0.0 fixes
+    # 37 advisories in 12.3.0 and needs Python >=3.11.
+    "pillow==13.0.0",
+    # fastembed caps onnxruntime <1.24 on Python <=3.13 but requires
+    # >=1.24.2 on 3.14, so no single pin covers requires-python >=3.11.
     # Exact-pinned per marker rather than ranged (repo rule).
     "onnxruntime==1.23.2; python_version < '3.14'",
     "onnxruntime==1.28.0; python_version >= '3.14'",
