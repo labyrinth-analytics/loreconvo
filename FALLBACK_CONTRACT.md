@@ -65,6 +65,15 @@ The export/import ops (SH-101928) are second callers of the shared-core
 3. **DB discovery precedence:** `--db-path` (explicit) > `LORECONVO_DB` (env
    override) > Cowork VM mount > `~/.loreconvo/sessions.db`. This matches
    the MCP server's own resolution.
+4. **Default visibility matches MCP** (SH-105345). `--read` and `--search`
+   hide external-tool sessions (unless `--include-external` on `--search`,
+   or `LORECONVO_EXTERNAL_TOOL_EXCLUSION=0`) and expired sessions (unless
+   `--include-expired` on `--search`). The rule is
+   `storage_core.session_visibility_clause`. `--expires-at clear` clears an
+   expiry, like MCP `set_session_expiry(expires_at=None)`.
+5. **Fallback commands never clear `hook_failure.json`** (SH-105345). Only
+   a hook's own successful bootstrap removes the marker, so `--stats`
+   reports the same `hook_saves_failing` value as MCP `get_stats`.
 
 ## Drift guard
 
