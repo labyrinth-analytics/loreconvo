@@ -16,6 +16,25 @@
 
 ### Fixed
 
+- SH-105343: async LLM summarization never ran on a DB migrated by the
+  shipped code -- `session_summarizer._check_schema_ready` gates on a
+  `v06_v07` row in `schema_migration_log` that only the monorepo-only
+  `scripts/loreconvo_migrate_v06_v07.py` wrote (since v0.7.0). The in-package
+  migration (`_migrate_add_summary_source_columns`) now records it with
+  `INSERT OR IGNORE`.
+- SH-105344: `SessionDatabase.close()` / `release_idle_connection()` run
+  `PRAGMA wal_checkpoint(TRUNCATE)` before closing; `server.main()` closes the
+  DB on stdin EOF (try/finally) and on SIGTERM (handler closes on a daemon
+  thread, exits 128+signum). Previously MCP-written data stayed in
+  `sessions.db-wal`, so `sessions.db` alone was not portable.
+- SH-105345: fallback `save_to_loreconvo.py` parity with MCP -- `--search` /
+  `--read` apply `storage_core.session_visibility_clause` (external-tool and
+  expired sessions hidden by default; `--include-external` /
+  `--include-expired`), `--expires-at clear` maps to None, and the hook
+  bootstrap resolvers take `clear_breadcrumb` (fallback passes False) so
+  fallback commands no longer delete `hook_failure.json`.
+- SH-105346: `cli.py stats` prints `hook_saves_failing` via
+  `usage_stats_with_hook_status()`.
 - SH-104903: Hermes `handle_tool_call` dispatch parity. 14 of 42 advertised
   Hermes tools had no working dispatch path. Added `TOOL_NAME_ALIASES` for 5
   name mismatches and explicit handlers for 9 tools that need wrapping.
@@ -34,6 +53,11 @@
 
 ### Changed
 
+- SH-105341: `requires-python` raised to `>=3.11`; `fastembed==0.8.0` ->
+  `0.9.1` with an explicit `pillow==13.0.0` pin (pillow 13 needs 3.11).
+- SH-105342: `LICENSE` is a release-managed surface (`release_surfaces.py`):
+  the BSL Licensed Work names the release version and Change Date is the
+  release day + 4 years.
 - SH-104850: `server.json` (MCP Registry) is a managed version surface,
   bumped and verified by `release.sh` and published at release Step 10.
 - SH-104652: CVE monitor comments on the `fastembed` pins (no version
@@ -49,6 +73,10 @@
 
 ### Security
 
+- SH-105341: pip-audit found 37 advisories in pillow 12.3.0 (transitive via
+  fastembed 0.8.0's `pillow<13` cap), all fixed in 13.0.0. Supersedes the
+  SH-104652 monitor-only disposition (which covered 8). Text-only usage
+  (`TextEmbedding`), but `import fastembed` loads PIL.
 - SH-104737 (2026-10-25): startup migration removes existing `auto:cooccurrence`
   `session_links` rows that join sessions with different `project` values.
   SH-104211 (v0.10.19) stopped new cross-project cooccurrence links from being
