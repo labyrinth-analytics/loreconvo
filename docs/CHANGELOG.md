@@ -43,7 +43,7 @@ What changed in each release, written for users (not developers).
   and `--read` hide external-tool and expired sessions by default (on
   `--search`, add `--include-external` or `--include-expired` to show them),
   `--project` now actually filters `--search` and `--read` (it was accepted
-  and ignored), `--expires-at clear` removes an expiry, and the script no
+  and ignored; `--inspect` now rejects it with an error instead), `--expires-at clear` removes an expiry, and the script no
   longer erases the record that session-saving hooks are failing.
 - `python -m loreconvo.cli stats` now shows whether hook saves are failing,
   like the `get_stats` tool.
