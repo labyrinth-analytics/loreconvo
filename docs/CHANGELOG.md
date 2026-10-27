@@ -26,20 +26,27 @@ What changed in each release, written for users (not developers).
   related-session lookup. Hermes now tells you when a tool is only available
   through the MCP server, and its built-in instructions use the current tool
   names.
-- Pro: background session summaries now run. They never started on
-  databases set up by the normal install, so sessions kept their quick
-  heuristic summary. No action needed; it starts on the next launch.
-- Copying `~/.loreconvo/sessions.db` to another machine now brings every
-  session with it. Previously, sessions saved through the MCP server could stay
-  in a side file (`sessions.db-wal`) after the assistant closed, so a copy of
-  `sessions.db` alone could arrive empty.
-- The Python fallback script now matches the MCP tools: `--search` and `--read`
-  hide external-tool and expired sessions by default (use `--include-external`
-  or `--include-expired` to show them), `--expires-at clear` removes an expiry,
-  and the script no longer erases the record that session-saving hooks are
-  failing.
-- `loreconvo stats` on the command line now shows whether hook saves are
-  failing, like the `get_stats` tool.
+- Pro: background session summaries now run when you have set
+  `LORECONVO_ANTHROPIC_API_KEY`. They never started on databases set up by the
+  normal install, so sessions kept their quick heuristic summary. **If you set
+  that key on Pro (for example only for `summarize=True`), LoreConvo will now
+  also send new session text to the Anthropic API in the background to write
+  summaries**, up to 100 a day by default (`LORECONVO_SUMMARIZER_DAILY_CAP`).
+  Unset the key to keep everything local.
+- After your assistant closes normally, `~/.loreconvo/sessions.db` now holds
+  every session on its own, so copying that one file to another machine brings
+  them with it. Previously, sessions saved through the MCP server could stay in
+  a side file (`sessions.db-wal`), so a copy of `sessions.db` alone could arrive
+  empty. If LoreConvo is still running or was force-killed, copy the
+  `sessions.db-wal` file too.
+- The Python fallback script now matches the MCP tools more closely: `--search`
+  and `--read` hide external-tool and expired sessions by default (on
+  `--search`, add `--include-external` or `--include-expired` to show them),
+  `--project` now actually filters `--search` and `--read` (it was accepted
+  and ignored), `--expires-at clear` removes an expiry, and the script no
+  longer erases the record that session-saving hooks are failing.
+- `python -m loreconvo.cli stats` now shows whether hook saves are failing,
+  like the `get_stats` tool.
 
 ### Changed
 
