@@ -53,9 +53,9 @@ Respond in this exact JSON format (no other text):
 {
   "title": "...",
   "summary": "...",
-  "decisions": "...",
-  "artifacts": "...",
-  "open_questions": "..."
+  "decisions": ["..."],
+  "artifacts": ["..."],
+  "open_questions": ["..."]
 }"""
 
 
@@ -254,6 +254,22 @@ def _call_claude_api(transcript_excerpt: str, api_key: str) -> dict:
     return json.loads(text)
 
 
+def _as_list(value) -> list:
+    """Normalize a model-returned list field to a list of strings (SH-105355).
+
+    Haiku returns JSON arrays; older prompts asked for bullet strings. Either
+    way the sessions columns hold json.dumps(list), like every other writer.
+    """
+    if value is None:
+        return []
+    if isinstance(value, list):
+        items = [str(item) for item in value]
+    else:
+        items = str(value).splitlines()
+    cleaned = [item.strip().lstrip("-*").strip() for item in items]
+    return [item for item in cleaned if item]
+
+
 def _update_session_with_llm_summary(conn: sqlite3.Connection,
                                       session_id: str, result: dict) -> None:
     existing = conn.execute(
@@ -274,9 +290,9 @@ def _update_session_with_llm_summary(conn: sqlite3.Connection,
             result.get("title"),
             result.get("summary"),
             result.get("summary"),
-            result.get("decisions"),
-            result.get("artifacts"),
-            result.get("open_questions"),
+            json.dumps(_as_list(result.get("decisions"))),
+            json.dumps(_as_list(result.get("artifacts"))),
+            json.dumps(_as_list(result.get("open_questions"))),
             session_id,
         ),
     )
@@ -422,7 +438,15 @@ def summarize_session(session_id: str, transcript_path: str = None) -> bool:
             log.error("API call failed for session %s: %s", session_id, safe_msg)
             return False
 
-        _update_session_with_llm_summary(conn, session_id, result)
+        try:
+            _update_session_with_llm_summary(conn, session_id, result)
+        except Exception as exc:
+            # SH-105355: a result we cannot apply must not leave the session
+            # stuck at summary_pending or crash the dispatched process.
+            safe_msg = str(exc)[:200]
+            _mark_fallback(conn, session_id, f"apply_error:{safe_msg}")
+            log.error("Could not apply summary for session %s: %s", session_id, safe_msg)
+            return False
         log.info("SUMMARY_COMPLETE session_id=%s source=claude_async", session_id)
         return True
 
