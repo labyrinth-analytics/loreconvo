@@ -65,12 +65,16 @@ The export/import ops (SH-101928) are second callers of the shared-core
 3. **DB discovery precedence:** `--db-path` (explicit) > `LORECONVO_DB` (env
    override) > Cowork VM mount > `~/.loreconvo/sessions.db`. This matches
    the MCP server's own resolution.
-4. **Default visibility matches MCP** (SH-105345). `--read` and `--search`
-   hide external-tool sessions (unless `--include-external` on `--search`,
-   or `LORECONVO_EXTERNAL_TOOL_EXCLUSION=0`) and expired sessions (unless
+4. **External-tool and expired sessions are hidden by default, as in MCP**
+   (SH-105345). `--read` and `--search` hide external-tool sessions (unless
+   `--include-external` on `--search`, or
+   `LORECONVO_EXTERNAL_TOOL_EXCLUSION=0`) and expired sessions (unless
    `--include-expired` on `--search`). The rule is
-   `storage_core.session_visibility_clause`. `--expires-at clear` clears an
-   expiry, like MCP `set_session_expiry(expires_at=None)`.
+   `storage_core.session_visibility_clause`. `--project` filters `--read`
+   and `--search` with the same normalization as MCP, and `--inspect`
+   refuses it (SH-105354). `--expires-at clear` clears an expiry, like MCP
+   `set_session_expiry(expires_at=None)`. Not yet matched: `--read` still
+   lists periodic/file_memory sessions and has no 30-day window (SH-105349).
 5. **Fallback commands never clear `hook_failure.json`** (SH-105345). Only
    a hook's own successful bootstrap removes the marker, so `--stats`
    reports the same `hook_saves_failing` value as MCP `get_stats`.
