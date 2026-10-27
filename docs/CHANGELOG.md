@@ -26,15 +26,38 @@ What changed in each release, written for users (not developers).
   related-session lookup. Hermes now tells you when a tool is only available
   through the MCP server, and its built-in instructions use the current tool
   names.
+- Pro: background session summaries now run. They never started on
+  databases set up by the normal install, so sessions kept their quick
+  heuristic summary. No action needed; it starts on the next launch.
+- Copying `~/.loreconvo/sessions.db` to another machine now brings every
+  session with it. Previously, sessions saved through the MCP server could stay
+  in a side file (`sessions.db-wal`) after the assistant closed, so a copy of
+  `sessions.db` alone could arrive empty.
+- The Python fallback script now matches the MCP tools: `--search` and `--read`
+  hide external-tool and expired sessions by default (use `--include-external`
+  or `--include-expired` to show them), `--expires-at clear` removes an expiry,
+  and the script no longer erases the record that session-saving hooks are
+  failing.
+- `loreconvo stats` on the command line now shows whether hook saves are
+  failing, like the `get_stats` tool.
 
 ### Changed
 
+- **LoreConvo now requires Python 3.11 or newer.** Python 3.10 reaches end of
+  life this month, and the security fixes below need 3.11. If you are on 3.10,
+  stay on v0.10.19 until you upgrade Python.
 - Automatic summaries (`save_session` with `summarize=True`) and turn capture
   now use only `LORECONVO_ANTHROPIC_API_KEY`. Earlier versions also picked up
   a general `ANTHROPIC_API_KEY` set for other tools, which could send session
   text to the Anthropic API when you had not configured LoreConvo to do so.
   **If you use either feature, set `LORECONVO_ANTHROPIC_API_KEY`.** Without it,
   LoreConvo stays local-only.
+
+### Security
+
+- Updated the embedding library and its image-handling dependency (Pillow) to
+  versions that fix 37 published vulnerabilities. LoreConvo only embeds text,
+  so the affected image code was not used, but the library was loaded.
 
 ## v0.10.19 (2026-10-23)
 
