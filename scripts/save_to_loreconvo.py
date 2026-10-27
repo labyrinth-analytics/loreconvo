@@ -66,6 +66,7 @@ ensure_schema = _storage.ensure_schema
 sanitize_fts_query = _storage.sanitize_fts_query
 discover_loreconvo_db = _storage.discover_loreconvo_db
 session_visibility_clause = _storage.session_visibility_clause
+normalize_project_name = _storage.normalize_project_name
 
 
 # -- Tier enforcement (SH-100324: parity with MCP server's save_session) --
@@ -332,6 +333,12 @@ def read_sessions(args):
         conditions.append("surface = ?")
         params.append(args.surface)
 
+    # SH-105354: same normalized project filter as MCP get_recent_sessions.
+    project = normalize_project_name(getattr(args, "project", None))
+    if project:
+        conditions.append("project = ?")
+        params.append(project)
+
     tag_filter = getattr(args, "tag_filter", None)
     if tag_filter:
         # LIKE match against the JSON-serialised tags array.
@@ -429,6 +436,10 @@ def search_rows(args):
     conn, db_path = _connect(args.db_path)
     include_external = getattr(args, "include_external", False)
     include_expired = getattr(args, "include_expired", False)
+    # SH-105354: same normalized project filter as MCP search_sessions.
+    project = normalize_project_name(getattr(args, "project", None))
+    project_sql = " AND {col} = ?" if project else ""
+    project_params = [project] if project else []
 
     try:
         # Use FTS5 MATCH for performance and relevance
@@ -440,9 +451,10 @@ def search_rows(args):
                JOIN sessions s ON s.rowid = f.rowid
                WHERE sessions_fts MATCH ?"""
             + session_visibility_clause("s.", include_external, include_expired)
+            + project_sql.format(col="s.project")
             + """
                ORDER BY s.created_at DESC LIMIT ?""",
-            (sanitize_fts_query(args.search), args.limit)
+            [sanitize_fts_query(args.search)] + project_params + [args.limit]
         ).fetchall()
     except sqlite3.OperationalError:
         # Sanitized input should always parse. If MATCH still fails (corrupt
@@ -460,6 +472,7 @@ def search_rows(args):
         params = []
         for term in terms:
             params.extend([f"%{term}%", f"%{term}%"])
+        params.extend(project_params)
         params.append(args.limit)
         rows = conn.execute(
             f"""SELECT id, surface, title,
@@ -467,7 +480,7 @@ def search_rows(args):
                        datetime(created_at) as created
                 FROM sessions
                 WHERE {where}{session_visibility_clause(
-                    "", include_external, include_expired)}
+                    "", include_external, include_expired)}{project_sql.format(col="project")}
                 ORDER BY created_at DESC LIMIT ?""",
             params
         ).fetchall()
@@ -511,6 +524,7 @@ def _cmd_search_semantic(args):
     try:
         results = db.search_sessions(
             args.search, limit=args.limit, semantic=True,
+            project=getattr(args, "project", None),
             include_external=getattr(args, "include_external", False),
             include_expired=getattr(args, "include_expired", False),
         )
@@ -601,6 +615,12 @@ def skill_history(args):
 
 def cmd_inspect(args):
     """List stored sessions with optional filters (inspect_sessions)."""
+    if getattr(args, "project", None):
+        # SH-105354: inspect_sessions has no project filter; refuse rather
+        # than silently returning every project's sessions.
+        print("ERROR: --project is not supported with --inspect; use "
+              "--read --project or --search --project", file=sys.stderr)
+        sys.exit(2)
     db = _session_database(args)
     try:
         sessions = db.inspect_sessions(
