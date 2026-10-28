@@ -39,6 +39,16 @@ TOOL_NAME_ALIASES: Dict[str, str] = {
 # single-source-of-truth violation. Available via MCP/CLI. (SH-104903)
 MCP_ONLY_TOOLS = {"inject_agent_context", "configure_tools"}
 
+# SH-105363: Hermes-native tools share one flat namespace with Hermes core
+# and every other installed plugin. Memory-manager injection silently drops
+# any tool whose name already exists in the agent's tool surface
+# (memory_manager_tools.py:inject_memory_provider_tools, line 101). Generic
+# names like get_stats / get_tier / get_project risk silent collisions. Every
+# Hermes-exposed tool name is therefore prefixed with loreconvo_ at exposure
+# time (get_tool_schemas) and stripped before dispatch (handle_tool_call).
+# MCP tool names in server.py are unchanged -- the prefix is Hermes-only.
+TOOL_NAME_PREFIX = "loreconvo_"
+
 # -- LoreConvo imports (pip-installed package or source-tree fallback) --------
 
 def _import_loreconvo(module: str):
@@ -136,9 +146,9 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
             return ""
         return (
             "LoreConvo session memory is active. Past sessions across Claude surfaces "
-            "(Code, Cowork, Chat) are searchable. Use search_sessions to find "
-            "prior work, get_context_for to recall project context, and "
-            "save_memory_item to persist decisions, questions, or artifacts."
+            "(Code, Cowork, Chat) are searchable. Use loreconvo_search_sessions to find "
+            "prior work, loreconvo_get_context_for to recall project context, and "
+            "loreconvo_save_memory_item to persist decisions, questions, or artifacts."
         )
 
     # -- Recall / prefetch ----------------------------------------------------
@@ -341,13 +351,22 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
         dispatch path, so advertising them wastes the model's tool budget on
         tools that can only error.  The filter is derived from MCP_ONLY_TOOLS
         (one source), not a hand-listed duplicate.
+
+        Every exposed tool name is prefixed with TOOL_NAME_PREFIX (SH-105363)
+        to avoid collisions in Hermes's flat tool namespace.  The prefix is
+        stripped in handle_tool_call() before dispatch; MCP tool names in
+        server.py are unchanged.
         """
         enabled_groups = self._resolve_enabled_groups()
 
         try:
             from loreconvo.core.hermes_tool_loader import load_schemas_for_groups
             schemas = load_schemas_for_groups(enabled_groups)
-            return [s for s in schemas if s.get("name") not in MCP_ONLY_TOOLS]
+            filtered = [s for s in schemas if s.get("name") not in MCP_ONLY_TOOLS]
+            return [
+                {**s, "name": f"{TOOL_NAME_PREFIX}{s['name']}"}
+                for s in filtered
+            ]
         except ImportError:
             logger.warning("hermes_tool_loader not available -- falling back to empty schema list")
             return []
@@ -375,6 +394,12 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
     def handle_tool_call(self, tool_name: str, args: Dict[str, Any], **kwargs: Any) -> str:
         if not self._initialized or not self._db:
             return json.dumps({"error": "LoreConvo is not available"})
+
+        # SH-105363: strip the loreconvo_ prefix that get_tool_schemas() added
+        # so the bare MCP name is used for dispatch, Pro gating, and
+        # MCP_ONLY_TOOLS checks.
+        if tool_name.startswith(TOOL_NAME_PREFIX):
+            tool_name = tool_name[len(TOOL_NAME_PREFIX):]
 
         # Pro gating (matches MCP server behavior).
         try:
