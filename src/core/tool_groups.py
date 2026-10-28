@@ -179,6 +179,9 @@ def resolve_enabled_groups(config_path: Path | None = None) -> set[str]:
             config = json.loads(config_path.read_text(encoding="utf-8"))
         except Exception:
             return {"core"}
+        if not isinstance(config, dict):
+            # A top-level JSON list (or scalar) has no "tool_groups" key.
+            return {"core"}
         raw = config.get("tool_groups")
         if "tool_groups" not in config:
             # Absent key = all on (upgrade-safe default).
@@ -189,7 +192,7 @@ def resolve_enabled_groups(config_path: Path | None = None) -> set[str]:
             return {"core"}
         try:
             validated = validate_group_names(raw)
-        except ValueError:
+        except (ValueError, TypeError):
             return {"core"}
         return set(validated) | {"core"}
 

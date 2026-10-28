@@ -31,7 +31,7 @@ from pathlib import Path
 from _bootstrap import resolve_storage_core, BootstrapError
 
 try:
-    _storage = resolve_storage_core(Path(__file__))
+    _storage = resolve_storage_core(Path(__file__), clear_breadcrumb=False)
 except BootstrapError as exc:
     from _bootstrap import _write_breadcrumb
     _write_breadcrumb("auto_load", str(exc), [])

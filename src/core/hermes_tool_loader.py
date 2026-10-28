@@ -52,8 +52,8 @@ def load_schemas_for_groups(enabled_groups: set) -> List[Dict[str, Any]]:
     try:
         from loreconvo.core.tool_groups import TOOL_GROUPS, ALWAYS_ON, classify_tool
     except ImportError:
-        logger.warning("tool_groups import failed -- returning all schemas unfiltered")
-        return load_all_schemas()
+        logger.warning("tool_groups import failed -- returning empty schemas (fail-closed)")
+        return []
 
     all_schemas = load_all_schemas()
     result = []

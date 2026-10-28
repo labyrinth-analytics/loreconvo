@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "hooks" / "scripts"))
 from _bootstrap import resolve_session_core, BootstrapError
 
 try:
-    _core = resolve_session_core(Path(__file__))
+    _core = resolve_session_core(Path(__file__), clear_breadcrumb=False)
     SessionDatabase = _core.SessionDatabase
     Config = _core.Config
 except BootstrapError as exc:

@@ -357,11 +357,11 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
 
         try:
             tool_groups_mod = _import_loreconvo("tool_groups")
-            config_dir = Path.home() / ".loreconvo"
-            config_path = config_dir / "config.json"
+            import loreconvo.core.config
+            config_path = loreconvo.core.config.Config().config_path
             groups = tool_groups_mod.resolve_enabled_groups(config_path)
         except Exception:
-            groups = {"core", "memory", "graph", "agents", "admin"}
+            groups = {"core"}
 
         self._cached_enabled_groups = groups
         return groups
@@ -374,7 +374,9 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
         try:
             from loreconvo.core.hermes_tool_loader import is_pro_tool, upgrade_message
         except ImportError:
-            is_pro_tool = lambda n: False  # type: ignore
+            # Fail closed: block Pro tools when the loader is unavailable
+            # rather than silently running them unlicensed.
+            is_pro_tool = lambda n: True  # type: ignore
             upgrade_message = lambda: json.dumps({"error": "Pro check unavailable"})  # type: ignore
 
         if is_pro_tool(tool_name) and not self._resolve_license():
@@ -425,8 +427,18 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
 
         # Generic DB-dispatch fallback: tool name matches a SessionDatabase
         # method, resolving through TOOL_NAME_ALIASES when the Hermes tool
-        # name differs from the method name.
+        # name differs from the method name. Restricted to names the schema
+        # declared (explicit handlers + TOOL_NAME_ALIASES values) so safety
+        # does not depend on the host's _tool_to_provider routing alone.
         db_method_name = TOOL_NAME_ALIASES.get(tool_name, tool_name)
+        _dispatch_allowlist: set[str] = set(handlers.keys()) | set(
+            TOOL_NAME_ALIASES.values()
+        )
+        if db_method_name not in _dispatch_allowlist:
+            return json.dumps({
+                "error": f"Hermes dispatch: {tool_name} is not in the allowlist.",
+                "note": "This tool is available via MCP. Hermes parity build is in progress (SH-103849).",
+            })
         try:
             db_method = getattr(self._db, db_method_name, None)
             if callable(db_method):
