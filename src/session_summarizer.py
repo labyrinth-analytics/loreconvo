@@ -259,15 +259,40 @@ def _as_list(value) -> list:
 
     Haiku returns JSON arrays; older prompts asked for bullet strings. Either
     way the sessions columns hold json.dumps(list), like every other writer.
+    Each item is capped at 2000 chars (SH-105359 hardening).
     """
     if value is None:
         return []
     if isinstance(value, list):
-        items = [str(item) for item in value]
+        items = value
     else:
         items = str(value).splitlines()
-    cleaned = [item.strip().lstrip("-*").strip() for item in items]
-    return [item for item in cleaned if item]
+
+    result = []
+    for item in items:
+        if item is None:
+            continue
+        if isinstance(item, dict):
+            try:
+                item_str = json.dumps(item)
+            except (TypeError, ValueError):
+                continue
+        else:
+            item_str = str(item)
+
+        item_str = item_str.strip()
+        if item_str.startswith("- "):
+            item_str = item_str[2:]
+        elif item_str.startswith("* "):
+            item_str = item_str[2:]
+
+        if len(item_str) > 2000:
+            item_str = item_str[:2000]
+
+        if item_str:
+            result.append(item_str)
+
+    return result
 
 
 def _update_session_with_llm_summary(conn: sqlite3.Connection,
