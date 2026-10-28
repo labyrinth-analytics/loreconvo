@@ -425,7 +425,7 @@
     },
     {
       "name": "inject_agent_context",
-      "description": "Return targeted session context for an agent at session start.\n\nIf topics is provided (non-empty, len<=10), it overrides stored config.\nIf topics is None, stored config is used.\nIf topics=[], has_config reflects stored state; no injection runs.\n\nReturns status in {\"ok\", \"partial\", \"warning\", \"error\"}.\nBranch on status first; treat \"warning\" as skipped (not success), not\nas a synonym for \"ok\" -- a caller that only checks `status != \"error\"`\nwill silently treat skipped or empty injection as success.\n",
+      "description": "Return targeted session context within project for an agent at session start.\n\nIf topics is provided (non-empty, len<=10), it overrides stored config.\nIf topics is None, stored config is used.\nIf topics=[], has_config reflects stored state; no injection runs.\n\nReturns status in {\"ok\", \"partial\", \"warning\", \"error\"}.\nBranch on status first; treat \"warning\" as skipped (not success), not\nas a synonym for \"ok\" -- a caller that only checks `status != \"error\"`\nwill silently treat skipped or empty injection as success.\n",
       "parameters": {
         "properties": {
           "agent_name": {
