@@ -5,10 +5,11 @@ python_dependencies:
   - "loreconvo==0.10.20"
 requires_env:
   - name: LORECONVO_HERMES_PROJECT
-    description: "Default project name for LoreConvo sessions created by Hermes"
+    description: "Default project name for LoreConvo sessions created by Hermes (optional; press Enter to skip, defaults to 'hermes')"
     required: false
     default: "hermes"
   - name: LORECONVO_PRO
-    description: "Pro license key (LAB-... format).  Activate Pro tier for Hermes-native access to Pro-only tools (semantic search, export, etc.)."
+    description: "Pro license key (LAB-... format).  Optional -- press Enter to skip; free tier works without it.  An existing on-disk licence is used if unset.  Activates Pro tier for Hermes-native access to Pro-only tools (semantic search, export, etc.)."
     required: false
+    secret: true
     default: ""

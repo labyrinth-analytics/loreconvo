@@ -336,12 +336,18 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
 
         Loads from the build-time-generated hermes_tool_schemas.json, filtered
         by the shared tool-group config.  Schemas are derived, not hand-written.
+
+        MCP_ONLY_TOOLS are excluded (SH-105362): they have no Hermes-native
+        dispatch path, so advertising them wastes the model's tool budget on
+        tools that can only error.  The filter is derived from MCP_ONLY_TOOLS
+        (one source), not a hand-listed duplicate.
         """
         enabled_groups = self._resolve_enabled_groups()
 
         try:
             from loreconvo.core.hermes_tool_loader import load_schemas_for_groups
-            return load_schemas_for_groups(enabled_groups)
+            schemas = load_schemas_for_groups(enabled_groups)
+            return [s for s in schemas if s.get("name") not in MCP_ONLY_TOOLS]
         except ImportError:
             logger.warning("hermes_tool_loader not available -- falling back to empty schema list")
             return []
