@@ -4,6 +4,15 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## Unreleased
+
+### Fixed
+
+- Agent context now stays within the requested project. Consolidation status
+  is available when viewing a project without selecting a surface.
+- The Python fallback now matches recent-session filtering and search ranking.
+  Expiry changes require an explicit timestamp or a request to clear it.
+
 ## v0.10.20 (2026-10-26)
 
 ### Added

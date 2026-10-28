@@ -34,7 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from core.models import Session
 from core.database import (
     SessionDatabase, SessionLimitReachedError,
-    _pinning_enabled, parse_session_id, truncate_session_fields,
+    _pinning_enabled, parse_session_id, truncate_session_fields, normalize_project_name,
 )
 from core.loredocs_bridge import (
     CROSS_LINK_EMBEDDING_MODEL,
@@ -572,7 +572,7 @@ def _get_inject_timeout() -> float:
     return clamped
 
 
-def _fan_out_topics_fts5(topics, max_results, global_timeout_s):
+def _fan_out_topics_fts5(topics, max_results, global_timeout_s, project=None):
     """Sequential per-topic search for FTS5 (free tier, P95 < 100ms/topic).
 
     Deadline is checked both before AND after each topic query (H-O3) so a
@@ -594,7 +594,10 @@ def _fan_out_topics_fts5(topics, max_results, global_timeout_s):
         topic_started = time.monotonic()
         try:
             results.extend(
-                _get_db().get_context_for(topic, max_results, include_external=False, semantic=False)
+                _get_db().search_sessions(
+                    topic, project=project, limit=max_results,
+                    include_external=False, semantic=False,
+                )
             )
         except Exception as exc:
             logger.warning(
@@ -613,7 +616,7 @@ def _fan_out_topics_fts5(topics, max_results, global_timeout_s):
     return results, timed_out, completed
 
 
-def _fan_out_topics_semantic(topics, max_results, global_timeout_s):
+def _fan_out_topics_semantic(topics, max_results, global_timeout_s, project=None):
     """Concurrent per-topic search for semantic mode (Pro, P95 < 700ms/topic).
 
     ThreadPoolExecutor capped at 4 workers. Residual bound: running threads
@@ -630,7 +633,10 @@ def _fan_out_topics_semantic(topics, max_results, global_timeout_s):
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(topics), 4)) as ex:
         futures = {
-            ex.submit(_get_db().get_context_for, t, max_results, False, True): t
+            ex.submit(
+                _get_db().search_sessions, t, project=project, limit=max_results,
+                include_external=False, semantic=True,
+            ): t
             for t in topics
         }
         try:
@@ -771,7 +777,7 @@ def inject_agent_context(
     max_results_per_topic: int = 3,
     semantic: bool = False,
 ) -> dict:
-    """Return targeted session context for an agent at session start.
+    """Return targeted session context within project for an agent at session start.
 
     If topics is provided (non-empty, len<=10), it overrides stored config.
     If topics is None, stored config is used.
@@ -864,11 +870,13 @@ def inject_agent_context(
     try:
         if semantic:
             raw_results, timed_out, searched = _fan_out_topics_semantic(
-                resolved_topics, resolved_max_results, global_timeout_s
+                resolved_topics, resolved_max_results, global_timeout_s,
+                project=normalize_project_name(project),
             )
         else:
             raw_results, timed_out, searched = _fan_out_topics_fts5(
-                resolved_topics, resolved_max_results, global_timeout_s
+                resolved_topics, resolved_max_results, global_timeout_s,
+                project=normalize_project_name(project),
             )
     except Exception:
         logger.warning("inject_agent_context: fan-out failed", exc_info=True)

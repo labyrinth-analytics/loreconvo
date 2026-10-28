@@ -1,5 +1,16 @@
 # LoreConvo Changelog
 
+## Unreleased
+
+### Fixed
+
+- SH-105468: agent context searches scope retrieval to the requested project
+  before ranking/limits, including semantic fallback. Project-only dream logs
+  report an eligible surface digest when no project-wide digest exists.
+- SH-105468: fallback recent reads and keyword search use shared accessors for
+  visibility, time window, ordering and relevance. CLI expiry changes require
+  an explicit timestamp or clear action.
+
 ## v0.10.20 (2026-10-26)
 
 ### Added

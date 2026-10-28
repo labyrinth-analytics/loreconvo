@@ -316,6 +316,15 @@ def save_session(args):
 
 # -- Read recent sessions --
 
+def _session_preview(session):
+    """Keep the fallback's historical output shape for shared-core sessions."""
+    return {
+        "id": session.id, "surface": session.surface, "title": session.title,
+        "summary_preview": (session.summary or "")[:300],
+        "created": session.created_at.replace("T", " ")[:19],
+    }
+
+
 def read_sessions(args):
     """Read recent sessions from LoreConvo DB.
 
@@ -324,42 +333,20 @@ def read_sessions(args):
     legacy database is migrated to have the columns that filter reads.
     """
     db = _session_database(args)
-    conn = db.conn
-
-    conditions = []
-    params = []
-
-    if args.surface:
-        conditions.append("surface = ?")
-        params.append(args.surface)
-
-    # SH-105354: same normalized project filter as MCP get_recent_sessions.
-    project = normalize_project_name(getattr(args, "project", None))
-    if project:
-        conditions.append("project = ?")
-        params.append(project)
-
-    tag_filter = getattr(args, "tag_filter", None)
-    if tag_filter:
-        # LIKE match against the JSON-serialised tags array.
-        # Tags are stored as json.dumps(list) so a quoted exact token like
-        # '"agent:ron-builder"' appears verbatim in the stored string.
-        # This is robust against NULL and malformed-JSON rows (those won't match).
-        conditions.append("tags LIKE ?")
-        params.append(f'%"{tag_filter}"%')
-
-    base = (
-        "SELECT id, surface, title, substr(summary, 1, 300) as summary_preview, "
-        "datetime(created_at) as created FROM sessions WHERE 1=1"
-    )
-    if conditions:
-        base += " AND " + " AND ".join(conditions)
-    base += session_visibility_clause()
-    base += " ORDER BY created_at DESC LIMIT ?"
-    params.append(args.limit)
-
     try:
-        rows = conn.execute(base, params).fetchall()
+        # Fetch the shared recent corpus before applying fallback-only filters,
+        # so surface/tag filtering happens before the requested result limit.
+        tag_filter = getattr(args, "tag_filter", None)
+        sessions = db.get_recent_sessions(
+            limit=-1 if args.surface or tag_filter else args.limit,
+            project=getattr(args, "project", None),
+        )
+        sessions = [session for session in sessions
+                    if (not args.surface or session.surface == args.surface)
+                    and (not tag_filter or tag_filter in session.tags)]
+        if args.limit >= 0:
+            sessions = sessions[:args.limit]
+        rows = [_session_preview(session) for session in sessions]
     finally:
         db.close()
 
@@ -433,29 +420,20 @@ def search_rows(args):
     External-tool and expired sessions are hidden unless --include-external /
     --include-expired, same as MCP search_sessions (SH-105345).
     """
-    conn, db_path = _connect(args.db_path)
+    db = _session_database(args)
+    conn = db.conn
     include_external = getattr(args, "include_external", False)
     include_expired = getattr(args, "include_expired", False)
-    # SH-105354: same normalized project filter as MCP search_sessions.
     project = normalize_project_name(getattr(args, "project", None))
     project_sql = " AND {col} = ?" if project else ""
     project_params = [project] if project else []
 
     try:
-        # Use FTS5 MATCH for performance and relevance
-        rows = conn.execute(
-            """SELECT s.id, s.surface, s.title,
-                      substr(s.summary, 1, 300) as summary_preview,
-                      datetime(s.created_at) as created
-               FROM sessions_fts f
-               JOIN sessions s ON s.rowid = f.rowid
-               WHERE sessions_fts MATCH ?"""
-            + session_visibility_clause("s.", include_external, include_expired)
-            + project_sql.format(col="s.project")
-            + """
-               ORDER BY s.created_at DESC LIMIT ?""",
-            [sanitize_fts_query(args.search)] + project_params + [args.limit]
-        ).fetchall()
+        results = db.search_sessions(
+            args.search, limit=args.limit, project=project,
+            include_external=include_external, include_expired=include_expired,
+        )
+        rows = [_session_preview(result.session) for result in results]
     except sqlite3.OperationalError:
         # Sanitized input should always parse. If MATCH still fails (corrupt
         # or missing FTS index), degrade to a per-term AND over LIKE.
@@ -1358,6 +1336,8 @@ def main():
     elif args.set_session_expiry:
         if not args.expiry_session_id:
             parser.error("--set-session-expiry requires --expiry-session-id")
+        if args.expires_at is None:
+            parser.error("--set-session-expiry requires --expires-at (timestamp or clear)")
         cmd_set_session_expiry(args)
     elif args.pin_session:
         if not args.pin_session_id:

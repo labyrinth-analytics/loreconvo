@@ -2175,6 +2175,7 @@ class SessionDatabase:
         include_expired: bool = False,
         after: Optional[str] = None,
         before: Optional[str] = None,
+        project: Optional[str] = None,
     ) -> List[SearchResult]:
         """Fetch sessions by ID (Lance results) and apply post-filters.
 
@@ -2192,6 +2193,9 @@ class SessionDatabase:
         if before is not None:
             sql += " AND start_date < ?"
             params.append(before)
+        if project:
+            sql += " AND project = ?"
+            params.append(normalize_project_name(project))
         rows = self.conn.execute(sql, params).fetchall()
 
         # Preserve relevance order from session_ids
@@ -3394,13 +3398,14 @@ class SessionDatabase:
         after: Optional[str] = None,
         before: Optional[str] = None,
     ) -> List[SearchResult]:
+        normalized_project = normalize_project_name(project) if project else None
         # Semantic path: Pro tier + Lance index available
         if semantic and self.config.is_pro:
             lance = self._get_lance_index()
             if lance.is_available():
                 session_ids = lance.search(
                     query,
-                    project=project,
+                    project=normalized_project,
                     limit=limit * 3,
                     half_life_days=SEARCH_HALF_LIFE_DAYS,
                 )
@@ -3408,7 +3413,7 @@ class SessionDatabase:
                     return self._fetch_sessions_for_semantic(
                         session_ids, persona, tags, skills, limit, include_external,
                         include_expired=include_expired,
-                        after=after, before=before,
+                        after=after, before=before, project=normalized_project,
                     )
             # Fall through to FTS5 if Lance unavailable or no results
 
@@ -3435,11 +3440,9 @@ class SessionDatabase:
             sql += " AND s.id IN (SELECT session_id FROM persona_sessions WHERE persona_name LIKE ?)"
             params.append(persona + "%")
 
-        if project:
-            normalized = normalize_project_name(project)
-            if normalized:
-                sql += " AND s.project = ?"
-                params.append(normalized)
+        if normalized_project:
+            sql += " AND s.project = ?"
+            params.append(normalized_project)
 
         if skills:
             placeholders = ",".join("?" * len(skills))
@@ -5345,6 +5348,18 @@ class SessionDatabase:
         digest = None
         if project:
             raw = self.get_memory_digest(project, surface)
+            if raw is None and surface is None:
+                # An omitted surface filters the log across all surfaces. If
+                # there is no project-wide digest, show the latest eligible
+                # surface digest rather than implying consolidation never ran.
+                rows = self.conn.execute(
+                    "SELECT surface FROM memory_digests WHERE project=? "
+                    "ORDER BY updated_at DESC, id DESC", (project,)
+                ).fetchall()
+                for row in rows:
+                    raw = self.get_memory_digest(project, row["surface"])
+                    if raw is not None:
+                        break
             if raw:
                 inject_env = os.environ.get("LORECONVO_DREAM_INJECT", "true").lower()
                 inject_active = inject_env != "false" and not bool(raw.get("disabled", 0))

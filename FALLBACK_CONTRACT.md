@@ -73,8 +73,13 @@ The export/import ops (SH-101928) are second callers of the shared-core
    `storage_core.session_visibility_clause`. `--project` filters `--read`
    and `--search` with the same normalization as MCP, and `--inspect`
    refuses it (SH-105354). `--expires-at clear` clears an expiry, like MCP
-   `set_session_expiry(expires_at=None)`. Not yet matched: `--read` still
-   lists periodic/file_memory sessions and has no 30-day window (SH-105349).
+   `set_session_expiry(expires_at=None)`. `--read` calls the shared recent-session
+   accessor: internal periodic/file_memory captures are excluded and the default
+   30-day window and ordering match MCP. Surface/tag filters apply before the
+   requested limit. Keyword search uses the shared relevance-ranked accessor;
+   the existing LIKE fallback remains available if the FTS index is damaged.
+   CLI expiry updates require an explicit timestamp or `clear`; omitting
+   `--expires-at` is an argument error and does not change the stored expiry.
 5. **Fallback commands never clear `hook_failure.json`** (SH-105345). Only
    a hook's own successful bootstrap removes the marker, so `--stats`
    reports the same `hook_saves_failing` value as MCP `get_stats`.
