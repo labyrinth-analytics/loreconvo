@@ -42,6 +42,7 @@ from .storage_core import (
     sanitize_fts_query,
     normalize_project_name,
     PROJECT_ALIASES,
+    session_visibility_clause,
 )
 
 from .loredocs_bridge import (
@@ -2179,17 +2180,12 @@ class SessionDatabase:
 
         Preserves the relevance order returned by LanceIndex.search().
         """
-        _exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
         placeholders = ",".join("?" * len(session_ids))
         sql = f"SELECT * FROM sessions WHERE id IN ({placeholders})"
         params = list(session_ids)
-        if _exclusion_enabled and not include_external:
-            sql += " AND (external_tool_session IS NULL OR external_tool_session = 0)"
-        if not include_expired:
-            sql += (
-                " AND (expires_at IS NULL "
-                "OR julianday(expires_at) > julianday('now'))"
-            )
+        sql += session_visibility_clause(
+            include_external=include_external, include_expired=include_expired
+        )
         if after is not None:
             sql += " AND start_date >= ?"
             params.append(after)
@@ -3359,16 +3355,11 @@ class SessionDatabase:
         include_external: bool = False,
         include_expired: bool = False,
     ) -> List[Session]:
-        _exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
         query = "SELECT * FROM sessions WHERE start_date >= ? AND (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
-        if _exclusion_enabled and not include_external:
-            query += " AND (external_tool_session IS NULL OR external_tool_session = 0)"
-        if not include_expired:
-            query += (
-                " AND (expires_at IS NULL "
-                "OR julianday(expires_at) > julianday('now'))"
-            )
+        query += session_visibility_clause(
+            include_external=include_external, include_expired=include_expired
+        )
         params = [cutoff]
 
         if project:
@@ -3421,7 +3412,6 @@ class SessionDatabase:
                     )
             # Fall through to FTS5 if Lance unavailable or no results
 
-        _exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
         fts_query = self._sanitize_fts_query(query)
         sql = """
             SELECT s.*, sessions_fts.rank
@@ -3429,13 +3419,9 @@ class SessionDatabase:
             JOIN sessions_fts ON s.rowid = sessions_fts.rowid
             WHERE sessions_fts MATCH ?
         """
-        if _exclusion_enabled and not include_external:
-            sql += " AND (s.external_tool_session IS NULL OR s.external_tool_session = 0)"
-        if not include_expired:
-            sql += (
-                " AND (s.expires_at IS NULL "
-                "OR julianday(s.expires_at) > julianday('now'))"
-            )
+        sql += session_visibility_clause(
+            "s.", include_external=include_external, include_expired=include_expired
+        )
         params = [fts_query]
 
         if after is not None:
@@ -4199,10 +4185,10 @@ class SessionDatabase:
         SH-10121: external_tool_session sessions excluded -- re-exporting imported
         sessions creates circular contamination once Phase 3 import lands.
         """
-        _exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
         query = "SELECT * FROM sessions WHERE (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
-        if _exclusion_enabled:
-            query += " AND (external_tool_session IS NULL OR external_tool_session = 0)"
+        # include_expired=True: this export has never filtered by expires_at,
+        # only the external_tool_session piece of the shared clause applies here.
+        query += session_visibility_clause(include_expired=True)
         params: list = []
 
         if not export_all:
@@ -4655,19 +4641,13 @@ class SessionDatabase:
         sql = (
             "SELECT id FROM sessions "
             f"WHERE id IN ({placeholders}) AND project=? "
-            "AND (source IS NULL OR source NOT IN ('periodic', 'file_memory')) "
-            "AND (expires_at IS NULL "
-            "OR julianday(expires_at) > julianday('now'))"
+            "AND (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
         )
+        sql += session_visibility_clause()
         params: list = [*source_ids, digest["project"]]
         if digest.get("surface") is not None:
             sql += " AND surface=?"
             params.append(digest["surface"])
-        exclusion_enabled = (
-            os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
-        )
-        if exclusion_enabled:
-            sql += " AND (external_tool_session IS NULL OR external_tool_session=0)"
         rows = self.conn.execute(sql, params).fetchall()
         return len(rows) == len(source_ids)
 
@@ -4765,14 +4745,8 @@ class SessionDatabase:
             "FROM sessions "
             "WHERE project=? "
             "AND (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
-            " AND (expires_at IS NULL "
-            "OR julianday(expires_at) > julianday('now'))"
         )
-        if os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0":
-            sql += (
-                " AND (external_tool_session IS NULL "
-                "OR external_tool_session = 0)"
-            )
+        sql += session_visibility_clause()
         if surface is not None:
             sql += " AND surface=?"
             params.append(surface)

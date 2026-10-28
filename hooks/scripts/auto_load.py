@@ -39,6 +39,7 @@ except BootstrapError as exc:
     sys.exit(1)
 
 _open_conn = _storage._open_conn
+session_visibility_clause = _storage.session_visibility_clause
 
 # Robust sibling import (SH-13436 r5): resolve this script's own directory
 # explicitly rather than relying on sys.path[0], which is invocation-path
@@ -143,19 +144,13 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
 
         sessions = []
 
-        exclusion_enabled = os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0"
         col_names = {row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()}
-        # Only add the filter if the column exists (older DBs may not have it yet)
+        # Columns may not exist yet on older DBs; omit whichever piece of the
+        # shared visibility clause a missing column would make invalid SQL.
         has_ext_col = "external_tool_session" in col_names
-        ext_filter = (
-            " AND (external_tool_session IS NULL OR external_tool_session = 0)"
-            if (exclusion_enabled and has_ext_col) else ""
-        )
-        # SH-10248: exclude expired sessions from auto-load context
-        expiry_filter = (
-            " AND (expires_at IS NULL "
-            "OR julianday(expires_at) > julianday('now'))"
-            if "expires_at" in col_names else ""
+        has_expiry_col = "expires_at" in col_names
+        visibility_filter = session_visibility_clause(
+            include_external=not has_ext_col, include_expired=not has_expiry_col
         )
         # Keep-forever user-curation signal (v0.8.1)
         kf_col = ", keep_forever" if "keep_forever" in col_names else ""
@@ -173,7 +168,7 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
                 " WHERE project = ?"
                 " AND start_date >= ?"
                 " AND (source IS NULL OR source = 'session')"
-                + ext_filter + expiry_filter +
+                + visibility_filter +
                 " ORDER BY start_date DESC LIMIT ?",
                 (project, cutoff, limit),
             )
@@ -488,19 +483,13 @@ def query_digest_for_injection(db_path: str, project: str, surface: str):
             source_sql = (
                 "SELECT id FROM sessions "
                 f"WHERE id IN ({placeholders}) AND project=? "
-                "AND (source IS NULL OR source NOT IN ('periodic', 'file_memory')) "
-                "AND (expires_at IS NULL "
-                "OR julianday(expires_at) > julianday('now'))"
+                "AND (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
             )
+            source_sql += session_visibility_clause()
             source_params = [*source_ids, project]
             if surface is not None:
                 source_sql += " AND surface=?"
                 source_params.append(surface)
-            if os.environ.get("LORECONVO_EXTERNAL_TOOL_EXCLUSION", "1") != "0":
-                source_sql += (
-                    " AND (external_tool_session IS NULL "
-                    "OR external_tool_session=0)"
-                )
             source_rows = conn.execute(source_sql, source_params).fetchall()
             if len(source_rows) != len(source_ids):
                 return None
