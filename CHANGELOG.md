@@ -4,6 +4,16 @@
 
 ### Fixed
 
+- SH-105579: `delete_session()` and `prune_expired_sessions()` now remove the
+  deleted session(s) from the `sessions.lance` semantic index (Pro tier), not
+  just SQLite. Previously the stale Lance rows stayed searchable and fed
+  dangling cross-links in LoreDocs. Prune batches all expired ids into a
+  single Lance delete call. Pinned sessions are untouched (never reach the
+  prune/delete path); a Lance failure is logged and never blocks or rolls
+  back the SQLite delete. If you have a store from before this fix, run
+  `rebuild_index()` once to drop any pre-existing stale Lance rows for
+  already-deleted sessions -- it rebuilds the index from SQLite only, so a
+  leftover row for a gone session is dropped by construction.
 - SH-105468: agent context searches scope retrieval to the requested project
   before ranking/limits, including semantic fallback. Project-only dream logs
   report an eligible surface digest when no project-wide digest exists.
