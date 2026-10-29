@@ -280,11 +280,12 @@ def _as_list(value) -> list:
         else:
             item_str = str(item)
 
-        item_str = item_str.strip()
         if item_str.startswith("- "):
             item_str = item_str[2:]
         elif item_str.startswith("* "):
             item_str = item_str[2:]
+
+        item_str = item_str.strip()
 
         if len(item_str) > 2000:
             item_str = item_str[:2000]
