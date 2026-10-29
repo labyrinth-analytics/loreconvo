@@ -416,6 +416,30 @@ class LanceIndex:
             _log.error("get_vectors_by_session_ids failed: %s", exc)
             return {}
 
+    def delete_sessions(self, session_ids) -> bool:
+        """Delete one or more sessions from the Lance index by session_id.
+
+        Batches all ids into a single Lance delete call. No-op (returns True)
+        when the table does not exist or no ids are given. Errors are logged
+        but never raised -- callers must not let a Lance failure block or
+        roll back the SQLite delete it accompanies.
+        """
+        if not session_ids:
+            return True
+        table = self._open_table()
+        if table is None:
+            return True
+        try:
+            safe_ids = [sid for sid in session_ids if sid and _UUID_RE.match(sid)]
+            if not safe_ids:
+                return True
+            quoted = ",".join(f"'{sid}'" for sid in safe_ids)
+            table.delete(f"session_id IN ({quoted})")
+            return True
+        except Exception as exc:
+            _log.error("Lance delete_sessions failed for %d id(s): %s", len(session_ids), exc)
+            return False
+
     def rebuild(self, sessions: list, state: Optional[dict] = None) -> dict:
         """Rebuild the Lance index from a list of session dicts.
 

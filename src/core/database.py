@@ -1571,22 +1571,26 @@ class SessionDatabase:
         INSTEAD OF triggers on views do not update cursor.rowcount on the originating
         DELETE, so we must count rows before deletion to get the accurate count.
         """
-        before = self.conn.execute(
-            "SELECT COUNT(*) FROM sessions_prunable "
-            "WHERE julianday(expires_at) < julianday(?)", (cutoff_ts,)
-        ).fetchone()[0]
+        expired_ids = [
+            r["id"] for r in self.conn.execute(
+                "SELECT id FROM sessions_prunable "
+                "WHERE julianday(expires_at) < julianday(?)", (cutoff_ts,)
+            ).fetchall()
+        ]
         with self.conn:
             self.conn.execute(
                 "DELETE FROM sessions_prunable "
                 "WHERE julianday(expires_at) < julianday(?)", (cutoff_ts,)
             )
-        if before == 0:
+        if not expired_ids:
             logger.debug(
                 "prune_expired_sessions: 0 rows deleted before %s "
                 "(no expired unpinned sessions, or all matching sessions are pinned).",
                 cutoff_ts
             )
-        return before
+        else:
+            self._lance_delete_safe(expired_ids)
+        return len(expired_ids)
 
     # -- Anti-pattern storage (v0.8.0) --
 
@@ -4369,7 +4373,25 @@ class SessionDatabase:
         )
         self.conn.execute("DELETE FROM sessions_prunable WHERE id = ?", (session_id,))
         self.conn.commit()
+        self._lance_delete_safe([session_id])
         return True
+
+    def _lance_delete_safe(self, session_ids: List[str]) -> None:
+        """Remove deleted session ids from the Lance index, if Pro. Best-effort.
+
+        Mirrors _lance_write_safe's never-fail contract: a Lance error is
+        logged and never propagated, so it cannot block or roll back the
+        SQLite delete it accompanies (SH-105579).
+        """
+        if not self.config.is_pro:
+            return
+        try:
+            self._get_lance_index().delete_sessions(session_ids)
+        except Exception as exc:
+            import logging as _log
+            _log.getLogger(__name__).error(
+                "Lance delete failed for %d session(s): %s", len(session_ids), exc
+            )
 
     def get_usage_stats(self) -> dict:
         """Return aggregate usage statistics for the get_stats MCP tool.
