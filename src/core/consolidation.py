@@ -406,7 +406,14 @@ class HeuristicConsolidator:
         dedup pass degrades gracefully (candidates pass through).
         """
         try:
-            from core.hybrid_search import LanceIndex
+            import importlib.util
+            hybrid_search_path = Path(__file__).parent / "hybrid_search.py"
+            spec = importlib.util.spec_from_file_location(
+                "hybrid_search", str(hybrid_search_path)
+            )
+            hybrid_search = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(hybrid_search)
+            LanceIndex = hybrid_search.LanceIndex
             lance_dir = self.lore_dir / "sessions.lance"
             return LanceIndex(lance_dir)
         except Exception:
