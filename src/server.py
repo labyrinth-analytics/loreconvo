@@ -32,6 +32,7 @@ except ModuleNotFoundError as _exc:
     raise
 from pydantic import BaseModel, ConfigDict, Field
 from core.models import Session
+from core.secret_redaction import redact_secrets
 from core.database import (
     SessionDatabase, SessionLimitReachedError,
     _pinning_enabled, parse_session_id, truncate_session_fields, normalize_project_name,
@@ -257,6 +258,12 @@ def save_session(
     """
     summary_source = None
     if summarize:
+        # Redact BEFORE the outbound Claude API call, not just before the DB
+        # write -- otherwise a raw credential leaves the machine first
+        # [r4/new-1]. The database-layer call re-runs on the compressed
+        # text below; redact_secrets is idempotent ([REDACTED] matches none
+        # of the six patterns).
+        summary, _ = redact_secrets(summary)
         compressed = _compress_summary(summary)
         if compressed != summary:
             summary_source = "claude_api"
@@ -322,7 +329,10 @@ def save_session(
     config_exists = _onboard_config_path(_get_db()).exists()
     is_first_session = _get_db().session_count() == 1 and not config_exists
 
-    result = {"session_id": saved_id, "status": "saved", "title": title}
+    # Echo session.title (redacted by the DB-layer write), never the raw
+    # local `title` parameter -- the response must be built only from
+    # redacted values [r4/if-H2].
+    result = {"session_id": saved_id, "status": "saved", "title": session.title}
     if fields_truncated:
         result["truncated"] = True
     if is_first_session:

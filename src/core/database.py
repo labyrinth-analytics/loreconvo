@@ -45,6 +45,8 @@ from .storage_core import (
     session_visibility_clause,
 )
 
+from .secret_redaction import redact_secrets, redact_value
+
 from .loredocs_bridge import (
     CROSS_LINK_CAP,
     CROSS_LINK_EMBEDDING_DIM,
@@ -3075,6 +3077,16 @@ class SessionDatabase:
                 "Use the Session dataclass (which auto-generates a UUID) "
                 "instead of raw SQL inserts."
             )
+        # Redact secret-shaped text before any further processing (hashing,
+        # truncation, insert) [r4/sec-H6]. Redact before cap, never after
+        # [r4/ops-L1], so the marker can't be pushed past the field cap.
+        session.title, _ = redact_secrets(session.title)
+        session.summary, _ = redact_secrets(session.summary)
+        if session.reasoning_notes:
+            session.reasoning_notes, _ = redact_secrets(session.reasoning_notes)
+        session.decisions = [redact_secrets(d)[0] for d in session.decisions]
+        session.artifacts = [redact_secrets(a)[0] for a in session.artifacts]
+        session.open_questions = [redact_secrets(q)[0] for q in session.open_questions]
         truncate_session_fields(session)
         # SH-103918: normalize project name on write so the store never
         # accumulates spelling variants of the same project.
@@ -4228,9 +4240,14 @@ class SessionDatabase:
         ).fetchone():
             return "skipped"
 
+        # Redact secret-shaped text before caps are applied [r4/sec-H6,
+        # r4/ops-L1: redact before cap, never after].
+        title_redacted, _ = redact_secrets(str(session_dict.get("title", "") or ""))
+        summary_redacted, _ = redact_secrets(str(session_dict.get("summary", "") or ""))
+
         # Apply field caps (SEC-00068)
-        title = str(session_dict.get("title", "") or "")[:_IMPORT_FIELD_CAPS["title"]]
-        summary = str(session_dict.get("summary", "") or "")[:_IMPORT_FIELD_CAPS["summary"]]
+        title = title_redacted[:_IMPORT_FIELD_CAPS["title"]]
+        summary = summary_redacted[:_IMPORT_FIELD_CAPS["summary"]]
         created_at = str(session_dict.get("created_at", "") or "")
 
         # Recompute content_hash locally; never trust the imported value (SEC-00069)
@@ -4244,13 +4261,14 @@ class SessionDatabase:
 
         tags = [str(t)[:_IMPORT_FIELD_CAPS["list_item"]]
                 for t in (session_dict.get("tags") or [])]
-        decisions = [str(d)[:_IMPORT_FIELD_CAPS["list_item"]]
+        decisions = [redact_secrets(str(d))[0][:_IMPORT_FIELD_CAPS["list_item"]]
                      for d in (session_dict.get("decisions") or [])]
-        open_questions = [str(q)[:_IMPORT_FIELD_CAPS["list_item"]]
+        open_questions = [redact_secrets(str(q))[0][:_IMPORT_FIELD_CAPS["list_item"]]
                           for q in (session_dict.get("open_questions") or [])]
         # SEC-00070: strip artifacts to basename only
         import os as _os
-        artifacts = [_os.path.basename(str(a)) for a in (session_dict.get("artifacts") or [])]
+        artifacts = [redact_secrets(_os.path.basename(str(a)))[0]
+                     for a in (session_dict.get("artifacts") or [])]
 
         surface = str(session_dict.get("surface", "") or "")
         project = session_dict.get("project") or None
@@ -4909,6 +4927,15 @@ class SessionDatabase:
         fields_present: Optional[set[str]] = None,
     ) -> str:
         """Import one session. Returns 'imported', 'replaced', or 'skipped'."""
+        # Redact secret-shaped text before hashing or inserting [r4/sec-H6].
+        session.title, _ = redact_secrets(session.title)
+        session.summary, _ = redact_secrets(session.summary)
+        if session.reasoning_notes:
+            session.reasoning_notes, _ = redact_secrets(session.reasoning_notes)
+        session.decisions = [redact_secrets(d)[0] for d in session.decisions]
+        session.artifacts = [redact_secrets(a)[0] for a in session.artifacts]
+        session.open_questions = [redact_secrets(q)[0] for q in session.open_questions]
+
         existing = self.conn.execute(
             "SELECT * FROM sessions WHERE id = ?", (session.id,)
         ).fetchone()
@@ -5495,6 +5522,16 @@ class SessionDatabase:
         if err is not None:
             return err
 
+        # Redact secret-shaped text before truncation [r4/sec-H6, r4/ops-L1].
+        # tags and metadata KEYS are untouched (short controlled vocabulary /
+        # field names, not values) [r4/dm-H1].
+        title, _ = redact_secrets(title)
+        if body is not None:
+            body, _ = redact_secrets(body)
+        if artifact_type is not None:
+            artifact_type, _ = redact_secrets(artifact_type)
+        metadata, _ = redact_value(metadata)
+
         title, title_truncated = _truncate_text(title)
         stored_body = artifact_type if item_type == "artifact" else body
         stored_body, body_truncated = _truncate_text(stored_body)
@@ -5712,9 +5749,12 @@ class SessionDatabase:
                     if not title.strip():
                         conn.execute("ROLLBACK")
                         return {"ok": False, "code": "invalid_title", "message": "title must be non-empty."}
+                    # Redact before storing [r4/sec-H6].
+                    title, _ = redact_secrets(title)
                     set_clauses.append("title = ?")
                     params.append(title)
                 if body is not None:
+                    body, _ = redact_secrets(body)  # redact before cap [r4/ops-L1]
                     new_body, body_truncated = _truncate_text(body)
                     truncated = truncated or body_truncated
                     set_clauses.append("body = ?")
@@ -5725,7 +5765,8 @@ class SessionDatabase:
                     set_clauses.append("tags = ?")
                     params.append(tags_json)
                 if metadata is not None:
-                    metadata_json, metadata_truncated = _truncate_json_dict(dict(metadata))
+                    metadata_redacted, _ = redact_value(dict(metadata))  # [r4/dm-H1]
+                    metadata_json, metadata_truncated = _truncate_json_dict(metadata_redacted)
                     truncated = truncated or metadata_truncated
                     set_clauses.append("metadata = ?")
                     params.append(metadata_json)
