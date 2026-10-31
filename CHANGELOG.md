@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Added
+
+- SH-105603: save-path secret redaction. `save_session`, `save_memory_item`,
+  `update_memory_item`, `merge_session`, and `import_session` now redact
+  AWS keys/secrets, generic password/token assignments, bearer tokens, JWTs,
+  and PEM private keys from free-text fields (title/summary/decisions/
+  open_questions/artifacts/metadata values) before any DB write, before
+  `summarize=True` sends the summary to the Claude API, and before the
+  response is built -- raw secrets never reach disk, the API, logs, or MCP
+  responses. Metadata dict/list values are redacted recursively; keys are
+  untouched. New `loreconvo-scan-secrets` CLI entry point retroactively
+  scans and redacts existing rows (dry-run by default; `--apply` takes an
+  exclusive transaction and fails closed on lock or row error with no
+  partial changes). If a scan reports matches, rotate the exposed
+  credential -- redaction removes it from LoreConvo's storage but does not
+  invalidate it at its origin.
+
 ### Fixed
 
 - SH-105579: `delete_session()` and `prune_expired_sessions()` now remove the

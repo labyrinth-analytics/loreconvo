@@ -6,6 +6,16 @@ What changed in each release, written for users (not developers).
 
 ## Unreleased
 
+### Added
+
+- Secrets (AWS keys, passwords, tokens, bearer tokens, JWTs, PEM private
+  keys) are now automatically redacted before anything is saved, before
+  a summary is sent to Claude for summarization, and before results are
+  returned -- across saved sessions and memory items. A new maintenance
+  command, `loreconvo-scan-secrets`, can scan and clean up anything saved
+  before this update (dry-run by default). If it finds a match, rotate
+  that credential -- redacting it here does not invalidate it elsewhere.
+
 ### Fixed
 
 - Agent context now stays within the requested project. Consolidation status
