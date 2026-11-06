@@ -1,6 +1,6 @@
 # LoreConvo Changelog
 
-## Unreleased
+## v0.11.0 (2026-11-06)
 
 ### Added
 
@@ -15,7 +15,12 @@
   untouched. New `loreconvo-scan-secrets` CLI entry point retroactively
   scans and redacts existing rows (dry-run by default; `--apply` takes an
   exclusive transaction and fails closed on lock or row error with no
-  partial changes). If a scan reports matches, rotate the exposed
+  partial changes). The scan cleans SQLite only; Pro users run
+  `rebuild_index()` afterwards to rebuild `sessions.lance` from the
+  redacted rows. SH-105853: redaction also covers
+  `storage_core.upsert_session` (session hooks), the async Pro summarizer
+  (transcript before the API call, model output before the DB write), and
+  the fallback/CLI save echo. If a scan reports matches, rotate the exposed
   credential -- redaction removes it from LoreConvo's storage but does not
   invalidate it at its origin.
 

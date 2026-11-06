@@ -1,4 +1,4 @@
-# LoreConvo v0.10.20
+# LoreConvo v0.11.0
 
 [![LoreConvo MCP server](https://mcprush.com/badge/loreconvo-mcp/card.svg)](https://mcprush.com/to/loreconvo-mcp?ref=badge)
 
@@ -418,67 +418,31 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.10.20 (2026-10-26)
+## v0.11.0 (2026-11-06)
 
 ### Added
 
-- You can now choose which groups of LoreConvo tools your AI assistant sees.
-  Fewer tools means less clutter in the assistant's tool list and less
-  context used. Use the new `configure_tools` tool, the
-  `LORECONVO_TOOL_GROUPS` environment variable, or a `tool_groups` setting in
-  `~/.loreconvo/config.json`. Changes apply after a restart. By default every
-  group stays on, so nothing changes unless you opt in.
+- Secrets (AWS keys; API keys, passwords and tokens of 16 or more
+  characters written as `name=value` or `name: value`; bearer tokens; JWTs;
+  PEM private keys) are
+  now automatically redacted before anything is saved, before
+  a summary is sent to Claude for summarization, and before results are
+  returned -- across saved sessions and memory items. A new maintenance
+  command, `loreconvo-scan-secrets`, can scan and clean up anything saved
+  before this update (dry-run by default). Pro users should run
+  `rebuild_index` afterwards so the semantic search index is cleaned too.
+  If it finds a match, rotate that credential -- redacting it here does not
+  invalidate it elsewhere.
 
 ### Fixed
 
-- Related-session links created by earlier versions between sessions in
-  different projects are now removed automatically on first start. v0.10.19
-  stopped new cross-project links; this cleans up the old ones. Links you
-  created yourself are not touched. No action needed.
-- Hermes users: LoreConvo tools that previously failed when called from
-  Hermes now work, including export, onboarding, anti-pattern tagging and
-  related-session lookup. Hermes now tells you when a tool is only available
-  through the MCP server, and its built-in instructions use the current tool
-  names.
-- Pro: background session summaries now run when you have set
-  `LORECONVO_ANTHROPIC_API_KEY`. They never started on databases set up by the
-  normal install, so sessions kept their quick heuristic summary. **If you set
-  that key on Pro (for example only for `summarize=True`), LoreConvo will now
-  also send new session text to the Anthropic API in the background to write
-  summaries**, up to 100 a day by default (`LORECONVO_SUMMARIZER_DAILY_CAP`).
-  Unset the key to keep everything local.
-- After your assistant closes normally, `~/.loreconvo/sessions.db` now holds
-  every session on its own, so copying that one file to another machine brings
-  them with it. Previously, sessions saved through the MCP server could stay in
-  a side file (`sessions.db-wal`), so a copy of `sessions.db` alone could arrive
-  empty. If LoreConvo is still running or was force-killed, copy the
-  `sessions.db-wal` file too.
-- The Python fallback script now matches the MCP tools more closely: `--search`
-  and `--read` hide external-tool and expired sessions by default (on
-  `--search`, add `--include-external` or `--include-expired` to show them),
-  `--project` now actually filters `--search` and `--read` (it was accepted
-  and ignored; `--inspect` now rejects it with an error instead), `--expires-at clear` removes an expiry, and the script no
-  longer erases the record that session-saving hooks are failing.
-- `python -m loreconvo.cli stats` now shows whether hook saves are failing,
-  like the `get_stats` tool.
-
-### Changed
-
-- **LoreConvo now requires Python 3.11 or newer.** Python 3.10 reaches end of
-  life this month, and the security fixes below need 3.11. If you are on 3.10,
-  stay on v0.10.19 until you upgrade Python.
-- Automatic summaries (`save_session` with `summarize=True`) and turn capture
-  now use only `LORECONVO_ANTHROPIC_API_KEY`. Earlier versions also picked up
-  a general `ANTHROPIC_API_KEY` set for other tools, which could send session
-  text to the Anthropic API when you had not configured LoreConvo to do so.
-  **If you use either feature, set `LORECONVO_ANTHROPIC_API_KEY`.** Without it,
-  LoreConvo stays local-only.
-
-### Security
-
-- Updated the embedding library and its image-handling dependency (Pillow) to
-  versions that fix 37 published vulnerabilities. LoreConvo only embeds text,
-  so the affected image code was not used, but the library was loaded.
+- Deleted and expired sessions no longer linger in Pro semantic search
+  results. If you used semantic search before this update, run
+  `rebuild_index` once to clear out any old entries.
+- Agent context now stays within the requested project. Consolidation status
+  is available when viewing a project without selecting a surface.
+- The Python fallback now matches recent-session filtering and search ranking.
+  Expiry changes require an explicit timestamp or a request to clear it.
 
 <!-- WHATS_NEW:END -->
 

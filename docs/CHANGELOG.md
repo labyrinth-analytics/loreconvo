@@ -4,20 +4,27 @@ What changed in each release, written for users (not developers).
 
 ---
 
-## Unreleased
+## v0.11.0 (2026-11-06)
 
 ### Added
 
-- Secrets (AWS keys, passwords, tokens, bearer tokens, JWTs, PEM private
-  keys) are now automatically redacted before anything is saved, before
+- Secrets (AWS keys; API keys, passwords and tokens of 16 or more
+  characters written as `name=value` or `name: value`; bearer tokens; JWTs;
+  PEM private keys) are
+  now automatically redacted before anything is saved, before
   a summary is sent to Claude for summarization, and before results are
   returned -- across saved sessions and memory items. A new maintenance
   command, `loreconvo-scan-secrets`, can scan and clean up anything saved
-  before this update (dry-run by default). If it finds a match, rotate
-  that credential -- redacting it here does not invalidate it elsewhere.
+  before this update (dry-run by default). Pro users should run
+  `rebuild_index` afterwards so the semantic search index is cleaned too.
+  If it finds a match, rotate that credential -- redacting it here does not
+  invalidate it elsewhere.
 
 ### Fixed
 
+- Deleted and expired sessions no longer linger in Pro semantic search
+  results. If you used semantic search before this update, run
+  `rebuild_index` once to clear out any old entries.
 - Agent context now stays within the requested project. Consolidation status
   is available when viewing a project without selecting a surface.
 - The Python fallback now matches recent-session filtering and search ranking.
