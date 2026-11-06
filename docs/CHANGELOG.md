@@ -8,7 +8,8 @@ What changed in each release, written for users (not developers).
 
 ### Added
 
-- Secrets (AWS keys; API keys, passwords and tokens of 16 or more
+- Secrets (AWS keys; standalone provider keys from Anthropic, OpenAI,
+  GitHub, and Slack; API keys, passwords and tokens of 16 or more
   characters written as `name=value` or `name: value`; bearer tokens; JWTs;
   PEM private keys) are
   now automatically redacted before anything is saved, before

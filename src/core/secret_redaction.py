@@ -19,6 +19,13 @@ _PEM_BODY_CHARS = r"[A-Za-z0-9+/=\s:,\-]"
 _PATTERNS = [
     # AWS access key ID
     re.compile(r"AKIA[0-9A-Z]{16}"),
+    # Bare provider keys -- a key pasted standalone (no name=value wrapper)
+    # was previously only caught inside an assignment [r4 gap]. Ordered
+    # most-specific first so sk-ant- is consumed before the generic sk- match.
+    re.compile(r"sk-ant-[A-Za-z0-9_-]{16,}"),   # Anthropic API key
+    re.compile(r"sk-[A-Za-z0-9_-]{20,}"),       # OpenAI (sk- / sk-proj- / sk-svcacct-)
+    re.compile(r"ghp_[A-Za-z0-9]{20,}"),        # GitHub classic PAT
+    re.compile(r"xoxb-[A-Za-z0-9-]{20,}"),      # Slack bot token
     # AWS secret access key -- self-contained: the aws_secret_access_key
     # keyword is part of the match, so no cross-field pairing is needed or
     # claimed [r4/sec-H3].
