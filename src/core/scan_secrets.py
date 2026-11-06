@@ -6,7 +6,7 @@ place.
     loreconvo-scan-secrets --apply      # redact in place
 
 Scope: sessions.{title,summary,decisions,artifacts,open_questions,
-reasoning_notes,previous_summary} and memory_items.{title,body,metadata}.
+reasoning_notes,previous_summary} and memory_items.{title,body,metadata,closed_reason}.
 Uses the same canonical patterns as the write path (scripts/lib/
 secret_redaction.py, via the generated product copy) -- one definition of
 "secret-shaped", applied going forward by the write path and retroactively
@@ -42,7 +42,7 @@ from .storage_core import _open_conn
 
 _SESSION_TEXT_COLUMNS = ["title", "summary", "reasoning_notes", "previous_summary"]
 _SESSION_LIST_COLUMNS = ["decisions", "artifacts", "open_questions"]
-_MEMORY_TEXT_COLUMNS = ["title", "body"]
+_MEMORY_TEXT_COLUMNS = ["title", "body", "closed_reason"]
 _MEMORY_DICT_COLUMNS = ["metadata"]
 
 
@@ -143,7 +143,7 @@ def _scan(conn, apply: bool) -> dict:
             _apply_updates(conn, "sessions", row["id"], updates)
 
     item_rows = conn.execute(
-        "SELECT id, title, body, metadata FROM memory_items"
+        "SELECT id, title, body, metadata, closed_reason FROM memory_items"
     ).fetchall()
     counts["memory_items_scanned"] = len(item_rows)
     for row in item_rows:

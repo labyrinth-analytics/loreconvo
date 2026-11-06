@@ -5685,11 +5685,15 @@ class SessionDatabase:
                         "message": "The requested transition is not valid for this item's type.",
                     }
 
+                redacted_reason = None
+                if reason:
+                    redacted_reason, _ = redact_secrets(reason)
+
                 now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
                 conn.execute(
                     """UPDATE memory_items SET status=?, closed_at=?, closed_reason=?,
                        closed_by_session_id=?, updated_at=? WHERE id=?""",
-                    (new_status, now, reason, closing_session_id, now, item_id)
+                    (new_status, now, redacted_reason, closing_session_id, now, item_id)
                 )
                 conn.execute("COMMIT")
             except Exception:
