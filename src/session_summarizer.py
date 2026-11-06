@@ -443,7 +443,9 @@ def summarize_session(session_id: str, transcript_path: str = None) -> bool:
         if transcript_path and Path(transcript_path).exists():
             try:
                 transcript_text = Path(transcript_path).read_text(encoding="utf-8", errors="replace")
-                transcript_text = transcript_text[:_MAX_TRANSCRIPT_CHARS]
+                # SH-105853: redact before the cut (a key straddling it would
+                # otherwise survive as an unmatchable prefix).
+                transcript_text = redact_text(transcript_text)[:_MAX_TRANSCRIPT_CHARS]
             except Exception as exc:
                 log.warning("Could not read transcript at %s: %s", transcript_path, exc)
                 transcript_text = row["summary"] or ""

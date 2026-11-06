@@ -30,6 +30,7 @@ _open_conn = _storage._open_conn
 ensure_schema = _storage.ensure_schema
 upsert_session = _storage.upsert_session
 redact_parsed_session = _storage.redact_parsed_session
+redact_text = _storage.redact_text
 # One derivation of truncate-with-marker (SH-101877): the hook path and the
 # direct-write path share storage_core's implementation. CAP VALUES now
 # deliberately diverge (SH-101938): the hook path keeps 500/8000, the direct
@@ -127,6 +128,9 @@ def parse_transcript(transcript_path):
                     text_parts.append(block)
             content = " ".join(text_parts)
 
+        # SH-105853: redact before any truncation, so a secret straddling a
+        # cut cannot survive as an unmatchable partial prefix.
+        content = redact_text(content) if isinstance(content, str) else content
         if role == "user" and content:
             user_messages.append(content[:500])  # Truncate long messages
         elif role == "assistant" and content:
@@ -386,6 +390,9 @@ def main():
         parsed = parse_transcript(transcript_path)
         if not parsed:
             sys.exit(0)
+        # SH-105853: redact once up front so the log line, the save and the
+        # dispatched follow-ups never see a raw secret (hook.log is on disk).
+        parsed = redact_parsed_session(parsed)
 
         # Skip very short sessions (less than 2 messages)
         if parsed["message_count"] < 2:

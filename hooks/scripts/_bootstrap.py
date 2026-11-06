@@ -199,7 +199,7 @@ def resolve_storage_core(origin, clear_breadcrumb=True):
                 _required_attrs = ("discover_loreconvo_db", "ensure_schema",
                                    "sanitize_fts_query", "_open_conn",
                                    "session_visibility_clause",
-                                   "redact_parsed_session")
+                                   "redact_parsed_session", "redact_text")
                 missing = [attr for attr in _required_attrs
                            if not hasattr(storage_core, attr)]
                 if missing:

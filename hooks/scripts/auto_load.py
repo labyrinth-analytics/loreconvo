@@ -40,6 +40,7 @@ except BootstrapError as exc:
 
 _open_conn = _storage._open_conn
 session_visibility_clause = _storage.session_visibility_clause
+redact_text = _storage.redact_text
 
 # Robust sibling import (SH-13436 r5): resolve this script's own directory
 # explicitly rather than relying on sys.path[0], which is invocation-path
@@ -198,7 +199,8 @@ def index_memory_md(db_path, project_dir):
 
     try:
         lines = memory_path.read_text(encoding="utf-8", errors="ignore").splitlines()
-        content = "\n".join(lines[:MEMORY_MD_MAX_LINES])
+        # SH-105853: MEMORY.md is indexed into a searchable sessions row.
+        content = redact_text("\n".join(lines[:MEMORY_MD_MAX_LINES]))
         if not content.strip():
             return False
 
