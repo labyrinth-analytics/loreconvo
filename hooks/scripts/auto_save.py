@@ -29,6 +29,7 @@ except BootstrapError as exc:
 _open_conn = _storage._open_conn
 ensure_schema = _storage.ensure_schema
 upsert_session = _storage.upsert_session
+redact_parsed_session = _storage.redact_parsed_session
 # One derivation of truncate-with-marker (SH-101877): the hook path and the
 # direct-write path share storage_core's implementation. CAP VALUES now
 # deliberately diverge (SH-101938): the hook path keeps 500/8000, the direct
@@ -267,6 +268,7 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
         exists = row is not None
         existing_tags_json = row[1] if row else None
 
+        parsed = redact_parsed_session(parsed)  # SH-105853
         now = utc_now_iso()
         tags_json = json.dumps(auto_save_tags())
         decisions_json = json.dumps(parsed["decisions"])

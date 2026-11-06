@@ -28,6 +28,7 @@ except BootstrapError as exc:
 _open_conn = _storage._open_conn
 ensure_schema = _storage.ensure_schema
 upsert_session = _storage.upsert_session
+redact_parsed_session = _storage.redact_parsed_session
 
 # Reuse transcript parsing from auto_save.py
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -66,6 +67,7 @@ def save_pre_compact(db_path, session_id, parsed, trigger, project=None):
 
         cursor = conn.execute("SELECT id, tags FROM sessions WHERE id = ?", (session_id,))
         row = cursor.fetchone()
+        parsed = redact_parsed_session(parsed)  # SH-105853
         now = utc_now_iso()
         tags_json = json.dumps(tags)
         decisions_json = json.dumps(parsed["decisions"])

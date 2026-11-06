@@ -29,9 +29,9 @@ from pathlib import Path
 # Import _open_conn from storage_core. Try relative import first (package
 # context), fall back to absolute import (monorepo-root test context).
 try:
-    from .core.storage_core import _open_conn
+    from .core.storage_core import _open_conn, redact_parsed_session, redact_text
 except ImportError:
-    from core.storage_core import _open_conn
+    from core.storage_core import _open_conn, redact_parsed_session, redact_text
 
 # Module-level constants.
 MAX_SUMMARY_RETRIES = 5
@@ -298,6 +298,7 @@ def _as_list(value) -> list:
 
 def _update_session_with_llm_summary(conn: sqlite3.Connection,
                                       session_id: str, result: dict) -> None:
+    result = redact_parsed_session(result)  # SH-105853: model output too
     existing = conn.execute(
         "SELECT summary, project, surface FROM sessions WHERE id=?",
         (session_id,),
@@ -453,6 +454,9 @@ def summarize_session(session_id: str, transcript_path: str = None) -> bool:
             _mark_fallback(conn, session_id, "no_transcript")
             log.info("No transcript available for session %s -- fallback heuristic", session_id)
             return False
+
+        # SH-105853: never send a raw secret to the API.
+        transcript_text = redact_text(transcript_text)
 
         # Call API.
         try:

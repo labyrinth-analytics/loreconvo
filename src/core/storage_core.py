@@ -11,6 +11,7 @@ and FTS5 query sanitization. database.py imports from here and
 re-exports _open_conn so no existing caller changes.
 """
 
+import json
 import logging
 import os
 import re
@@ -18,6 +19,61 @@ import sqlite3
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Secret redaction for non-SessionDatabase writers (SH-105853)
+# ---------------------------------------------------------------------------
+# Hooks load this module by file path (no package), so a relative import is
+# not always available; fall back to loading the sibling generated module by
+# path. secret_redaction.py is stdlib-only, like this module.
+
+def _load_secret_redaction():
+    try:
+        from . import secret_redaction  # package context
+        return secret_redaction
+    except ImportError:
+        import importlib.util
+        path = Path(__file__).with_name("secret_redaction.py")
+        spec = importlib.util.spec_from_file_location(
+            "_loreconvo_secret_redaction", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+
+_secret_redaction = _load_secret_redaction()
+
+
+def redact_text(text):
+    """Return text with secret shapes replaced by the redaction marker."""
+    return _secret_redaction.redact_secrets(text)[0]
+
+
+def redact_json_text(text):
+    """Redact string values inside a JSON-encoded field.
+
+    Decodes first so a secret inside a JSON string (whose quotes are
+    escaped) is still matched; re-encodes only when something changed.
+    Non-JSON text is redacted as plain text.
+    """
+    if not text:
+        return text
+    try:
+        decoded = json.loads(text)
+    except (TypeError, ValueError):
+        return redact_text(text)
+    redacted, count = _secret_redaction.redact_value(decoded)
+    return json.dumps(redacted) if count else text
+
+
+def redact_parsed_session(parsed):
+    """Copy of a hook-parsed session dict with free-text fields redacted."""
+    out = dict(parsed)
+    for key in ("title", "summary", "decisions", "artifacts", "open_questions"):
+        if key in out:
+            out[key] = _secret_redaction.redact_value(out[key])[0]
+    return out
 
 # Schema revision -- increment on any DDL change.
 # Used as PRAGMA user_version for cross-environment compatibility gating.
@@ -375,6 +431,11 @@ def upsert_session(conn: sqlite3.Connection, session_id: str, title: str,
     (hooks, core, fallback script, summarizer) use this single definition
     so FK cascades, column defaults, and conflict resolution are uniform.
     """
+    title = redact_text(title)
+    summary = redact_text(summary)
+    decisions = redact_json_text(decisions)
+    artifacts = redact_json_text(artifacts)
+    open_questions = redact_json_text(open_questions)
     existing = conn.execute(
         "SELECT summary, project, surface, source, external_tool_session "
         "FROM sessions WHERE id=?",

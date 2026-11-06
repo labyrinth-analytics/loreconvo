@@ -309,7 +309,7 @@ def save_session(args):
         db.close()
 
     print(f"Saved session {saved_id} to {db_path}")
-    print(f"  title: {args.title}")
+    print(f"  title: {session.title}")  # redacted by save_session (SH-105853)
     print(f"  surface: {args.surface}")
     return saved_id
 
