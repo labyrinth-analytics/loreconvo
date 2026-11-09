@@ -180,7 +180,7 @@ LoreConvo is listed in the Hermes plugin catalog and can be installed with one c
 
 This is the simplest way to add LoreConvo to Hermes. The catalog installs LoreConvo as a native Hermes memory provider -- it reads and writes the same `~/.loreconvo/sessions.db` as your other LoreConvo clients.
 
-> **Tool coverage note:** The catalog integration exposes 3 tools (search, context retrieval, and save). It does not support Pro license keys. If you need the full 40-tool MCP suite or Pro features (consolidation, semantic search, anti-pattern tagging, etc.), use Option B instead.
+> **Tool coverage note:** The catalog integration exposes 3 tools (search, context retrieval, and save). It does not support Pro license keys. If you need the full <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count -->-tool MCP suite or Pro features (consolidation, semantic search, anti-pattern tagging, etc.), use Option B instead.
 
 **First install:**
 
@@ -239,7 +239,7 @@ hermes plugins update loreconvo
 
 ### Option B: MCP Server via YAML Config
 
-Hermes Agent also supports LoreConvo as an MCP server through its YAML config file. This gives you the full set of 40 LoreConvo MCP tools rather than the three catalog provider tools.
+Hermes Agent also supports LoreConvo as an MCP server through its YAML config file. This gives you the full set of <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> LoreConvo MCP tools rather than the three catalog provider tools.
 
 Add an entry under `mcp_servers:` in `~/.hermes/config.yaml`:
 
@@ -711,5 +711,5 @@ index it at the start of each session.
 
 - [Quickstart Guide](docs/quickstart.md) -- get up and running in 5 minutes
 - [CLI Reference](docs/cli_reference.md) -- manage sessions from the terminal
-- [MCP Tool Catalog](docs/mcp_tool_catalog.md) -- all 40 tools explained in plain English
+- [MCP Tool Catalog](docs/mcp_tool_catalog.md) -- all <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> tools explained in plain English
 - [Changelog](docs/CHANGELOG.md) -- what changed in each release

@@ -89,7 +89,7 @@ Replace `/path/to/loreconvo` with wherever you saved the source folder.
 
 After making code changes, use `/reload-plugins` to refresh without restarting.
 
-Once loaded, Claude has access to all 40 LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
+Once loaded, Claude has access to all <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
 
 ### Cowork (Desktop App)
 
@@ -315,7 +315,7 @@ After checkout, your license key is emailed automatically to the address you use
 
 ## MCP Tools
 
-LoreConvo provides 40 MCP tools that Claude calls automatically during sessions.
+LoreConvo provides <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> MCP tools that Claude calls automatically during sessions.
 The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs/mcp_tool_catalog.md) for the complete reference.
 
 | Tool | What it does |

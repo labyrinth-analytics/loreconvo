@@ -1,6 +1,6 @@
 # LoreConvo MCP Tool Catalog
 
-LoreConvo provides 40 MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all 40.
+LoreConvo provides <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count -->.
 
 This catalog explains what each tool does, when Claude uses it, and what parameters it accepts.
 
