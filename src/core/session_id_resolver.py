@@ -1,3 +1,12 @@
+from typing import Literal, overload
+
+
+@overload
+def resolve_session_id(session_id: str | None, lore_session_id: str | None, required: Literal[True]) -> str: ...
+@overload
+def resolve_session_id(session_id: str | None, lore_session_id: str | None, required: Literal[False]) -> str | None: ...
+@overload
+def resolve_session_id(session_id: str | None, lore_session_id: str | None, required: bool) -> str | None: ...
 def resolve_session_id(session_id: str | None, lore_session_id: str | None, required: bool) -> str | None:
     """Resolve session_id alias for remote-devices bridge compatibility.
 
@@ -28,4 +37,35 @@ def resolve_session_id(session_id: str | None, lore_session_id: str | None, requ
 
     if required:
         raise ValueError("session_id is required")
+    return None
+
+
+def resolve_session_ids(
+    session_ids: list[str] | None,
+    lore_session_ids: list[str] | None,
+) -> list[str] | None:
+    """Resolve session_ids (plural) alias for remote-devices bridge compatibility.
+
+    Same logic as resolve_session_id but for list-typed parameters (e.g.,
+    export_for_anthropic's session_ids). Neither value is required; returns
+    None when the caller supplies neither.
+
+    Args:
+        session_ids: Primary session_ids parameter
+        lore_session_ids: Alias for session_ids (for remote-devices bridge)
+
+    Returns:
+        Resolved session_ids list, or None if not provided
+
+    Raises:
+        ValueError: If both differ
+    """
+    if session_ids is not None and lore_session_ids is not None:
+        if session_ids != lore_session_ids:
+            raise ValueError("both session_ids and lore_session_ids provided with different values")
+        return session_ids
+    if session_ids is not None:
+        return session_ids
+    if lore_session_ids is not None:
+        return lore_session_ids
     return None

@@ -60,6 +60,7 @@ from core.tool_groups import (
 from core.license import get_license_status, LORECONVO_UPGRADE_URL
 from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onboard_config_path
 from core.timeutil import parse_iso_utc
+from core.session_id_resolver import resolve_session_id, resolve_session_ids
 from core import trust_framing
 from compat_check import check as _compat_check, emit_startup_warnings as _compat_emit
 
@@ -212,6 +213,7 @@ def save_session(
     start_date: str | None = None,
     end_date: str | None = None,
     session_id: str | None = None,
+    lore_session_id: str | None = None,
     external_tool_session: bool = False,
     reasoning_notes: str | None = None,
     summarize: bool = False,
@@ -255,7 +257,10 @@ def save_session(
             Claude API (Haiku) for compression before saving. Opt-in only;
             defaults to False. Falls back to the raw summary on any API error
             or if the key is absent. See INSTALL.md Privacy Note.
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both session_id and lore_session_id are provided, they must match.
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=False)
     summary_source = None
     if summarize:
         # Redact BEFORE the outbound Claude API call, not just before the DB
@@ -378,12 +383,15 @@ def get_recent_sessions(
 
 
 @mcp.tool(title="Get Session")
-def get_session(session_id: str) -> dict:
+def get_session(session_id: str | None = None, lore_session_id: str | None = None) -> dict:
     """Get full details of a specific session.
 
     Args:
         session_id: The UUID of the session to retrieve
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=True)
     session = _get_db().get_session(session_id)
     if not session:
         return {"error": f"Session {session_id} not found"}
@@ -927,9 +935,11 @@ def inject_agent_context(
 
 @mcp.tool(title="Tag Session")
 def tag_session(
-    session_id: str,
+    *,
+    session_id: str | None = None,
     persona_name: str,
     relevance_note: str | None = None,
+    lore_session_id: str | None = None,
 ) -> dict:
     """Tag a session with a persona for filtered recall.
 
@@ -939,7 +949,10 @@ def tag_session(
         session_id: Session to tag
         persona_name: Persona identifier (e.g., 'ron-bot', 'ron-bot:sql', 'tax-prep')
         relevance_note: Optional note about why this session is relevant to the persona
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=True)
     _get_db().tag_session(session_id, persona_name, relevance_note)
     return {"status": "tagged", "session_id": session_id, "persona": persona_name}
 
@@ -963,9 +976,10 @@ def link_sessions(
 
 @mcp.tool(title="Get Related Sessions")
 def get_related_sessions(
-    session_id: str,
+    session_id: str | None = None,
     limit: int = 10,
     min_shared_terms: int = 3,
+    lore_session_id: str | None = None,
 ) -> dict:
     """Find sessions related to a given session by co-occurrence and embedding. Pro only.
 
@@ -978,7 +992,10 @@ def get_related_sessions(
         session_id: UUID of the session to find related sessions for
         limit: Max results to return (default 10, max 50)
         min_shared_terms: Minimum shared keywords required (default 3)
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=True)
     return _get_db().related_sessions_payload(
         session_id, limit=limit, min_shared_terms=min_shared_terms
     )
@@ -990,6 +1007,7 @@ def graph_session_map(
     project: str | None = None,
     depth: int = 1,
     max_nodes: int = 60,
+    lore_session_id: str | None = None,
 ) -> dict:
     """Render a Mermaid knowledge-graph neighborhood around a session or project.
 
@@ -1006,6 +1024,8 @@ def graph_session_map(
         project: name of the seed project. Exactly one of session_id/project required.
         depth: number of BFS expansion hops over link edges, clamped [0, 3]
         max_nodes: node budget (sessions + attribute leaves), clamped [1, 200]
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
 
     Returns a dict with version, seed, seed_found, mermaid, nodes, edges,
     truncated, nodes_emitted, nodes_available, edges_emitted,
@@ -1013,6 +1033,7 @@ def graph_session_map(
     edge_kinds_included, edge_kinds_omitted -- or {"error": {...}} on a
     validation failure or an unavailable database.
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=False)
     return _get_db().build_graph_map_payload(
         session_id=session_id, project=project, depth=depth, max_nodes=max_nodes
     )
@@ -1094,6 +1115,7 @@ def create_project(
     default_persona: str | None = None,
     instructions: str | None = None,
     session_id: str | None = None,
+    lore_session_id: str | None = None,
 ) -> dict:
     """Create or update a project definition.
 
@@ -1107,7 +1129,10 @@ def create_project(
         default_persona: Auto-tag new sessions with this persona
         instructions: Optional project-wide instructions or constraints
         session_id: Optional session ID for audit trail (typically provided by MCP context)
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=False)
     _get_db().create_project(name, description, expected_skills, default_persona, instructions, session_id=session_id)
     return {"status": "created", "project": name}
 
@@ -1370,6 +1395,7 @@ def export_for_anthropic(
     project: str | None = None,
     session_ids: list[str] | None = None,
     days_back: int | None = None,
+    lore_session_ids: list[str] | None = None,
 ) -> dict:
     """Export LoreConvo sessions to Anthropic managed-agents memory format. Pro only.
 
@@ -1386,7 +1412,10 @@ def export_for_anthropic(
         project: Export only sessions from this project.
         session_ids: List of specific session UUIDs to export. Overrides project filter.
         days_back: Limit to sessions from the last N days.
+        lore_session_ids: Alias for session_ids (for remote-devices bridge compatibility).
+            If both are provided, they must match.
     """
+    session_ids = resolve_session_ids(session_ids, lore_session_ids)
     payload = _get_db().anthropic_export_payload(
         project=project, session_ids=session_ids, days_back=days_back
     )
@@ -1447,6 +1476,7 @@ def inspect_sessions(
     since: str | None = None,
     limit: int = 20,
     show_stats: bool = False,
+    lore_session_id: str | None = None,
 ) -> dict:
     """Inspect stored sessions: list, filter, or get full detail for one session.
 
@@ -1461,7 +1491,10 @@ def inspect_sessions(
         since: Return sessions on or after this date (YYYY-MM-DD).
         limit: Max sessions to return (default 20).
         show_stats: If True, include aggregate counts (total, by_surface, by_project).
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=False)
     if session_id:
         session = _get_db().get_session(session_id)
         if not session:
@@ -1599,8 +1632,10 @@ def get_memory_digest(
 
 @mcp.tool(title="Set Session Expiry")
 def set_session_expiry(
-    session_id: str,
+    *,
+    session_id: str | None = None,
     expires_at: str | None,
+    lore_session_id: str | None = None,
 ) -> dict:
     """Set or clear an expiry date on a session.
 
@@ -1612,7 +1647,10 @@ def set_session_expiry(
     Args:
         session_id: ID of the session to update
         expires_at: ISO 8601 date string (e.g. '2027-01-01T00:00:00Z'), or None to clear
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=True)
     result = _get_db().set_session_expiry(session_id, expires_at)
     if not result.get("ok"):
         return {
@@ -1657,7 +1695,7 @@ def get_dream_log(
 
 
 @mcp.tool(title="Get Docs for Session")
-def get_docs_for_session(session_id: str, limit: int = 5) -> dict:
+def get_docs_for_session(session_id: str | None = None, limit: int = 5, lore_session_id: str | None = None) -> dict:
     """Return LoreDocs documents cross-linked to a LoreConvo session. Pro tier only.
 
     Queries the LoreDocs cross_product_links table. Both LoreConvo and LoreDocs
@@ -1670,6 +1708,8 @@ def get_docs_for_session(session_id: str, limit: int = 5) -> dict:
     Args:
         session_id  -- LoreConvo session UUID
         limit       -- max results (default 5)
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
 
     Returns dict with:
         schema_version          -- int, for version negotiation by callers
@@ -1678,6 +1718,7 @@ def get_docs_for_session(session_id: str, limit: int = 5) -> dict:
         links                   -- list of link dicts
         reason                  -- set when cross_product_available is False
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=True)
     try:
         ld_db = discover_loredocs_db()
     except LoreDocsAccessError as exc:
@@ -1714,7 +1755,7 @@ def get_docs_for_session(session_id: str, limit: int = 5) -> dict:
 
 
 @mcp.tool(title="Link Session to Doc")
-def session_link_doc(session_id: str, doc_id: str, vault_id: str) -> dict:
+def session_link_doc(*, session_id: str | None = None, doc_id: str, vault_id: str, lore_session_id: str | None = None) -> dict:
     """Create a manual cross-product link from a LoreConvo session to a LoreDocs doc.
 
     Manual links are accessible on all tiers. The target doc must not be in a
@@ -1724,6 +1765,8 @@ def session_link_doc(session_id: str, doc_id: str, vault_id: str) -> dict:
         session_id  -- LoreConvo session UUID
         doc_id      -- LoreDocs document ID
         vault_id    -- LoreDocs vault containing the document
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
 
     Returns dict with:
         ok      -- bool
@@ -1733,6 +1776,7 @@ def session_link_doc(session_id: str, doc_id: str, vault_id: str) -> dict:
                    | "vault not found" | "vault has cross-linking disabled"
                    | "document not found"
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=True)
     try:
         ld_db = discover_loredocs_db()
     except LoreDocsAccessError as exc:
@@ -1822,16 +1866,20 @@ def get_anti_patterns(
 
 
 @mcp.tool(title="Tag Session as Anti-Pattern")
-def tag_as_anti_pattern(session_id: str,
+def tag_as_anti_pattern(session_id: str | None = None,
                          source: str = "unknown",
-                         reason: str = "") -> dict:
+                         reason: str = "",
+                         lore_session_id: str | None = None) -> dict:
     """Mark an existing session as an anti-pattern. Idempotent.
 
     Args:
         session_id: The sessions.id value to mark (TEXT <= 255 chars).
         source: Attribution for this tag (e.g., 'claude-code', 'agent:gina').
         reason: Human-readable reason for the tag. Stored in audit log.
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=True)
     try:
         result = _get_db().mark_anti_pattern(session_id, source=source, reason=reason)
         return {"status": result, "session_id": session_id}
@@ -1842,9 +1890,10 @@ def tag_as_anti_pattern(session_id: str,
 
 
 @mcp.tool(title="Untag Anti-Pattern")
-def untag_anti_pattern(session_id: str,
+def untag_anti_pattern(session_id: str | None = None,
                         source: str = "unknown",
-                        reason: str = "") -> dict:
+                        reason: str = "",
+                        lore_session_id: str | None = None) -> dict:
     """Remove an anti-pattern tag from a session. Idempotent.
 
     The audit log row is written on successful removal; not written if the
@@ -1854,7 +1903,10 @@ def untag_anti_pattern(session_id: str,
         session_id: The sessions.id value to untag (TEXT <= 255 chars).
         source: Attribution for this untag (e.g., 'claude-code', 'admin').
         reason: Human-readable reason for the removal. Stored in audit log.
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=True)
     try:
         result = _get_db().remove_anti_pattern(session_id, source=source, reason=reason)
         return {"status": result, "session_id": session_id}
@@ -1863,12 +1915,18 @@ def untag_anti_pattern(session_id: str,
 
 
 @mcp.tool(title="Pin Session")
-def pin_session(session_id: str, keep_forever: object = True) -> dict:
+def pin_session(session_id: str | None = None, keep_forever: object = True, lore_session_id: str | None = None) -> dict:
     """Pin or unpin a session to exclude it from automated cleanup.
 
     keep_forever=True (default): session excluded from future cleanup;
       any existing expires_at is cleared atomically.
     keep_forever=False: pin removed; session can receive expiry again.
+
+    Args:
+        session_id: The session ID to pin or unpin.
+        keep_forever: True to pin, False to unpin.
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
 
     Returns:
         {"ok": True, "session_id": "...", "keep_forever": bool}
@@ -1878,6 +1936,7 @@ def pin_session(session_id: str, keep_forever: object = True) -> dict:
         {"ok": False, "code": "db_error", "message": "..."}
         {"ok": False, "code": "feature_disabled", "message": "..."}
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=True)
     import logging
     # Explicit bool coercion: accept True/False/1/0/"true"/"false"/"1"/"0"
     if isinstance(keep_forever, str):
@@ -1936,6 +1995,7 @@ def save_memory_item(
     metadata: dict | None = None,
     external_id: str | None = None,
     artifact_type: str | None = None,
+    lore_session_id: str | None = None,
 ) -> dict:
     """Save a structured memory item: a decision, open question, or artifact.
 
@@ -1956,7 +2016,10 @@ def save_memory_item(
         metadata: Freeform key-value metadata (mainly for artifacts).
         external_id: Caller-supplied dedup key, unique per (project, external_id).
         artifact_type: For item_type='artifact', the artifact's type (e.g. 'file', 'url').
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
     """
+    session_id = resolve_session_id(session_id, lore_session_id, required=False)
     return _get_db().save_memory_item(
         item_type=item_type, title=title, body=body, session_id=session_id,
         project=project, tags=tags, metadata=metadata, external_id=external_id,

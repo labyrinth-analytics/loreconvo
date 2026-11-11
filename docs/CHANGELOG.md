@@ -4,6 +4,18 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.11.1 (2026-11-10)
+
+### Added
+
+- All tools that accept a `session_id` parameter now also accept
+  `lore_session_id` as an alias. This works around the remote-devices
+  bridge (used by Claude Cowork) which strips arguments named
+  `session_id` in transit. If you pass both, they must match. The
+  `export_for_anthropic` tool similarly accepts `lore_session_ids` as
+  an alias for `session_ids`. No existing call needs to change -- the
+  original parameter name still works.
+
 ## v0.11.0 (2026-11-06)
 
 ### Added

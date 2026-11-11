@@ -1,5 +1,25 @@
 # LoreConvo Changelog
 
+## v0.11.1 (2026-11-10)
+
+### Added
+
+- SH-106024: `lore_session_id` alias parameter on 15 tools that accept
+  `session_id` (or `session_ids`). The remote-devices bridge (Claude Cowork)
+  strips arguments named `session_id` in transit; the alias
+  `lore_session_id` (or `lore_session_ids` for `export_for_anthropic`)
+  provides a workaround. Both primary and alias are accepted; if both are
+  supplied they must match. The primary name remains primary -- no breaking
+  change to any existing caller. Resolver lives in
+  `src/core/session_id_resolver.py` (`resolve_session_id`,
+  `resolve_session_ids`). Tools updated: `save_session`, `get_session`,
+  `tag_session`, `get_related_sessions`, `graph_session_map`,
+  `create_project`, `export_for_anthropic`, `inspect_sessions`,
+  `set_session_expiry`, `get_docs_for_session`, `session_link_doc`,
+  `tag_as_anti_pattern`, `untag_anti_pattern`, `pin_session`,
+  `save_memory_item`. Several tools became keyword-only (`*,`) to
+  accommodate the optional alias before required parameters.
+
 ## v0.11.0 (2026-11-06)
 
 ### Added
