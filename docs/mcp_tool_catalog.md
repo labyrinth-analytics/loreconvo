@@ -619,7 +619,7 @@ LoreConvo and LoreDocs from separate marketplace installs is sufficient.
 
 ## Tool Groups (v0.10.20+)
 
-You can choose which of the 40 tools your AI assistant sees. Fewer tools means
+You can choose which of the <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> tools your AI assistant sees. Fewer tools means
 a shorter tool list for the assistant to read and less context used. Available
 on all tiers. By default every group is on, so nothing changes unless you opt in.
 
@@ -652,7 +652,7 @@ below) rather than guessing.
 ### `configure_tools`
 
 Lists or sets the enabled tool groups. Always available, whatever groups are
-selected, and not counted in the 40 tools (like the `get_server_info`
+selected, and not counted in the <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> tools (like the `get_server_info`
 diagnostic).
 
 **Parameters:**
