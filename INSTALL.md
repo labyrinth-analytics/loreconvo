@@ -157,7 +157,7 @@ Codex uses a TOML config file at `~/.codex/config.toml`. Add a `[mcp_servers.lor
 ```toml
 [mcp_servers.loreconvo]
 command = "uvx"
-args = ["loreconvo==<version>"]
+args = ["--from", "loreconvo[server]==<version>", "loreconvo"]
 
 [mcp_servers.loreconvo.env]
 CODEX_HOME = "/Users/your-username/.codex"  # Required by Codex to locate its own config when running MCP servers as subprocesses
@@ -180,7 +180,7 @@ LoreConvo is listed in the Hermes plugin catalog and can be installed with one c
 
 This is the simplest way to add LoreConvo to Hermes. The catalog installs LoreConvo as a native Hermes memory provider -- it reads and writes the same `~/.loreconvo/sessions.db` as your other LoreConvo clients.
 
-> **Tool coverage note:** The catalog integration exposes 3 tools (search, context retrieval, and save). It does not support Pro license keys. If you need the full <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count -->-tool MCP suite or Pro features (consolidation, semantic search, anti-pattern tagging, etc.), use Option B instead.
+> **Tool coverage note:** The catalog integration works as a Hermes memory provider. It reads and writes your session database, supports Pro license keys (passed via `LORECONVO_PRO` env var or `~/.loredocs/license.json`), and provides search and context retrieval. If you need the full <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count -->-tool MCP suite (for advanced features like consolidation, semantic search, or anti-pattern tagging in non-Hermes contexts), use Option B instead.
 
 **First install:**
 
@@ -195,6 +195,7 @@ The installer shows a disclosure and asks three questions:
 
 2. **"Enable 'loreconvo' now?":** Answer `y`.
    - Hermes plugins install disabled by default. This step activates the plugin for your current profile.
+   - **Important:** Enabling the plugin does NOT automatically set it as your memory provider. To use LoreConvo as Hermes memory, run `hermes memory setup` and select `loreconvo`, or manually add `memory.provider: loreconvo` to `~/.hermes/config.yaml`. Once activated, LoreConvo will prefetch relevant sessions at the start of each turn and save each turn to your session database.
 
 3. **"Prepare these with Hermes through PM now?" (Python deps):** Answer `y`.
    - This installs the `loreconvo` package into Hermes' managed Python environment. If you answer `n`, run these two commands afterwards:
@@ -202,6 +203,7 @@ The installer shows a disclosure and asks three questions:
      hermes plugins enable loreconvo
      hermes pm repair
      ```
+   - After the dependency install, restart the Hermes gateway if one is running: `hermes gateway restart`. Hermes prints this reminder automatically.
 
 **Verify the install:**
 
@@ -233,7 +235,7 @@ After re-installing from the catalog, future upgrades should use:
 hermes plugins update loreconvo
 ```
 
-> Note: catalog-based updates via `hermes plugins update` are the expected path but have not been verified by Labyrinth Analytics as of this writing.
+> Note: catalog-based updates via `hermes plugins update` are tested and verified working. You will see a dependency-consent prompt ("Apply this update? Python dependencies: ...") which is expected -- accept it to complete the update.
 
 ---
 
@@ -248,7 +250,9 @@ mcp_servers:
   loreconvo:
     command: uvx
     args:
-      - loreconvo==<version>
+      - "--from"
+      - "loreconvo[server]==<version>"
+      - "loreconvo"
     enabled: true
     env:
       LORECONVO_PRO: your-license-key
