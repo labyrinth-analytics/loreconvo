@@ -180,7 +180,7 @@ LoreConvo is listed in the Hermes plugin catalog and can be installed with one c
 
 This is the simplest way to add LoreConvo to Hermes. The catalog installs LoreConvo as a native Hermes memory provider -- it reads and writes the same `~/.loreconvo/sessions.db` as your other LoreConvo clients.
 
-> **Tool coverage note:** The catalog integration works as a Hermes memory provider. It reads and writes your session database, supports Pro license keys (passed via `LORECONVO_PRO` env var or `~/.loredocs/license.json`), and provides search and context retrieval. If you need the full <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count -->-tool MCP suite (for advanced features like consolidation, semantic search, or anti-pattern tagging in non-Hermes contexts), use Option B instead.
+> **Tool coverage note:** The catalog integration works as a Hermes memory provider. It reads and writes your session database, supports Pro license keys (passed via `LORECONVO_PRO` env var or `~/.loreconvo/license.json`), and provides search and context retrieval. If you need the full <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count -->-tool MCP suite (for advanced features like consolidation, semantic search, or anti-pattern tagging in non-Hermes contexts), use Option B instead.
 
 **First install:**
 
@@ -241,7 +241,7 @@ hermes plugins update loreconvo
 
 ### Option B: MCP Server via YAML Config
 
-Hermes Agent also supports LoreConvo as an MCP server through its YAML config file. This gives you the full set of <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> LoreConvo MCP tools rather than the three catalog provider tools.
+Hermes Agent also supports LoreConvo as an MCP server through its YAML config file. This gives you the full set of <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> LoreConvo MCP tools, providing direct access to advanced features like consolidation, semantic search, and anti-pattern tagging.
 
 Add an entry under `mcp_servers:` in `~/.hermes/config.yaml`:
 
