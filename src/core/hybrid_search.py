@@ -274,19 +274,17 @@ class LanceIndex:
             return False
 
         try:
-            # Try to get fragment count before compaction for logging
-            old_fragments = None
-            if hasattr(table, 'fragment_count'):
-                old_fragments = table.fragment_count()
+            # Run optimization and capture return value for metrics
+            result = table.optimize()
 
-            # Run optimization (LanceDB method to merge fragments)
-            table.optimize()
+            # Try to extract fragment metrics from result
+            old_fragments = None
+            new_fragments = None
+            if hasattr(result, 'fragments'):
+                old_fragments = result.fragments.get('before', None)
+                new_fragments = result.fragments.get('after', None)
 
             # Log results
-            new_fragments = None
-            if hasattr(table, 'fragment_count'):
-                new_fragments = table.fragment_count()
-
             if old_fragments is not None and new_fragments is not None:
                 _log.info(
                     'Lance table optimized: %d fragments -> %d fragments',
