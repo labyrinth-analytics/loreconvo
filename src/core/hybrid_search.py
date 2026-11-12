@@ -274,8 +274,13 @@ class LanceIndex:
             return False
 
         try:
-            # Run optimization and capture return value for metrics
-            result = table.optimize()
+            # cleanup_older_than=0 prunes superseded fragments/versions immediately
+            # instead of the 7-day default. Safe here because this Lance table is
+            # a derived index (SQLite is the system of record and can rebuild it),
+            # so there is no time-travel/rollback value in keeping old versions --
+            # and without this, disk usage grows with write count rather than row
+            # count (SH-106101 benchmark: 25974 -> 142618 bytes/session, 1k->15k).
+            result = table.optimize(cleanup_older_than=datetime.timedelta(0))
 
             # Try to extract fragment metrics from result
             old_fragments = None
