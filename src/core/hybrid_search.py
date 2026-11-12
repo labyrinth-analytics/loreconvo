@@ -103,6 +103,7 @@ def _should_index(
     - source in ('periodic', 'file_memory')
     - title starts with '--- name:' (SKILL.md content stored as sessions)
     - summary starts with '--- name:' within first 20 chars (bypass detection)
+    - summary is None (missing_summary: must be excluded for consistency with rebuild())
     """
     if external_tool:
         return False
@@ -111,6 +112,8 @@ def _should_index(
     if title and title.startswith('--- name:'):
         return False
     if summary and summary[:20].startswith('--- name:'):
+        return False
+    if summary is None:
         return False
     return True
 
