@@ -195,6 +195,7 @@ class LanceIndex:
         self._model = None
         self._db = None
         self._table = None
+        self._write_count = 0
 
     # ---- lazy accessors ----
 
@@ -259,6 +260,48 @@ class LanceIndex:
         except Exception:
             return 0
 
+    def compact_if_needed(self, threshold: int = 100) -> bool:
+        """Compact the LanceDB table if write count meets threshold.
+
+        Returns True if compaction ran, False otherwise.
+        Never raises; errors are logged but do not block operations.
+        """
+        if self._write_count < threshold:
+            return False
+
+        table = self._open_table()
+        if table is None:
+            return False
+
+        try:
+            # Try to get fragment count before compaction for logging
+            old_fragments = None
+            if hasattr(table, 'fragment_count'):
+                old_fragments = table.fragment_count()
+
+            # Run optimization (LanceDB method to merge fragments)
+            table.optimize()
+
+            # Log results
+            new_fragments = None
+            if hasattr(table, 'fragment_count'):
+                new_fragments = table.fragment_count()
+
+            if old_fragments is not None and new_fragments is not None:
+                _log.info(
+                    'Lance table optimized: %d fragments -> %d fragments',
+                    old_fragments,
+                    new_fragments,
+                )
+            else:
+                _log.info('Lance table optimized')
+
+            self._write_count = 0
+            return True
+        except Exception as exc:
+            _log.warning('Lance compact_if_needed failed: %s', exc)
+            return False
+
     def index_session(
         self,
         session_id: str,
@@ -313,6 +356,8 @@ class LanceIndex:
                     return True
                 table.delete(f"session_id = '{session_id}'")
                 table.add([row])
+                self._write_count += 1
+                self.compact_if_needed()
 
             return True
         except Exception as exc:
