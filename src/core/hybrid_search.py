@@ -346,7 +346,8 @@ class LanceIndex:
                 self._table.create_fts_index('tags', replace=True)
             else:
                 # Validate UUID format to prevent SQL injection via session_id.
-                # LanceDB 0.30.2 has no parameterized filter API; constrain the
+                # LanceDB 0.34.0 has parameterized filter API via Expr, but UUID
+                # validation provides defense-in-depth. Current approach: constrain
                 # input space to [0-9a-f-] so no SQL metacharacters can reach
                 # the Arrow DataFusion engine. Revisit on every LanceDB upgrade.
                 if not _UUID_RE.match(session_id):
@@ -383,9 +384,10 @@ class LanceIndex:
 
             where_clause: Optional[str] = None
             if project:
-                # LanceDB 0.30.2 has no parameterized filter API. Arrow DataFusion
-                # follows standard SQL quoting: '' escapes a literal single-quote.
-                # Revisit on every LanceDB upgrade to check for parameterized support.
+                # LanceDB 0.34.0 has parameterized filter API via Expr, but current
+                # approach uses Arrow DataFusion SQL quoting: '' escapes a literal
+                # single-quote. Defense-in-depth is adequate; parameterization optional.
+                # Revisit on every LanceDB upgrade to check for improvements.
                 safe_proj = project.replace("'", "''")
                 where_clause = f"project = '{safe_proj}'"
 
