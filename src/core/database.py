@@ -499,6 +499,7 @@ class SessionDatabase:
         _check_shared_environment_warning()
         _check_network_filesystem_warning(str(self.config.db_path))
         self._init_schema()
+        self._maybe_upgrade_lance_compaction()
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -2142,6 +2143,30 @@ class SessionDatabase:
             lance_dir = Path(self.config.db_path).parent / 'sessions.lance'
             self._lance_index = LanceIndex(lance_dir)
         return self._lance_index
+
+    def _maybe_upgrade_lance_compaction(self) -> None:
+        """One-time compaction for Lance stores that pre-date SH-106077 compaction.
+
+        Stores created before compact_if_needed() existed may already carry
+        years of uncompacted fragments; waiting for the normal 100-write
+        threshold to accumulate again would leave them bloated indefinitely.
+        Runs at most once per store (marker file in the db dir, alongside
+        sessions.lance itself) and never raises -- same never-block
+        contract as compact_if_needed and _lance_write_safe.
+        """
+        if not self.config.is_pro:
+            return
+        lance_dir = Path(self.config.db_path).parent / 'sessions.lance'
+        marker = lance_dir.parent / '.lance_upgraded'
+        if marker.exists() or not lance_dir.exists():
+            return
+        try:
+            # threshold=0 forces compaction regardless of this process's
+            # (freshly zeroed) in-memory write counter.
+            self._get_lance_index().compact_if_needed(threshold=0)
+            marker.touch()
+        except Exception as exc:
+            logger.warning("Lance upgrade compaction failed: %s", exc)
 
     def _lance_write_safe(self, session: Session) -> None:
         """Write session to Lance index if Pro tier. Errors are logged, never raised.
