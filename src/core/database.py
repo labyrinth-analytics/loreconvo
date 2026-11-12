@@ -40,6 +40,7 @@ from .storage_core import (
     remediate_permissions,
     expand_compound_token,
     sanitize_fts_query,
+    has_precise_lookup_token,
     normalize_project_name,
     PROJECT_ALIASES,
     session_visibility_clause,
@@ -3503,6 +3504,20 @@ class SessionDatabase:
         params.append(limit)
 
         rows = self.conn.execute(sql, params).fetchall()
+
+        # SH-106145: an AND query across every derived keyword returns
+        # nothing the moment one keyword is absent from a summary, even
+        # when the other keywords uniquely identify the right session.
+        # Retry once with the same tokens OR-ed together (still BM25-
+        # ranked, so sessions matching more terms still sort first)
+        # instead of surfacing zero results.
+        if not rows and not has_precise_lookup_token(query):
+            or_query = self._sanitize_fts_query(query, match_any=True)
+            if or_query != fts_query:
+                or_params = list(params)
+                or_params[0] = or_query
+                rows = self.conn.execute(sql, or_params).fetchall()
+
         results = []
         for row in rows:
             session = self._row_to_session(row)

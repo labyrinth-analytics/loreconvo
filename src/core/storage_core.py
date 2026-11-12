@@ -544,7 +544,28 @@ def expand_compound_token(token: str):
     return [token] + parts
 
 
-def sanitize_fts_query(query: str) -> str:
+_PRECISE_LOOKUP_TOKEN_RE = re.compile(r'^[A-Za-z]{1,8}-\d+$')
+
+
+def has_precise_lookup_token(query: str) -> bool:
+    """True if any whitespace-separated token looks like a ticket ref
+    (e.g. "SH-100406").
+
+    Used to suppress the SH-106145 AND-empty-to-OR fallback for this
+    query shape: a ref + keyword search is a precision lookup, and the
+    2026-08-11 fix (test_absent_term_still_excludes) deliberately pins
+    AND-exclusion for it -- a ref that doesn't match any session must
+    return nothing, not an unrelated session that happens to share the
+    other word. The OR fallback is for vaguer, multi-content-word recall
+    queries (no ref-shaped token), not targeted ref lookups.
+    """
+    return any(
+        _PRECISE_LOOKUP_TOKEN_RE.match(tok.strip('"'))
+        for tok in query.split()
+    )
+
+
+def sanitize_fts_query(query: str, match_any: bool = False) -> str:
     """Sanitize and preprocess user input for FTS5 MATCH.
 
     Processing steps:
@@ -554,7 +575,11 @@ def sanitize_fts_query(query: str) -> str:
     4. Apply prefix matching (trailing *) for short alpha tokens (<=10 chars)
        so partial terms like "consolid" match "consolidation".
     5. Quote each token to escape FTS5 operators (hyphens, colons).
-    6. Implicit AND across all tokens (FTS5 default).
+    6. Implicit AND across all tokens (FTS5 default), or explicit OR across
+       all tokens when match_any=True (SH-106145: the Free-tier empty-
+       retrieval fallback -- a multi-word query where not every word
+       appears in the same session summary should still surface the
+       best BM25-ranked partial match instead of nothing).
 
     Examples:
         "stripe billing"     -> '"stripe" "billing"'
@@ -565,6 +590,7 @@ def sanitize_fts_query(query: str) -> str:
         "fts-migration"      -> '"fts-migration"'
         "agent:ron"          -> '"agent:ron"'
         "K-1 parser waiting" -> '"K-1" "parser" "waiting"'
+        "stripe billing", match_any=True -> '"stripe" OR "billing"'
     """
     safe = query.strip()
     if not safe:
@@ -611,7 +637,10 @@ def sanitize_fts_query(query: str) -> str:
 
     # FTS5 requires explicit AND when combining parenthesized OR-groups
     # with other terms. Implicit AND only works between simple tokens.
-    joiner = ' AND ' if has_or_group else ' '
+    if match_any:
+        joiner = ' OR '
+    else:
+        joiner = ' AND ' if has_or_group else ' '
     return joiner.join(fts_groups)
 
 
