@@ -274,6 +274,101 @@ With tool search off, Hermes sends every tool definition to the model on each tu
 
 ---
 
+## Connecting to Claude Desktop (Chat)
+
+Claude Desktop is the standalone desktop app (Cmd+Space, search "Claude"). You can add
+LoreConvo to it so the Chat tab has access to your session memory -- the same database
+that Claude Code uses.
+
+### Find your config file
+
+Open the config file in a text editor. The path contains a space, so use this command
+to open it safely:
+
+```bash
+open -e ~/"Library/Application Support/Claude/claude_desktop_config.json"
+```
+
+If the file does not exist yet, Claude Desktop has not created it. Start Claude Desktop
+at least once to generate it, then run the command above.
+
+### Add LoreConvo under mcpServers
+
+Find the `mcpServers` key (or add it if absent) and add an entry for LoreConvo:
+
+```json
+{
+  "mcpServers": {
+    "loreconvo": {
+      "command": "/Users/YOUR_USERNAME/.local/bin/uvx",
+      "args": ["--from", "loreconvo[server]==<version>", "loreconvo"],
+      "env": {
+        "LORECONVO_PRO": "your-license-key"
+      }
+    }
+  }
+}
+```
+
+Replace `YOUR_USERNAME` with your Mac username, `<version>` with the version you want
+to pin to (for example `0.11.0`), and `your-license-key` with your Pro license key.
+Omit the `env` block entirely if you are on the free tier.
+
+> **Why the full path to uvx?** Desktop apps launch without your shell's PATH. If you
+> use just `uvx` as the command, Claude Desktop cannot find it. You need the full absolute
+> path. Find yours by running `which uvx` in your terminal; on most macOS installs it is
+> `/Users/YOUR_USERNAME/.local/bin/uvx`.
+
+### Restart Claude Desktop
+
+Quit Claude Desktop fully -- use **Cmd+Q** (not just closing the window, which leaves
+it in the menu bar). Then reopen it. The LoreConvo tools load at startup.
+
+> **Note:** This same `mcpServers` entry also applies to Claude Desktop's Code tab
+> (when you open it from the desktop app). One entry in `claude_desktop_config.json`
+> covers both surfaces.
+
+### Verify it worked
+
+In a Chat session, ask Claude:
+
+```
+Call get_server_info
+```
+
+You should see a response showing the LoreConvo version and status `ok`. Then ask:
+
+```
+List my 3 most recent LoreConvo sessions
+```
+
+If LoreConvo is working, Claude returns sessions from your local `~/.loreconvo/` store --
+the same sessions you have in Claude Code.
+
+### Auto-save in Chat sessions
+
+The SessionEnd and SessionStart hooks (see below) are Claude Code hooks and do not run
+in Claude Desktop Chat. To save a session from Chat, ask Claude at the end of a
+conversation:
+
+```
+Save this session to LoreConvo with project "my_project"
+```
+
+Claude calls `save_session` directly. Use the `--project` name that matches your other
+sessions so they stay grouped together in search results.
+
+### Browser-based Claude.ai (export-to-chat.sh)
+
+If you use Claude through a browser at claude.ai (not the desktop app), LoreConvo is
+not available as an MCP server. As a workaround, `export-to-chat.sh` (included in the
+repo) exports your most recent sessions as text you can paste into a Chat window to
+give Claude context. This is a one-time paste, not a live connection. For persistent
+memory across browser sessions, switch to Claude Desktop and follow the Desktop setup
+above.
+
+---
+
 ## Setting Up Auto-Save and Auto-Load
 
 Install these hooks once and every session is captured automatically -- no `save_session`
