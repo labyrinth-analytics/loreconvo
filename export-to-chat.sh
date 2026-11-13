@@ -24,7 +24,15 @@ if [ -n "$1" ]; then
     echo "To export a specific session, use its ID with the CLI."
 else
     # Default: export last session to clipboard
-    OUTPUT=$("$PYTHON" "$CLI" export --last --format markdown 2>&1)
+    # Capture stdout only -- stderr (e.g. the network-filesystem warning logged
+    # by src/core/database.py) must reach the terminal, not the clipboard.
+    OUTPUT=$("$PYTHON" "$CLI" export --last --format markdown)
+    STATUS=$?
+
+    if [ $STATUS -ne 0 ] || [ -z "$OUTPUT" ] || [ "$OUTPUT" = "No sessions found." ]; then
+        echo "No sessions saved yet -- nothing to export."
+        exit 1
+    fi
 
     if command -v pbcopy &> /dev/null; then
         echo "$OUTPUT" | pbcopy
