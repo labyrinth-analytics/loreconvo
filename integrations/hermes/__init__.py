@@ -31,6 +31,8 @@ TOOL_NAME_ALIASES: Dict[str, str] = {
     "import_sessions": "import_export_file",
     "rebuild_index": "rebuild_lance_index",
     "get_related_sessions": "related_sessions_payload",
+    "get_context": "get_context_for",  # SH-105360
+    "save_memory": "save_memory_item",  # SH-105360
 }
 
 # Tools with no Hermes-native dispatch path. Disclosed, not silent: the
