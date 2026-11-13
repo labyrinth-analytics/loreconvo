@@ -180,7 +180,9 @@ LoreConvo is listed in the Hermes plugin catalog and can be installed with one c
 
 This is the simplest way to add LoreConvo to Hermes. The catalog installs LoreConvo as a native Hermes memory provider -- it reads and writes the same `~/.loreconvo/sessions.db` as your other LoreConvo clients.
 
-> **Tool coverage note:** The catalog integration works as a Hermes memory provider. It reads and writes your session database, supports Pro license keys (passed via `LORECONVO_PRO` env var or `~/.loreconvo/license.json`), and provides search and context retrieval. If you need the full <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count -->-tool MCP suite (for advanced features like consolidation, semantic search, or anti-pattern tagging in non-Hermes contexts), use Option B instead.
+> **Tool coverage note (v0.10.20+):** The catalog integration exposes a registry-derived tool set with the `loreconvo_` prefix: `loreconvo_search_sessions`, `loreconvo_get_context_for`, `loreconvo_save_memory_item`, and more. MCP-only tools (`configure_tools`, `inject_agent_context`) are excluded. Pro gating applies. If you need the full <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count -->-tool MCP suite for non-Hermes contexts, use Option B instead.
+>
+> **Upgrading from v0.10.19:** Two catalog tool names changed. Update `loreconvo_get_context` to `loreconvo_get_context_for` and `loreconvo_save_memory` to `loreconvo_save_memory_item`. The old names return an error in v0.10.20.
 
 **First install:**
 

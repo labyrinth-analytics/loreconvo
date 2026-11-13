@@ -89,6 +89,12 @@ What changed in each release, written for users (not developers).
 
 ### Changed
 
+- **Hermes catalog tool names changed.** If you call LoreConvo tools from Hermes
+  workflows or scripts, two names changed: `loreconvo_get_context` is now
+  `loreconvo_get_context_for`, and `loreconvo_save_memory` is now
+  `loreconvo_save_memory_item`. The old names return an error. `loreconvo_search_sessions`
+  is unchanged. This is because the catalog now exposes the full tool set by name
+  rather than a fixed three-tool subset.
 - **LoreConvo now requires Python 3.11 or newer.** Python 3.10 reaches end of
   life this month, and the security fixes below need 3.11. If you are on 3.10,
   stay on v0.10.19 until you upgrade Python.
