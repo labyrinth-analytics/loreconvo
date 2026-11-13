@@ -52,7 +52,7 @@ LoreConvo's FTS5 search is benchmarked against a 60-session synthetic corpus (6 
 | FTS5 + compound token expansion (default) | **88.9%** | **0.875** |
 | FTS5 baseline (no expansion) | 72.2% | 0.708 |
 
-Compound token expansion (camelCase / snake_case query preprocessing) lifts Recall@5 by **+35.7 pp** on queries using technical identifiers like `autoSave`, `pipeline_tracker`, and `get_context_for`.
+Compound token expansion (camelCase/PascalCase query preprocessing) lifts Recall@5 by **+35.7 pp** on queries using technical identifiers like `autoSave`, `PreCompact`, and `get_context_for`. Snake_case tokens like `pipeline_tracker` are matched as-is (not split), which avoids false matches on common subwords.
 
 [Full benchmark report](docs/agent-reports/benchmarks/loreconvo_recall_benchmark_20260522.md) |
 [Reproduce](scripts/run_loreconvo_recall_benchmark.py)

@@ -188,16 +188,19 @@ This is the simplest way to add LoreConvo to Hermes. The catalog installs LoreCo
 hermes plugins install loreconvo
 ```
 
-The installer shows a disclosure and asks three questions:
+The installer shows a disclosure and asks four questions:
 
 1. **`LORECONVO_HERMES_PROJECT`:** The default project name for sessions Hermes saves to LoreConvo.
    - Press Enter (leave it empty) unless you want every Hermes session filed under a specific project name. An empty value means LoreConvo uses `"hermes"` as the project, which is correct for most setups. You can change this later in `~/.hermes/.env`.
 
-2. **"Enable 'loreconvo' now?":** Answer `y`.
+2. **`LORECONVO_PRO`:** Your Pro license key (optional).
+   - Press Enter to skip if you are on the free tier. If you have a Pro key (starts with `LAB-`), paste it here to unlock Pro features (unlimited sessions, semantic search, and more) in Hermes sessions. An existing key already on disk is used automatically if you leave this blank.
+
+3. **"Enable 'loreconvo' now?":** Answer `y`.
    - Hermes plugins install disabled by default. This step activates the plugin for your current profile.
    - **Important:** Enabling the plugin does NOT automatically set it as your memory provider. To use LoreConvo as Hermes memory, run `hermes memory setup` and select `loreconvo`, or manually add `memory.provider: loreconvo` to `~/.hermes/config.yaml`. Once activated, LoreConvo will prefetch relevant sessions at the start of each turn and save each turn to your session database.
 
-3. **"Prepare these with Hermes through PM now?" (Python deps):** Answer `y`.
+4. **"Prepare these with Hermes through PM now?" (Python deps):** Answer `y`.
    - This installs the `loreconvo` package into Hermes' managed Python environment. If you answer `n`, run these two commands afterwards:
      ```bash
      hermes plugins enable loreconvo
