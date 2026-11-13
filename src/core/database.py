@@ -9,6 +9,8 @@ import re
 import shutil
 import socket
 import sqlite3
+import subprocess
+import sys
 import threading
 import uuid
 from contextlib import contextmanager
@@ -308,20 +310,97 @@ def _check_shared_environment_warning() -> None:
         )
 
 
+_NETWORK_FS_TYPES = frozenset({
+    "nfs", "nfs4", "smbfs", "cifs", "afpfs", "webdav",
+})
+
+_MOUNT_LINE_RE = re.compile(r"^.+? on (?P<mountpoint>/.*?) \((?P<options>[^)]*)\)\s*$")
+
+
+def _best_mount_match(resolved_path: str, mounts: List[tuple]) -> Optional[str]:
+    """Return the fstype of the ``(mountpoint, fstype)`` entry whose mountpoint
+    is the longest matching prefix of ``resolved_path``, or None if none match."""
+    best_type, best_len = None, -1
+    for mountpoint, fstype in mounts:
+        mountpoint = mountpoint.rstrip("/") or "/"
+        if (resolved_path == mountpoint or resolved_path.startswith(mountpoint + "/")) \
+                and len(mountpoint) > best_len:
+            best_type, best_len = fstype, len(mountpoint)
+    return best_type
+
+
+def _macos_fstype(resolved_path: str) -> Optional[str]:
+    """Real filesystem type for ``resolved_path`` on macOS, via `mount`'s output.
+
+    A path under /Volumes/ can be a local external APFS/HFS+ disk, not just a
+    network share -- the mountpoint's actual type (parsed here, not guessed
+    from the path) is what distinguishes them."""
+    try:
+        result = subprocess.run(
+            ["mount"], capture_output=True, text=True, timeout=5, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    mounts = []
+    for line in result.stdout.splitlines():
+        m = _MOUNT_LINE_RE.match(line)
+        if not m:
+            continue
+        fstype = m.group("options").split(",")[0].strip().lower()
+        mounts.append((m.group("mountpoint"), fstype))
+    return _best_mount_match(resolved_path, mounts)
+
+
+def _linux_fstype(resolved_path: str) -> Optional[str]:
+    """Real filesystem type for ``resolved_path`` on Linux, via /proc/mounts."""
+    try:
+        with open("/proc/mounts", "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except OSError:
+        return None
+    mounts = []
+    for line in lines:
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        mounts.append((parts[1], parts[2].lower()))
+    return _best_mount_match(resolved_path, mounts)
+
+
+def _get_mount_fstype(path: str) -> Optional[str]:
+    """Return the OS-reported filesystem type name for ``path``'s mount, or
+    None if it cannot be determined (unsupported platform, lookup failure)."""
+    try:
+        resolved = os.path.realpath(path)
+    except OSError:
+        return None
+    if sys.platform == "darwin":
+        return _macos_fstype(resolved)
+    if sys.platform.startswith("linux"):
+        return _linux_fstype(resolved)
+    return None
+
+
 def _check_network_filesystem_warning(db_path: str) -> None:
-    """Warn if sessions.db appears to be on a network filesystem."""
+    """Warn if sessions.db is actually on a network filesystem.
+
+    Checks the real mount filesystem type, not a path prefix: a local
+    external disk on macOS mounts under /Volumes/ too, so a /Volumes/ path
+    alone is not evidence of a network mount (SH-106181)."""
     if os.environ.get("LORECONVO_SKIP_NETWORK_FS_WARN"):
         return
     path = str(db_path)
-    network_prefixes = ("/Volumes/", "/net/", "/mnt/smb", "/mnt/nfs",
-                        "/media/nfs", "//")
-    if any(path.startswith(p) for p in network_prefixes):
+    parent = os.path.dirname(path) or "."
+    fstype = _get_mount_fstype(parent)
+    if fstype in _NETWORK_FS_TYPES:
         logger.warning(
-            "sessions.db path '%s' appears to be on a network filesystem. "
+            "sessions.db path '%s' is on a %s network filesystem. "
             "chmod 600 does not prevent access by root-level backup agents "
             "or NFS/SMB servers. Move sessions.db to local storage if this "
             "is a concern. Set LORECONVO_SKIP_NETWORK_FS_WARN=1 to suppress.",
-            path
+            path, fstype
         )
 
 
