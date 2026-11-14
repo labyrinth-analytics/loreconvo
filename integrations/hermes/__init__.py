@@ -660,7 +660,7 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
 
     def _handle_stats(self, args: Dict[str, Any]) -> str:
         try:
-            status = self._db.get_stats()
+            status = self._db.usage_stats_with_hook_status()
             return json.dumps(status, default=str)
         except Exception as exc:
             return json.dumps({"error": str(exc)})
@@ -700,7 +700,9 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
         if not session_id:
             return json.dumps({"error": "session_id is required"})
         try:
-            self._db.set_session_pin(session_id, keep_forever=keep_forever)
+            found = self._db.set_keep_forever(session_id, keep_forever)
+            if not found:
+                return json.dumps({"error": "session not found", "session_id": session_id})
             return json.dumps({"pinned": keep_forever, "session_id": session_id})
         except Exception as exc:
             return json.dumps({"error": str(exc)})
