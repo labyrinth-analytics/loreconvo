@@ -1769,8 +1769,10 @@ def session_link_doc(*, session_id: str | None = None, doc_id: str, vault_id: st
             If both are provided, they must match.
 
     Returns dict with:
-        ok      -- bool
-        reason  -- failure description on error. Specific since SH-100670:
+        ok          -- bool
+        session_id, doc_id, link_status on success
+        link_status -- "created" | "upgraded_from_auto" | "already_manual" | "noop_auto"
+        reason      -- failure description on error. Specific since SH-100670:
                    "LoreDocs not installed" | "LoreDocs installed but
                    unreachable: <detail>" | "LoreDocs schema too old: <detail>"
                    | "vault not found" | "vault has cross-linking disabled"
