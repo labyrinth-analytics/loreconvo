@@ -571,7 +571,7 @@ def sanitize_fts_query(query: str, match_any: bool = False) -> str:
     Processing steps:
     1. Split on whitespace into raw tokens.
     2. Handle explicit trailing `*` by stripping it before processing.
-    3. Expand compound tokens (camelCase, snake_case) into parts.
+    3. Expand compound tokens (camelCase/PascalCase) into parts.
     4. Apply prefix matching (trailing *) for short alpha tokens (<=10 chars)
        so partial terms like "consolid" match "consolidation".
     5. Quote each token to escape FTS5 operators (hyphens, colons).
@@ -584,7 +584,7 @@ def sanitize_fts_query(query: str, match_any: bool = False) -> str:
     Examples:
         "stripe billing"     -> '"stripe" "billing"'
         "autoSave"           -> '"autoSave" OR "auto" OR "Save"'
-        "snake_case"         -> '"snake_case" OR "snake" OR "case"'
+        "snake_case"         -> '"snake_case"'
         "consolid"           -> '"consolid"*'
         "word*"              -> '"word"*'
         "fts-migration"      -> '"fts-migration"'
