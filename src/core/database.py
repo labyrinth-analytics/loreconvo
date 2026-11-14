@@ -3479,6 +3479,7 @@ class SessionDatabase:
         project: Optional[str] = None, skill: Optional[str] = None,
         include_external: bool = False,
         include_expired: bool = False,
+        surface: Optional[str] = None,
     ) -> List[Session]:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat().replace('+00:00', 'Z')
         query = "SELECT * FROM sessions WHERE start_date >= ? AND (source IS NULL OR source NOT IN ('periodic', 'file_memory'))"
@@ -3496,6 +3497,10 @@ class SessionDatabase:
         if skill:
             query += " AND id IN (SELECT session_id FROM session_skills WHERE skill_name = ?)"
             params.append(skill)
+
+        if surface:
+            query += " AND surface = ?"
+            params.append(surface)
 
         query += " ORDER BY start_date DESC LIMIT ?"
         params.append(limit)
