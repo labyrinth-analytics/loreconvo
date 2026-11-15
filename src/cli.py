@@ -21,6 +21,7 @@ from core.database import (
     _pinning_enabled, parse_session_id,
 )
 from core.config import Config
+from core.storage_core import redact_text
 
 db = SessionDatabase(Config())
 
@@ -64,7 +65,7 @@ def save(title, surface, summary, project, decisions, skills, tags,
     if permanent:
         db.set_keep_forever(session_id, keep_forever=True)
     click.echo(f"Saved session: {session_id}")
-    click.echo(f"  Title: {title}")
+    click.echo(f"  Title: {redact_text(title)}")
     click.echo(f"  Surface: {surface}")
     if project:
         click.echo(f"  Project: {project}")
