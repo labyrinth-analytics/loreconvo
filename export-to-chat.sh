@@ -35,15 +35,19 @@ else
     fi
 
     if command -v pbcopy &> /dev/null; then
-        echo "$OUTPUT" | pbcopy
-        echo "[OK] Last session copied to clipboard!"
-        echo ""
-        echo "Now switch to Claude Chat and paste (Cmd+V)."
-        echo ""
-        echo "--- Preview ---"
-        echo "$OUTPUT" | head -20
-        if [ $(echo "$OUTPUT" | wc -l) -gt 20 ]; then
-            echo "... (truncated, full content on clipboard)"
+        if echo "$OUTPUT" | pbcopy; then
+            echo "[OK] Last session copied to clipboard!"
+            echo ""
+            echo "Now switch to Claude Chat and paste (Cmd+V)."
+            echo ""
+            echo "--- Preview ---"
+            echo "$OUTPUT" | head -20
+            if [ $(echo "$OUTPUT" | wc -l) -gt 20 ]; then
+                echo "... (truncated, full content on clipboard)"
+            fi
+        else
+            echo "Failed to copy to clipboard."
+            exit 1
         fi
     else
         # No pbcopy (Linux), just print
