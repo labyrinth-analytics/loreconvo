@@ -257,8 +257,9 @@ def save_session(
             Claude API (Haiku) for compression before saving. Opt-in only;
             defaults to False. Falls back to the raw summary on any API error
             or if the key is absent. See INSTALL.md Privacy Note.
-        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
-            If both session_id and lore_session_id are provided, they must match.
+        lore_session_id: Use this parameter for remote-devices bridge clients (e.g.,
+            Cowork). The bridge drops session_id, so use lore_session_id instead. If both
+            session_id and lore_session_id are provided, they must match.
     """
     session_id = resolve_session_id(session_id, lore_session_id, required=False)
     summary_source = None
