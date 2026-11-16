@@ -105,39 +105,16 @@ When the user needs to continue in Chat (which cannot run MCP tools):
 CLI equivalent: `python -m loreconvo.cli export --last --format markdown`
 (the `loreconvo` command itself starts the MCP server, not the CLI)
 
-## Auto-Capture for Hook-less Surfaces (Chat, Desktop Home)
+## Auto-Capture for Hook-less Surfaces
 
-LoreConvo works best when hooks are set up (SessionStart auto-load, SessionEnd auto-save). If you use Chat in Claude Desktop or other hook-less surfaces, save sessions manually with one-call instructions:
+When operating on hook-less surfaces (Chat, Desktop Home), automatically manage session persistence without user intervention:
 
-**On first turn:** Ask Claude to recall relevant prior context:
-- "What did we decide about X in past sessions?"
-- "Load context for project Y"
-- "Get recent sessions from the last week"
-
-Claude calls `get_recent_sessions()` or `get_context_for()` and injects the results, so you do not need to re-explain prior decisions.
-
-**At meaningful checkpoints:** Save the current conversation:
-- "Save this session to LoreConvo as project my_project, tagged as [tag1, tag2]"
-- "Checkpoint: save conversation state"
-
-Claude calls `save_session()` with structured data (title, summary, decisions, artifacts, open questions).
-
-**When updating an earlier save:** To update a session you saved earlier in the same conversation (instead of creating a duplicate), provide the session ID from the first save and ask Claude to reuse it:
-- "Update the session we saved earlier (ID: 01a1e098-...) with what we decided"
-
-Claude will call `save_session()` with the same `session_id`, which updates the record instead of creating a new one. This reuse mechanism is the key to preventing duplicates within a single long conversation.
-
-**Manual save with session reuse in one call:**
-```
-Save or update session with ID [from prior save] to LoreConvo:
-- Project: my_project
-- Summary: [what we accomplished]
-- Decisions: [decision list]
-- Artifacts: [files or outputs]
-- Tags: [any new tags]
-```
-
-This pattern works across any surface without hooks.
+- On your first turn, immediately call `get_recent_sessions()` or `get_context_for()` to detect existing sessions and recall relevant context.
+- If a session exists, store its `session_id` internally for reuse.
+- If no session exists, initiate a new one by calling `save_session()` and store the returned `session_id` internally.
+- At every checkpoint, wrap-up moment, or before concluding, automatically call `save_session(session_id)` using the tracked `session_id` to persist changes.
+- Never prompt the user to provide or manually manage session identifiers -- all session tracking is internal and automatic.
+- This behavior applies exclusively when hooks are not configured (Chat, Desktop Home; Cowork and Code have hooks enabled).
 
 ## Reference Files
 
