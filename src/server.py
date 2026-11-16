@@ -2341,10 +2341,15 @@ def main():
     # Release the DB connection (and its write lock) when the client parks
     # this process idle -- stays alive so Claude Code/Desktop (which do not
     # re-spawn a stdio server that exits) keep a working connection (SH-13610).
+    # Backstop (24h hard-exit) disabled by default: the 5-min release_func
+    # already handles lock cleanup (SH-12881). Enable via LORECONVO_ENABLE_IDLE_BACKSTOP=1.
+    backstop_env = None
+    if os.environ.get("LORECONVO_ENABLE_IDLE_BACKSTOP"):
+        backstop_env = "LORECONVO_IDLE_BACKSTOP_TIMEOUT"
     idle_watchdog.install(
         mcp, env_var="LORECONVO_IDLE_TIMEOUT",
         release_func=_get_db().release_idle_connection,
-        backstop_env_var="LORECONVO_IDLE_BACKSTOP_TIMEOUT",
+        backstop_env_var=backstop_env,
     )
     # SH-105344: checkpoint the WAL into sessions.db on both clean stdin EOF
     # (the finally below) and SIGTERM, so sessions.db alone stays portable.
