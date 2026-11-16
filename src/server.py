@@ -357,17 +357,13 @@ def save_session(
 @mcp.tool(title="Delete Session")
 def delete_session(
     session_id: str | None = None,
-    confirm: bool = True,
+    confirm: bool = False,
     lore_session_id: str | None = None,
 ) -> dict:
     """Delete a session by ID.
 
     Permanently removes a session from storage. Pinned sessions cannot be deleted
     and must be unpinned first with pin_session(keep_forever=False).
-
-    Surface guidance for Claude Desktop: Desktop app Chat and Cowork tabs use 'chat' surface.
-    Claude Code (IDE, CLI, Code tab) uses 'code' surface. Use 'cowork' only for existing records
-    created before the merge.
 
     Args:
         session_id: ID of the session to delete
