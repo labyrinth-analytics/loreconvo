@@ -46,7 +46,7 @@ of the `skills/` directory containing this file). The scripts auto-discover the 
 Call the `save_session` MCP tool with structured data extracted from the conversation:
 
 1. **Title**: Short, descriptive (e.g., "LoreConvo PRD and architecture design")
-2. **Surface**: Where this ran - `cowork`, `code`, or `chat`
+2. **Surface**: Where this ran - `cowork`, `code`, or `chat`. For Claude Desktop: use `chat` for both Chat and Cowork tabs, `code` for the Claude Code tab. `cowork` is valid only for existing records created before the merge.
 3. **Summary**: 2-3 paragraphs covering what was done, why, and what matters for future sessions
 4. **Decisions**: List every decision made, even small ones -- these are the most searchable items. Keep each entry to one short, self-contained claim (one sentence is usually enough). Narrative detail belongs in **Summary**, which has a much larger budget. Each decision entry is capped at 2,000 characters. Anything longer is stored truncated with a visible `[TRUNCATED: ...]` marker, so a cut is never silent. A tight entry never hits the cap.
 5. **Artifacts**: Files created or modified, with paths

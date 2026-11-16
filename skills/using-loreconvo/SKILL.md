@@ -67,7 +67,7 @@ the same job silently. You do not need to do anything special -- the `loreconvo`
 action skill handles the switch transparently.
 
 **Vault surface tags.** The `surface` field identifies where the session ran: `code`,
-`cowork`, `chat`. Agents use surface to filter relevant sessions when loading context.
+`cowork`, `chat`. For Claude Desktop: use `chat` for Chat and Cowork tabs, `code` for the Code tab. `cowork` is valid only for existing records created before the merge. Agents use surface to filter relevant sessions when loading context.
 
 **Agent tag convention.** Agents save sessions with `tags: ["agent:<name>"]` so their
 sessions are discoverable by role (e.g., `search_sessions("agent:ron-builder")`).
