@@ -412,6 +412,98 @@ def delete_session(
         }
 
 
+@mcp.tool(title="Update Session")
+def update_session(
+    session_id: str | None = None,
+    title: str | None = None,
+    summary: str | None = None,
+    surface: str | None = None,
+    project: str | None = None,
+    tags: list[str] | None = None,
+    decisions: list[str] | None = None,
+    artifacts: list[str] | None = None,
+    open_questions: list[str] | None = None,
+    reasoning_notes: str | None = None,
+    lore_session_id: str | None = None,
+) -> dict:
+    """Update metadata fields on an existing session in place.
+
+    Only fields you pass are changed; fields you omit keep their current
+    values.  No new record is created.  Use this to correct a title,
+    refine a summary, retag, or fix a wrong surface label without
+    re-saving the entire session.
+
+    Args:
+        session_id: ID of the session to update (required)
+        title: New title for the session
+        summary: New summary text (replaces the existing summary)
+        surface: New surface -- 'code', 'chat', or 'cowork'
+        project: New project name
+        tags: New tag list (replaces existing tags)
+        decisions: New decisions list (replaces existing decisions)
+        artifacts: New artifacts list (replaces existing artifacts)
+        open_questions: New open questions list (replaces existing)
+        reasoning_notes: New reasoning notes text
+        lore_session_id: Alias for session_id (remote-devices bridge).
+            If both are provided, they must match.
+
+    Returns:
+        {"status": "updated", "session_id": "...", "title": "..."} on success
+        {"status": "error", "error": "message"} on failure
+    """
+    session_id = resolve_session_id(session_id, lore_session_id, required=True)
+
+    # Verify the session exists before attempting the update.
+    existing = _get_db().get_session(session_id)
+    if not existing:
+        return {
+            "status": "error",
+            "error": f"Session '{session_id}' not found."
+        }
+
+    # Build kwargs dict, only including fields that were explicitly provided.
+    update_kwargs: dict = {}
+    if title is not None:
+        update_kwargs["title"] = title
+    if summary is not None:
+        update_kwargs["summary"] = summary
+    if surface is not None:
+        update_kwargs["surface"] = surface
+    if project is not None:
+        update_kwargs["project"] = project
+    if tags is not None:
+        update_kwargs["tags"] = _normalize_tags(tags)
+    if decisions is not None:
+        update_kwargs["decisions"] = decisions
+    if artifacts is not None:
+        update_kwargs["artifacts"] = artifacts
+    if open_questions is not None:
+        update_kwargs["open_questions"] = open_questions
+    if reasoning_notes is not None:
+        update_kwargs["reasoning_notes"] = reasoning_notes
+
+    if not update_kwargs:
+        return {
+            "status": "error",
+            "error": "No fields provided to update. Pass at least one of: "
+                     "title, summary, surface, project, tags, decisions, "
+                     "artifacts, open_questions, reasoning_notes."
+        }
+
+    updated = _get_db().update_session(session_id, **update_kwargs)
+    if updated:
+        return {
+            "status": "updated",
+            "session_id": session_id,
+            "title": updated.title,
+        }
+    else:
+        return {
+            "status": "error",
+            "error": "Failed to update session (internal error)."
+        }
+
+
 @mcp.tool(title="Get Recent Sessions")
 def get_recent_sessions(
     limit: int = 10,

@@ -28,6 +28,7 @@ ALWAYS_ON: set[str] = {"get_server_info", "configure_tools"}
 TOOL_GROUPS: dict[str, tuple[str, ...]] = {
     "core": (
         "save_session",
+        "update_session",
         "search_sessions",
         "get_context_for",
         "get_recent_sessions",

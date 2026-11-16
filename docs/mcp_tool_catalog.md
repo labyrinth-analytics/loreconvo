@@ -1,6 +1,6 @@
 # LoreConvo MCP Tool Catalog
 
-LoreConvo provides <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count -->.
+LoreConvo provides <!-- mcp-tool-count:user_facing -->41<!-- /mcp-tool-count --> MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all <!-- mcp-tool-count:user_facing -->41<!-- /mcp-tool-count -->.
 
 This catalog explains what each tool does, when Claude uses it, and what parameters it accepts.
 
@@ -440,6 +440,52 @@ Sets or clears an expiry date on a session. After the date passes, the session i
 
 ---
 
+### `update_session`
+
+Updates metadata fields on an existing session in place. Only fields you provide are changed; fields you omit keep their current values. No new record is created. Use this to correct a title, refine a summary, retag, or fix a wrong surface label without re-saving the entire session.
+
+**When Claude uses it:** When you ask to fix or update something about a saved session (e.g., "fix the title on that session" or "retag that session as 'urgent'").
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `session_id` | text | yes | none | UUID of the session to update |
+| `title` | text | no | none | New title for the session |
+| `summary` | text | no | none | New summary text (replaces existing) |
+| `surface` | text | no | none | New surface -- 'code', 'chat', or 'cowork' |
+| `project` | text | no | none | New project name |
+| `tags` | array | no | none | New tag list (replaces existing tags) |
+| `decisions` | array | no | none | New decisions list (replaces existing) |
+| `artifacts` | array | no | none | New artifacts list (replaces existing) |
+| `open_questions` | array | no | none | New open questions list (replaces existing) |
+| `reasoning_notes` | text | no | none | New reasoning notes text |
+
+**Example conversation:**
+> You: "Fix the title on that last session -- it should say 'API Design Review'."
+> Claude: *calls update_session with the session UUID and title="API Design Review"*
+
+---
+
+### `delete_session`
+
+Permanently deletes a session from the database and removes it from all search indexes. The deletion is irreversible -- use `set_session_expiry` if you want to hide a session temporarily instead. Requires explicit confirmation via the `confirm=True` parameter. Use this when a session contains sensitive information, test data, or is no longer needed.
+
+**When Claude uses it:** When you ask to delete a session or permanently remove a saved context.
+
+**Parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `session_id` | text | yes | none | UUID of the session to delete |
+| `confirm` | boolean | yes | false | Must be `true` to confirm deletion. Prevents accidental deletes. |
+
+**Example conversation:**
+> You: "Delete that broken test session SH-106303."
+> Claude: *calls delete_session with the session UUID and confirm=true*
+
+---
+
 ### `get_dream_log`
 
 Returns recent consolidation log entries so you can see exactly what LoreConvo processed during each run: timestamp, project, surface, mode, number of sessions analyzed, and what triggered the run. Use this to confirm consolidation happened, monitor free-tier usage, or diagnose why a digest might be missing or stale.
@@ -619,7 +665,7 @@ LoreConvo and LoreDocs from separate marketplace installs is sufficient.
 
 ## Tool Groups (v0.10.20+)
 
-You can choose which of the <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> tools your AI assistant sees. Fewer tools means
+You can choose which of the <!-- mcp-tool-count:user_facing -->41<!-- /mcp-tool-count --> tools your AI assistant sees. Fewer tools means
 a shorter tool list for the assistant to read and less context used. Available
 on all tiers. By default every group is on, so nothing changes unless you opt in.
 
@@ -652,7 +698,7 @@ below) rather than guessing.
 ### `configure_tools`
 
 Lists or sets the enabled tool groups. Always available, whatever groups are
-selected, and not counted in the <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> tools (like the `get_server_info`
+selected, and not counted in the <!-- mcp-tool-count:user_facing -->41<!-- /mcp-tool-count --> tools (like the `get_server_info`
 diagnostic).
 
 **Parameters:**
@@ -675,6 +721,7 @@ error instead of saving, because the environment variable overrides the file.
 | Tool | One-line summary |
 |------|-----------------|
 | `save_session` | Save a session with decisions, artifacts, and tags |
+| `update_session` | Update metadata fields on an existing session in place |
 | `get_recent_sessions` | List recent sessions (optionally filtered) |
 | `get_session` | Get full details of one session by ID |
 | `search_sessions` | Full-text keyword search across sessions |
@@ -695,6 +742,7 @@ error instead of saving, because the environment variable overrides the file.
 | `consolidate_memories` | Merge related sessions into persistent memory entries (Recall) |
 | `get_memory_digest` | Inject a condensed memory digest into the current session (Recall) |
 | `get_dream_log` | View the consolidation activity log |
+| `delete_session` | Permanently delete a session and remove it from all indexes |
 | `set_session_expiry` | Mark a session to expire and be pruned after a given date |
 | `get_stats` | Show usage statistics: session count, surface breakdown |
 | `inspect_sessions` | Inspect session internals for debugging |

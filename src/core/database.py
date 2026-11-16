@@ -4531,6 +4531,115 @@ class SessionDatabase:
         self._lance_delete_safe([session_id])
         return True
 
+    def update_session(
+        self,
+        session_id: str,
+        title: Optional[str] = None,
+        summary: Optional[str] = None,
+        surface: Optional[str] = None,
+        project: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        decisions: Optional[List[str]] = None,
+        artifacts: Optional[List[str]] = None,
+        open_questions: Optional[List[str]] = None,
+        reasoning_notes: Optional[str] = None,
+    ) -> Optional[Session]:
+        """Update metadata fields on an existing session in place.
+
+        Only fields that are not None are updated; fields omitted by the
+        caller retain their current values.  No new record is created -- if
+        the session_id does not exist, returns None.
+
+        Secret redaction is applied to every text field before the UPDATE.
+        The FTS index is refreshed by the ``sessions_au`` trigger.  The Lance
+        index entry is deleted and re-written so semantic search sees the
+        new content.
+        """
+        existing = self.get_session(session_id)
+        if not existing:
+            return None
+
+        # Build SET clause + params only for fields the caller provided.
+        set_parts: list[str] = []
+        params: list = []
+
+        if title is not None:
+            title, _ = redact_secrets(title)
+            set_parts.append("title = ?")
+            params.append(title)
+            existing.title = title
+
+        if summary is not None:
+            summary, _ = redact_secrets(summary)
+            set_parts.append("summary = ?")
+            params.append(summary)
+            existing.summary = summary
+
+        if surface is not None:
+            set_parts.append("surface = ?")
+            params.append(surface)
+            existing.surface = surface
+
+        if project is not None:
+            project = normalize_project_name(project)
+            set_parts.append("project = ?")
+            params.append(project)
+            existing.project = project
+
+        if tags is not None:
+            tag_list = tags
+            set_parts.append("tags = ?")
+            params.append(json.dumps(tag_list))
+            existing.tags = tag_list
+
+        if decisions is not None:
+            dec_list = [redact_secrets(d)[0] for d in decisions]
+            set_parts.append("decisions = ?")
+            params.append(json.dumps(dec_list))
+            existing.decisions = dec_list
+
+        if artifacts is not None:
+            art_list = [redact_secrets(a)[0] for a in artifacts]
+            set_parts.append("artifacts = ?")
+            params.append(json.dumps(art_list))
+            existing.artifacts = art_list
+
+        if open_questions is not None:
+            oq_list = [redact_secrets(q)[0] for q in open_questions]
+            set_parts.append("open_questions = ?")
+            params.append(json.dumps(oq_list))
+            existing.open_questions = oq_list
+
+        if reasoning_notes is not None:
+            reasoning_notes, _ = redact_secrets(reasoning_notes)
+            set_parts.append("reasoning_notes = ?")
+            params.append(reasoning_notes if reasoning_notes else None)
+            existing.reasoning_notes = reasoning_notes if reasoning_notes else None
+
+        if not set_parts:
+            # Nothing to update -- return the session unchanged.
+            return existing
+
+        # Recompute content_hash if title or summary changed.
+        if title is not None or summary is not None:
+            new_hash = self.compute_content_hash(
+                existing.title, existing.summary, existing.created_at
+            )
+            set_parts.append("content_hash = ?")
+            params.append(new_hash)
+
+        params.append(session_id)
+        sql = f"UPDATE sessions SET {', '.join(set_parts)} WHERE id = ?"
+        self.conn.execute(sql, params)
+        self.conn.commit()
+
+        # Refresh Lance index: delete stale entry, write fresh one.
+        self._lance_delete_safe([session_id])
+        self._lance_write_safe(existing)
+
+        # Re-read to return the authoritative row.
+        return self.get_session(session_id)
+
     def _lance_delete_safe(self, session_ids: List[str]) -> None:
         """Remove deleted session ids from the Lance index, if Pro. Best-effort.
 
