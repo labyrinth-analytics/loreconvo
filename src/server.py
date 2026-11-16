@@ -2430,9 +2430,9 @@ def main():
     # this process idle -- stays alive so Claude Code/Desktop (which do not
     # re-spawn a stdio server that exits) keep a working connection (SH-13610).
     # Backstop (24h hard-exit) disabled by default: the 5-min release_func
-    # already handles lock cleanup (SH-12881). Enable via LORECONVO_ENABLE_IDLE_BACKSTOP=1.
+    # already handles lock cleanup (SH-12881). Enable via LORECONVO_ENABLE_IDLE_BACKSTOP=1 or true.
     backstop_env = None
-    if os.environ.get("LORECONVO_ENABLE_IDLE_BACKSTOP"):
+    if os.environ.get("LORECONVO_ENABLE_IDLE_BACKSTOP") in ("1", "true"):
         backstop_env = "LORECONVO_IDLE_BACKSTOP_TIMEOUT"
     idle_watchdog.install(
         mcp, env_var="LORECONVO_IDLE_TIMEOUT",
