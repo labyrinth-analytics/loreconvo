@@ -13,6 +13,9 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+# Ensure surface_utils is importable when running with -S (no site-packages).
+sys.path.insert(0, str(Path(__file__).parent))
+
 # Bootstrap: resolve storage_core and timeutil for non-package callers.
 from _bootstrap import resolve_storage_core, resolve_timeutil, BootstrapError
 from surface_utils import get_surface_from_hook_input

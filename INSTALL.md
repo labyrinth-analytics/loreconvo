@@ -180,7 +180,7 @@ LoreConvo is listed in the Hermes plugin catalog and can be installed with one c
 
 This is the simplest way to add LoreConvo to Hermes. The catalog installs LoreConvo as a native Hermes memory provider -- it reads and writes the same `~/.loreconvo/sessions.db` as your other LoreConvo clients.
 
-> **Tool coverage note (v0.10.20+):** The catalog integration exposes a registry-derived tool set with the `loreconvo_` prefix: `loreconvo_search_sessions`, `loreconvo_get_context_for`, `loreconvo_save_memory_item`, and more. MCP-only tools (`configure_tools`, `inject_agent_context`) are excluded. Pro gating applies. If you need the full <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count -->-tool MCP suite for non-Hermes contexts, use Option B instead.
+> **Tool coverage note (v0.10.20+):** The catalog integration exposes a registry-derived tool set with the `loreconvo_` prefix: `loreconvo_search_sessions`, `loreconvo_get_context_for`, `loreconvo_save_memory_item`, and more. MCP-only tools (`configure_tools`, `inject_agent_context`) are excluded. Pro gating applies. If you need the full <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count -->-tool MCP suite for non-Hermes contexts, use Option B instead.
 >
 > **Upgrading from v0.10.19:** Two catalog tool names changed. Update `loreconvo_get_context` to `loreconvo_get_context_for` and `loreconvo_save_memory` to `loreconvo_save_memory_item`. The old names return an error in v0.10.20.
 
@@ -246,7 +246,7 @@ hermes plugins update loreconvo
 
 ### Option B: MCP Server via YAML Config
 
-Hermes Agent also supports LoreConvo as an MCP server through its YAML config file. This gives you the full set of <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> LoreConvo MCP tools, providing direct access to advanced features like consolidation, semantic search, and anti-pattern tagging.
+Hermes Agent also supports LoreConvo as an MCP server through its YAML config file. This gives you the full set of <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count --> LoreConvo MCP tools, providing direct access to advanced features like consolidation, semantic search, and anti-pattern tagging.
 
 Add an entry under `mcp_servers:` in `~/.hermes/config.yaml`:
 
@@ -350,18 +350,32 @@ List my 3 most recent LoreConvo sessions
 If LoreConvo is working, Claude returns sessions from your local `~/.loreconvo/` store --
 the same sessions you have in Claude Code.
 
-### Auto-save in Chat sessions
+### Auto-save in Chat and Desktop Home
 
-The SessionEnd and SessionStart hooks (see below) are Claude Code hooks and do not run
-in Claude Desktop Chat. To save a session from Chat, ask Claude at the end of a
-conversation:
+The SessionEnd and SessionStart hooks (above) are Claude Code-only. They do NOT run in Chat or the merged Desktop Home tab (Cowork was merged into Home in August 2026). To save sessions from these surfaces, use manual checkpoint saves:
 
+**At the end of a conversation or at key checkpoints, ask Claude:**
 ```
 Save this session to LoreConvo with project "my_project"
 ```
 
-Claude calls `save_session` directly. Use the `--project` name that matches your other
-sessions so they stay grouped together in search results.
+Claude calls `save_session` directly. Use the `--project` name that matches your other sessions so they stay grouped in search results.
+
+**For long conversations in Chat/Home, prevent duplicate saves by reusing the session ID from the first save:**
+
+1. Save the first checkpoint: "Save this conversation checkpoint to LoreConvo as project my_project"
+   - Claude returns a session ID (e.g., `01a1e098-...`)
+2. At the next checkpoint: "Update session 01a1e098-... with these new decisions: ..."
+   - Claude reuses the same session ID, updating the record instead of creating a duplicate
+
+**For first-turn context recall in hook-less surfaces:**
+
+Ask Claude to load prior context before you start the work:
+- "What did we decide about X last week?"
+- "Load context for project my_project"
+- "Get my 3 most recent sessions"
+
+Claude calls `get_recent_sessions()` or `get_context_for()` to retrieve and inject relevant prior sessions at the start, eliminating the need to re-explain context.
 
 ### Browser-based Claude.ai (export-to-chat.sh)
 
@@ -854,5 +868,5 @@ index it at the start of each session.
 
 - [Quickstart Guide](docs/quickstart.md) -- get up and running in 5 minutes
 - [CLI Reference](docs/cli_reference.md) -- manage sessions from the terminal
-- [MCP Tool Catalog](docs/mcp_tool_catalog.md) -- all <!-- mcp-tool-count:user_facing -->40<!-- /mcp-tool-count --> tools explained in plain English
+- [MCP Tool Catalog](docs/mcp_tool_catalog.md) -- all <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count --> tools explained in plain English
 - [Changelog](docs/CHANGELOG.md) -- what changed in each release
