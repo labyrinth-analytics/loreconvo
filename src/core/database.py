@@ -2236,6 +2236,11 @@ class SessionDatabase:
         """
         if not self.config.is_pro:
             return
+        if str(self.config.db_path) == ':memory:':
+            # No store directory: Path(':memory:').parent is the CWD, so the
+            # marker (and any sessions.lance found there) would belong to
+            # whatever directory the process happens to run in.
+            return
         lance_dir = Path(self.config.db_path).parent / 'sessions.lance'
         marker = lance_dir.parent / '.lance_upgraded'
         if marker.exists() or not lance_dir.exists():
@@ -2244,22 +2249,9 @@ class SessionDatabase:
             # threshold=0 forces compaction regardless of this process's
             # (freshly zeroed) in-memory write counter.
             self._get_lance_index().compact_if_needed(threshold=0)
-            if not self._is_test_environment():
-                marker.touch()
+            marker.touch()
         except Exception as exc:
             logger.warning("Lance upgrade compaction failed: %s", exc)
-
-    def _is_test_environment(self) -> bool:
-        """Detect if running in test environment to avoid marker file leaks."""
-        import sys
-        import os
-        if 'pytest' in sys.modules:
-            return True
-        if any('pytest' in arg for arg in sys.argv):
-            return True
-        if os.environ.get('PYTEST_CURRENT_TEST'):
-            return True
-        return False
 
     def _lance_write_safe(self, session: Session) -> None:
         """Write session to Lance index if Pro tier. Errors are logged, never raised.
