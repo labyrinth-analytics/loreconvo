@@ -142,7 +142,7 @@ mcp = FastMCP(
         "Use get_recent_sessions to see what was done recently. "
         "Use vault_suggest to get proactive recommendations on what to revisit. "
         "Use loreconvo_onboard to set up your workspace on first install. "
-        "Fields: surface identifies the platform (code/cowork/chat/codex/custom), "
+        "Fields: surface identifies the platform (code/cowork/chat/codex/custom; Claude Desktop uses 'chat' for Chat/Cowork and 'code' for Code tab), "
         "project is a snake_case workspace identifier, "
         "tags use conventions status:*, priority:*, agent:* (see your setup doc), "
         "skills_used lists skill names invoked (not tool names). "
@@ -224,9 +224,13 @@ def save_session(
     Captures decisions, artifacts, skills used, and open questions for recall
     in future sessions.
 
+    Surface guidance for Claude Desktop: Desktop app Chat and Cowork tabs use 'chat' surface.
+    Claude Code (IDE, CLI, Code tab) uses 'code' surface. Use 'cowork' only for existing records
+    created before the merge.
+
     Args:
         title: Short descriptive title for the session
-        surface: Where this session ran - 'cowork', 'code', or 'chat'
+        surface: Where this session ran - 'cowork', 'code', or 'chat'. For Claude Desktop: use 'chat' for Chat and Cowork, 'code' for Claude Code tab.
         summary: 2-3 paragraph narrative summary of what happened. Capped at
             15000 chars.
         decisions: List of key decisions made during the session. Each item
@@ -348,6 +352,68 @@ def save_session(
             "AI assistant."
         )
     return result
+
+
+@mcp.tool(title="Delete Session")
+def delete_session(
+    session_id: str | None = None,
+    confirm: bool = True,
+    lore_session_id: str | None = None,
+) -> dict:
+    """Delete a session by ID.
+
+    Permanently removes a session from storage. Pinned sessions cannot be deleted
+    and must be unpinned first with pin_session(keep_forever=False).
+
+    Surface guidance for Claude Desktop: Desktop app Chat and Cowork tabs use 'chat' surface.
+    Claude Code (IDE, CLI, Code tab) uses 'code' surface. Use 'cowork' only for existing records
+    created before the merge.
+
+    Args:
+        session_id: ID of the session to delete
+        confirm: Must be True to proceed with deletion (safety confirmation)
+        lore_session_id: Alias for session_id (for remote-devices bridge compatibility).
+            If both are provided, they must match.
+
+    Returns:
+        {"status": "deleted", "session_id": "..."} on success
+        {"status": "error", "error": "message"} on failure
+    """
+    if not confirm:
+        return {
+            "status": "error",
+            "error": "Deletion requires confirmation. Set confirm=True to proceed."
+        }
+
+    session_id = resolve_session_id(session_id, lore_session_id, required=True)
+
+    # Check if session exists and its pinning status
+    existing = _get_db().get_session(session_id)
+    if not existing:
+        return {
+            "status": "error",
+            "error": f"Session '{session_id}' not found."
+        }
+
+    if existing.keep_forever:
+        return {
+            "status": "error",
+            "error": f"Session '{session_id}' is pinned and cannot be deleted. "
+                     "Unpin it first with pin_session(keep_forever=False)."
+        }
+
+    # Perform deletion (deletes SQLite row and Lance index entry via _lance_delete_safe)
+    success = _get_db().delete_session(session_id)
+    if success:
+        return {
+            "status": "deleted",
+            "session_id": session_id
+        }
+    else:
+        return {
+            "status": "error",
+            "error": "Failed to delete session (internal error)."
+        }
 
 
 @mcp.tool(title="Get Recent Sessions")

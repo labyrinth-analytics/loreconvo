@@ -24,7 +24,7 @@ any memory at any time.
 
 ### You control what gets saved
 
-LoreConvo puts you in control: automatic capture only runs if you choose to install the session hooks, every save is inspectable, and you can delete any memory at any time.
+LoreConvo puts you in control: automatic capture only runs if you choose to install the session hooks, every save is inspectable, and you can delete sessions via the delete_session MCP tool.
 
 Every memory shows you exactly where it came from — which surface captured it, when, what project context it belongs to, and which skill generated it. No mystery. Full provenance.
 
@@ -374,7 +374,7 @@ LoreConvo is **local-first**. All data lives in `~/.loreconvo/sessions.db` on yo
 - **Data collected:** Session titles, summaries, tags, surface identifiers, project names, and skill names you provide when saving. No telemetry, usage analytics, or identifiers are collected automatically.
 - **Storage:** SQLite database at `~/.loreconvo/sessions.db`. No cloud storage. Override the path with the `LORECONVO_DB` environment variable.
 - **Third-party sharing:** None by default. Data leaves your machine only if you enable optional AI summarization by setting `LORECONVO_ANTHROPIC_API_KEY`, which sends a bounded transcript excerpt or summary to the Anthropic API under that key. Every summarization path (background summaries (Pro), post-turn capture (Pro), and `save_session(summarize=True)`) uses only this key; the generic `ANTHROPIC_API_KEY` is never read. Leave it unset and everything stays local.
-- **Retention:** Data is retained until you delete it via `delete_session` or remove the database file manually. No automatic expiry.
+- **Retention:** Data is kept in your local .loreconvo/ directory. Use the `set_session_expiry` MCP tool to set a TTL for automatic cleanup, or `delete_session` to manually delete sessions.
 - **Contact:** info@labyrinthanalyticsconsulting.com
 
 Full privacy policy: https://labyrinthanalyticsconsulting.com/privacy

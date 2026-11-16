@@ -35,6 +35,7 @@ TOOL_GROUPS: dict[str, tuple[str, ...]] = {
     ),
     "memory": (
         "consolidate_memories",
+        "delete_session",
         "get_anti_patterns",
         "get_dream_log",
         "get_memory_digest",
