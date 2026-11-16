@@ -109,10 +109,10 @@ CLI equivalent: `python -m loreconvo.cli export --last --format markdown`
 
 When operating on hook-less surfaces (Chat, Desktop Home), automatically manage session persistence without user intervention:
 
-- On your first turn, immediately call `get_recent_sessions()` or `get_context_for()` to detect existing sessions and recall relevant context.
-- If a session exists, store its `session_id` internally for reuse.
-- If no session exists, initiate a new one by calling `save_session()` and store the returned `session_id` internally.
-- At every checkpoint, wrap-up moment, or before concluding, automatically call `save_session(session_id)` using the tracked `session_id` to persist changes.
+- On your first turn, immediately call `get_recent_sessions()` or `get_context_for()` to recall relevant prior context. Use what you find as background only: those sessions belong to earlier conversations.
+- Never reuse the `session_id` of a recalled session. Saving with an existing `session_id` updates that session in place and would overwrite the earlier conversation's summary.
+- At your first checkpoint (or when the user says wrap up or save), call `save_session()` without a `session_id` to create this conversation's session, and keep the returned `session_id` internally.
+- At every later checkpoint, wrap-up moment, or before concluding, call `save_session(session_id=<the id returned by your first save in this conversation>)` to update it, without being asked. Pass the id as `lore_session_id` instead of `session_id` if your client strips `session_id` (the remote-devices bridge does; both names are accepted).
 - Never prompt the user to provide or manually manage session identifiers -- all session tracking is internal and automatic.
 - This behavior applies exclusively when hooks are not configured (Chat, Desktop Home; Cowork and Code have hooks enabled).
 
