@@ -15,6 +15,7 @@ from pathlib import Path
 
 # Bootstrap: resolve storage_core and timeutil for non-package callers.
 from _bootstrap import resolve_storage_core, resolve_timeutil, BootstrapError
+from surface_utils import get_surface_from_hook_input
 
 try:
     _storage = resolve_storage_core(Path(__file__))
@@ -248,12 +249,14 @@ def _has_explicit_save_signature(tags_json: str | None) -> bool:
     return any(str(t).startswith("role:") for t in tags)
 
 
-def save_to_db(db_path, session_id, parsed, project=None, source="session"):
+def save_to_db(db_path, session_id, parsed, project=None, surface=None, source="session"):
     """Save parsed session data via storage_core.
 
     source: 'session' for final SessionEnd saves, 'periodic' for mid-session snapshots.
     Periodic saves use the same session_id so the final SessionEnd save overwrites them.
     """
+    if surface is None:
+        surface = "code"
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
     conn = _open_conn(db_path, busy_timeout_ms=2000)
@@ -329,7 +332,7 @@ def save_to_db(db_path, session_id, parsed, project=None, source="session"):
                 conn,
                 session_id=session_uuid,
                 title=parsed["title"],
-                surface="code",
+                surface=surface,
                 project=project,
                 start_date=now,
                 end_date=now,
@@ -385,6 +388,7 @@ def main():
         transcript_path = hook_input.get("transcript_path", "")
         cwd = hook_input.get("cwd", "")
         project = os.path.basename(cwd.rstrip("/")) if cwd else None
+        surface = get_surface_from_hook_input(hook_input)
 
         # Parse transcript
         parsed = parse_transcript(transcript_path)
@@ -400,7 +404,7 @@ def main():
 
         # Save to database
         db_path = get_db_path()
-        saved = save_to_db(db_path, session_id, parsed, project)
+        saved = save_to_db(db_path, session_id, parsed, project, surface)
 
         if saved:
             sys.stderr.write(f"LoreConvo: Auto-saved session '{parsed['title']}'\n")
