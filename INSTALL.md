@@ -647,6 +647,45 @@ The free tier supports up to 50 sessions. When you reach the limit, `save_sessio
 returns a message explaining how to upgrade. Contact Labyrinth Analytics for a Pro
 license key, then re-run `claude mcp add --scope user` with `--env=LORECONVO_PRO=<your-key>` included.
 
+**"loreconvo stopped running" banner in Claude Desktop (or "Server disconnected" in Claude Code)**
+
+This banner appears when the LoreConvo MCP server exits unexpectedly. As of v0.11.2, the server
+stays alive indefinitely while your client keeps the connection open (even if idle for 24+ hours).
+Idle connections release database resources every 5 minutes but do not exit, so Claude Desktop
+and Claude Code can park a connection without seeing false-failure banners.
+
+If you see this banner in v0.11.1 or earlier, upgrade to the latest version:
+
+```bash
+# Update your Claude Code config to pin the latest version
+claude mcp add --scope user \
+  loreconvo -- \
+  uvx --from loreconvo[server]==0.11.2 loreconvo
+```
+
+(Replace `0.11.2` with the actual latest version -- check `https://pypi.org/project/loreconvo/`.)
+
+Then restart Claude Code or Desktop. The server will no longer hard-exit on idle.
+
+**Duplicate LoreConvo instances (Claude Desktop spawning 2+ servers)**
+
+Claude Desktop may spawn multiple LoreConvo MCP servers if both a Plugin AND a manual
+`~/.claude.json` config entry are active at the same time. Check your configuration:
+
+1. **Via Plugin:** Run `/plugin list` in Claude Desktop. If you see `loreconvo` listed, the
+   plugin is active.
+2. **Via ~/.claude.json:** Check if LoreConvo is listed there:
+   ```bash
+   cat ~/.claude.json | grep -A 5 loreconvo
+   ```
+
+If you see LoreConvo in BOTH places, remove one:
+
+- **Keep the Plugin (recommended):** Edit `~/.claude.json` and delete the entire `loreconvo` entry.
+- **Keep manual config:** Remove the plugin via `/plugin remove loreconvo@labyrinth-analytics-claude-plugins`.
+
+Then restart Claude Desktop. You should see only one LoreConvo instance in the logs.
+
 ---
 
 ## Upgrading
