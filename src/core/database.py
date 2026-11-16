@@ -4571,6 +4571,10 @@ class SessionDatabase:
 
         if summary is not None:
             summary, _ = redact_secrets(summary)
+            # Check if summary is actually changing
+            if summary != existing.summary:
+                set_parts.append("previous_summary = ?")
+                params.append(existing.summary)
             set_parts.append("summary = ?")
             params.append(summary)
             existing.summary = summary
