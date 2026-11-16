@@ -649,21 +649,21 @@ license key, then re-run `claude mcp add --scope user` with `--env=LORECONVO_PRO
 
 **"loreconvo stopped running" banner in Claude Desktop (or "Server disconnected" in Claude Code)**
 
-This banner appears when the LoreConvo MCP server exits unexpectedly. As of v0.11.2, the server
+This banner appears when the LoreConvo MCP server exits unexpectedly. The server
 stays alive indefinitely while your client keeps the connection open (even if idle for 24+ hours).
 Idle connections release database resources every 5 minutes but do not exit, so Claude Desktop
 and Claude Code can park a connection without seeing false-failure banners.
 
-If you see this banner in v0.11.1 or earlier, upgrade to the latest version:
+If you see this banner, upgrade to the latest version:
 
 ```bash
 # Update your Claude Code config to pin the latest version
 claude mcp add --scope user \
   loreconvo -- \
-  uvx --from loreconvo[server]==0.11.2 loreconvo
+  uvx --from loreconvo[server]==0.11.1 loreconvo
 ```
 
-(Replace `0.11.2` with the actual latest version -- check `https://pypi.org/project/loreconvo/`.)
+(Replace `0.11.1` with the actual latest version -- check `https://pypi.org/project/loreconvo/`.)
 
 Then restart Claude Code or Desktop. The server will no longer hard-exit on idle.
 
