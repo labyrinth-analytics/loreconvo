@@ -71,6 +71,18 @@ _EGG_INFO_CANDIDATES = (
 )
 
 
+def _resolve_backstop_env():
+    """Resolve the idle-backstop env var name, or None when disabled.
+
+    Only explicit truthy values ('1' or 'true') enable the 24h hard-exit
+    backstop (SH-106334).  Returns the backstop timeout env var name to
+    pass to idle_watchdog.install, or None when the backstop is off.
+    """
+    if os.environ.get("LORECONVO_ENABLE_IDLE_BACKSTOP") in ("1", "true"):
+        return "LORECONVO_IDLE_BACKSTOP_TIMEOUT"
+    return None
+
+
 def _check_egg_info_conflict() -> None:
     """Warn if a stale egg-info directory may shadow installed metadata.
 
@@ -2431,9 +2443,7 @@ def main():
     # re-spawn a stdio server that exits) keep a working connection (SH-13610).
     # Backstop (24h hard-exit) disabled by default: the 5-min release_func
     # already handles lock cleanup (SH-12881). Enable via LORECONVO_ENABLE_IDLE_BACKSTOP=1 or true.
-    backstop_env = None
-    if os.environ.get("LORECONVO_ENABLE_IDLE_BACKSTOP") in ("1", "true"):
-        backstop_env = "LORECONVO_IDLE_BACKSTOP_TIMEOUT"
+    backstop_env = _resolve_backstop_env()
     idle_watchdog.install(
         mcp, env_var="LORECONVO_IDLE_TIMEOUT",
         release_func=_get_db().release_idle_connection,
