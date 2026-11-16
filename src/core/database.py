@@ -4551,6 +4551,11 @@ class SessionDatabase:
         if not existing:
             return None
 
+        # Capture old values for digest invalidation
+        old_project = existing.project
+        old_surface = existing.surface
+        old_summary = existing.summary
+
         # Build SET clause + params only for fields the caller provided.
         set_parts: list[str] = []
         params: list = []
@@ -4628,6 +4633,16 @@ class SessionDatabase:
         sql = f"UPDATE sessions SET {', '.join(set_parts)} WHERE id = ?"
         self.conn.execute(sql, params)
         self.conn.commit()
+
+        # Invalidate memory digests if summary, project, or surface changed.
+        # Source-affecting writes invalidate both old and new (project, surface) scopes.
+        summary_changed = summary is not None and summary != old_summary
+        scope_changed = project is not None or surface is not None
+
+        if summary_changed or scope_changed:
+            self._invalidate_memory_digests_for_session_scope(old_project, old_surface)
+            if scope_changed:
+                self._invalidate_memory_digests_for_session_scope(existing.project, existing.surface)
 
         # Refresh Lance index: delete stale entry, write fresh one.
         self._lance_delete_safe([session_id])
