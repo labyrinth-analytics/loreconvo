@@ -34,6 +34,7 @@ redact_parsed_session = _storage.redact_parsed_session
 _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
 from auto_save import parse_transcript, _has_explicit_save_signature
+from surface_utils import get_surface_from_hook_input
 
 
 def get_db_path():
@@ -41,7 +42,7 @@ def get_db_path():
     return os.environ.get("LORECONVO_DB", os.path.expanduser("~/.loreconvo/sessions.db"))
 
 
-def save_pre_compact(db_path, session_id, parsed, trigger, project=None):
+def save_pre_compact(db_path, session_id, parsed, trigger, project=None, surface=None):
     """Save parsed session data before compaction.
 
     If the session already exists in the DB (e.g., from a prior pre-compact
@@ -52,9 +53,16 @@ def save_pre_compact(db_path, session_id, parsed, trigger, project=None):
     saves are namespaced like every other save. On UPDATE we only fill project
     when it is currently NULL (COALESCE) -- a pre-compact firing after an agent
     or SessionEnd save must not clobber an already-stamped project.
+
+    surface is derived from hook input or environment variables via get_surface_from_hook_input.
+    Defaults to 'code' if not specified.
     """
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     tags = ["pre-compact", trigger]
+
+    # Derive surface if not provided
+    if surface is None:
+        surface = "code"
 
     # Stamp the owning agent when this save fires inside a scheduled-agent run.
     agent = os.environ.get("LORECONVO_AGENT", "").strip()
@@ -108,7 +116,7 @@ def save_pre_compact(db_path, session_id, parsed, trigger, project=None):
             conn,
             session_id=session_id,
             title=parsed["title"],
-            surface="code",
+            surface=surface,
             project=project,
             start_date=now,
             end_date=now,
@@ -159,6 +167,7 @@ def main():
         trigger = hook_input.get("trigger", "auto")
         cwd = hook_input.get("cwd", "")
         project = os.path.basename(cwd.rstrip("/")) if cwd else None
+        surface = get_surface_from_hook_input(hook_input)
 
         parsed = parse_transcript(transcript_path)
         if not parsed:
@@ -168,7 +177,7 @@ def main():
             sys.exit(0)
 
         db_path = get_db_path()
-        saved = save_pre_compact(db_path, session_id, parsed, trigger, project)
+        saved = save_pre_compact(db_path, session_id, parsed, trigger, project, surface)
 
         if saved:
             sys.stderr.write(

@@ -22,6 +22,7 @@ from auto_save import (
     parse_transcript,
     save_to_db,
 )
+from surface_utils import get_surface_from_hook_input
 
 
 def main():
@@ -36,6 +37,7 @@ def main():
         transcript_path = hook_input.get("transcript_path", "")
         cwd = hook_input.get("cwd", "")
         project = os.path.basename(cwd.rstrip("/")) if cwd else None
+        surface = get_surface_from_hook_input(hook_input)
 
         if not transcript_path:
             sys.exit(0)
@@ -48,7 +50,7 @@ def main():
         # Save to database with source='stop'
         # SessionEnd will overwrite this to source='session' on normal exit
         db_path = get_db_path()
-        saved = save_to_db(db_path, session_id, parsed, project, source="stop")
+        saved = save_to_db(db_path, session_id, parsed, project, surface, source="stop")
 
         if saved:
             sys.stderr.write(

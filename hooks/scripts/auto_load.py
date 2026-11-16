@@ -49,6 +49,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 import trust_framing
+from surface_utils import get_surface_from_hook_input
 
 
 # Token-based soft cap (replaces char-based MAX_CONTEXT_CHARS).
@@ -558,7 +559,7 @@ def main():
         # provenance tag, SH-13436) rather than prepended raw -- order is
         # preserved as before: digest first, then sessions.
         project_name = os.path.basename(cwd) if cwd else ""
-        surface = os.environ.get("LORECONVO_SURFACE", "code")
+        surface = get_surface_from_hook_input(hook_input)
         digest_md = query_digest_for_injection(db_path, project_name, surface)
         if digest_md:
             digest_body = f"Provenance: {trust_framing.DIGEST_PROVENANCE_LABEL}\n\n{digest_md}"
