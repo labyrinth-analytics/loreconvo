@@ -19,6 +19,7 @@ dist/
 # LanceDB vector index (runtime data, lives at ~/.loreconvo/sessions.lance/ -- never tracked)
 sessions.lance/
 *.lance/
+.lance_upgraded
 *.log
 .DS_Store
 # tests/, test_*.py, and CLAUDE.md are TRACKED in the monorepo and stripped
