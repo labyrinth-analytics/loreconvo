@@ -121,6 +121,8 @@ empty injection as success -- always branch on the specific status value.
   lock. If you see "database is locked" errors, look for a stale `python src/server.py`
   process and kill it.
 
+- **Chat and Desktop Home have no auto-save hooks.** The hooks only fire in Claude Code. For Chat and Desktop's merged Home tab, save manually by asking Claude at a checkpoint. To prevent duplicate saves within a long conversation, provide the session ID from your first save and ask Claude to update it instead of creating a new one. The first save returns the session ID; include it in subsequent checkpoint saves.
+
 - **FTS5 search tips.** Use bare keywords for broad matches (`architecture decisions`).
   Use double quotes for exact phrases (`"session end"`). Prefix with `AND`/`OR` for
   boolean logic. Avoid special characters in queries.

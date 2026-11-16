@@ -413,7 +413,7 @@ def main():
             # Dispatch proactive consolidation trigger (SH-12693 r5)
             signal_count = len(parsed.get("decisions", [])) + len(parsed.get("open_questions", []))
             message_count = parsed.get("message_count", 0)
-            _dispatch_proactive_consolidation(project, "code", signal_count, message_count)
+            _dispatch_proactive_consolidation(project, surface, signal_count, message_count)
 
     except json.JSONDecodeError:
         sys.exit(0)
