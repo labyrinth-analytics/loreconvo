@@ -41,9 +41,9 @@ dependencies = [
     "pillow==13.0.0",
     # fastembed caps onnxruntime <1.24 on Python <=3.13 but requires
     # >=1.24.2 on 3.14, so no single pin covers requires-python >=3.11.
-    # Exact-pinned per marker rather than ranged (repo rule).
+    # 3.14 branch is a bounded range so a host env (Hermes locks 1.31.0) can resolve (SH-106477).
     "onnxruntime==1.23.2; python_version < '3.14'",
-    "onnxruntime==1.28.0; python_version >= '3.14'",
+    "onnxruntime>=1.28.0,<2; python_version >= '3.14'",  # allow-range: onnxruntime SH-106477
 ]
 
 [project.optional-dependencies]
