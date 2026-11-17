@@ -220,7 +220,13 @@ class LanceIndex:
             import lancedb  # noqa: deferred Pro dep
             self._lance_dir.mkdir(parents=True, exist_ok=True)
             os.chmod(self._lance_dir, 0o700)
-            self._db = lancedb.connect(str(self._lance_dir))
+            # timedelta(0): re-check the latest table version on every read, so a
+            # long-lived handle (the MCP server) survives another process
+            # compacting with cleanup_older_than=0, which deletes the data files
+            # an already-open version points at.
+            self._db = lancedb.connect(
+                str(self._lance_dir), read_consistency_interval=datetime.timedelta(0)
+            )
         return self._db
 
     def _open_table(self):
