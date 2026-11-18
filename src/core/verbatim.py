@@ -270,6 +270,56 @@ def capture_transcript(conn, session_id, transcript_path, redact, db_dir,
     return {"stored": stored, "reason": "ok"}
 
 
+def search_chunks(conn, fts_query, limit, passages_per_session=3):
+    """Keyword search over stored text, grouped by session, best first.
+
+    fts_query is an already-sanitized FTS5 MATCH expression. Each result is
+    {"session_id", "rank", "passages"}; rank is the session's best BM25
+    score (more negative is better) and passages are snippets around the
+    match, at most passages_per_session each.
+    """
+    rows = conn.execute(
+        """SELECT c.session_id AS session_id,
+                  bm25(session_chunks_fts) AS rank,
+                  snippet(session_chunks_fts, 0, '', '', ' ... ', 48) AS passage
+           FROM session_chunks_fts
+           JOIN session_chunks c ON c.id = session_chunks_fts.rowid
+           WHERE session_chunks_fts MATCH ?
+           ORDER BY rank
+           LIMIT ?""", (fts_query, max(int(limit), 1) * 10)).fetchall()
+    grouped = {}
+    order = []
+    for row in rows:
+        sid = row["session_id"]
+        if sid not in grouped:
+            grouped[sid] = {"session_id": sid, "rank": row["rank"], "passages": []}
+            order.append(sid)
+        if len(grouped[sid]["passages"]) < passages_per_session:
+            grouped[sid]["passages"].append(row["passage"])
+    return [grouped[sid] for sid in order[:limit]]
+
+
+# Environment variables through which a harness exposes its own session id
+# to commands the agent runs (tested 2026-11-14, spec Appendix A). First
+# match wins. Codex also sets CODEX_SESSION_ID, the root conversation; the
+# thread id is recorded because it names the transcript of whoever saved.
+_EXTERNAL_ID_VARS = (
+    ("codex", "CODEX_THREAD_ID"),
+    ("cursor", "CURSOR_CONVERSATION_ID"),
+    ("hermes", "HERMES_SESSION_ID"),
+)
+
+
+def detect_external_session(environ=None):
+    """Return (surface, external_session_id, id_source) or None."""
+    env = os.environ if environ is None else environ
+    for surface, name in _EXTERNAL_ID_VARS:
+        value = (env.get(name) or "").strip()
+        if value:
+            return surface, value, "env:" + name
+    return None
+
+
 def delete_chunks(conn, session_id=None):
     """Delete stored text for one session, or for all. Returns chunks removed.
 

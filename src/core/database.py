@@ -19,12 +19,13 @@ from pathlib import Path
 from typing import List, Optional
 
 from .config import Config
-from .hybrid_search import SEARCH_HALF_LIFE_DAYS, AUTOLOAD_HALF_LIFE_DAYS
+from .hybrid_search import SEARCH_HALF_LIFE_DAYS, AUTOLOAD_HALF_LIFE_DAYS, _rrf_merge
 from .license import LORECONVO_UPGRADE_URL, get_license_status
 from .models import (
     PersonaTag, Project, SearchResult, Session, SessionLink, SkillUsage
 )
 from . import trust_framing
+from . import verbatim as _verbatim
 from .storage_core import (
     SCHEMA_REVISION,
     SCHEMA_SQL,
@@ -2701,6 +2702,7 @@ class SessionDatabase:
         max_results: int = 5,
         include_external: bool = False,
         semantic: bool = False,
+        include_passages: bool = True,
     ) -> List[dict]:
         """Assemble the get_context_for MCP response (SH-101930).
 
@@ -2709,7 +2711,8 @@ class SessionDatabase:
         the same untrusted-session-content boundary as the MCP tool.
         """
         results = self.get_context_for(
-            topic, max_results, include_external=include_external, semantic=semantic
+            topic, max_results, include_external=include_external,
+            semantic=semantic, include_passages=include_passages,
         )
         out = []
         for r in results:
@@ -2717,12 +2720,16 @@ class SessionDatabase:
             # SH-13436: wrap content-bearing fields in the untrusted-session-content
             # delimiter. session_title/date/match_score stay raw (not recalled
             # content -- metadata only). Only non-empty strings are wrapped.
+            # SH-106224: passages are recalled conversation text -- same treatment
+            # as decisions/open_questions.
+            passages = r.passages if include_passages else []
             out.append({
                 "session_title": s.title,
                 "date": s.start_date,
                 "summary": trust_framing.wrap_untrusted(s.summary) if s.summary else s.summary,
                 "decisions": [trust_framing.wrap_untrusted(d) if d else d for d in s.decisions] if s.decisions else s.decisions,
                 "open_questions": [trust_framing.wrap_untrusted(q) if q else q for q in s.open_questions] if s.open_questions else s.open_questions,
+                "passages": [trust_framing.wrap_untrusted(p) if p else p for p in passages] if passages else [],
                 "match_score": r.match_score,
             })
         return out
@@ -3183,6 +3190,19 @@ class SessionDatabase:
 
     # -- Session CRUD --
 
+    def record_session_source(self, session_id, surface, external_session_id=None,
+                              id_source=None, transcript_path=None) -> None:
+        """Link a session to the tool session it came from (SH-106224)."""
+        with self._write_context():
+            exists = self.conn.execute(
+                "SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            if not exists:
+                raise ValueError(f"session not found: {session_id}")
+            _verbatim.record_source(
+                self.conn, session_id, surface,
+                external_session_id=external_session_id,
+                id_source=id_source, transcript_path=transcript_path)
+
     def save_session(self, session: Session) -> str:
         if not session.id:
             raise ValueError(
@@ -3522,6 +3542,92 @@ class SessionDatabase:
     _expand_compound_token = staticmethod(expand_compound_token)
     _sanitize_fts_query = staticmethod(sanitize_fts_query)
 
+    def _search_filter_sql(self, persona, tags, skills, normalized_project,
+                           include_external, include_expired, after, before):
+        """Filter clauses shared by summary search and chunk search.
+
+        Returns (sql_fragment, params). The fragment starts with ' AND' or is
+        empty and refers to the sessions table as s.
+        """
+        sql = session_visibility_clause(
+            "s.", include_external=include_external, include_expired=include_expired)
+        params = []
+        if after is not None:
+            sql += " AND s.start_date >= ?"
+            params.append(after)
+        if before is not None:
+            sql += " AND s.start_date < ?"
+            params.append(before)
+        if persona:
+            sql += " AND s.id IN (SELECT session_id FROM persona_sessions WHERE persona_name LIKE ?)"
+            params.append(persona + "%")
+        if normalized_project:
+            sql += " AND s.project = ?"
+            params.append(normalized_project)
+        if skills:
+            placeholders = ",".join("?" * len(skills))
+            sql += f" AND s.id IN (SELECT session_id FROM session_skills WHERE skill_name IN ({placeholders}))"
+            params.extend(skills)
+        if tags:
+            tag_checks = " OR ".join(
+                "loreconvo_tag_matches(s.tags, ?) = 1" for _ in tags)
+            sql += f" AND ({tag_checks})"
+            params.extend(tags)
+        return sql, params
+
+    def _fetch_sessions_by_ids(self, session_ids, filter_sql, filter_params):
+        """Load sessions by id, applying the same filters as summary search."""
+        if not session_ids:
+            return []
+        placeholders = ",".join("?" * len(session_ids))
+        rows = self.conn.execute(
+            f"SELECT s.* FROM sessions s "
+            f"WHERE s.id IN ({placeholders}){filter_sql}",
+            list(session_ids) + list(filter_params)).fetchall()
+        return [SearchResult(session=self._row_to_session(row), match_score=0.0)
+                for row in rows]
+
+    def _merge_chunk_hits(self, base, query, limit, include_passages,
+                          filter_sql, filter_params):
+        """Merge verbatim chunk hits into summary results (SH-106224).
+
+        A session found by both lists ranks higher (reciprocal rank fusion).
+        Any failure in the chunk index returns the summary results untouched.
+        """
+        try:
+            fts_query = self._sanitize_fts_query(query)
+            hits = _verbatim.search_chunks(self.conn, fts_query, limit * 3)
+            if not hits and not has_precise_lookup_token(query):
+                or_query = self._sanitize_fts_query(query, match_any=True)
+                if or_query != fts_query:
+                    hits = _verbatim.search_chunks(self.conn, or_query, limit * 3)
+        except sqlite3.Error as exc:
+            logger.warning("Verbatim chunk search failed; using summaries only: %s", exc)
+            return base
+        if not hits:
+            return base
+        by_id = {r.session.id: r for r in base}
+        missing = [h["session_id"] for h in hits if h["session_id"] not in by_id]
+        for result in self._fetch_sessions_by_ids(missing, filter_sql, filter_params):
+            by_id[result.session.id] = result
+        hits = [h for h in hits if h["session_id"] in by_id]
+        merged = _rrf_merge(
+            [{"session_id": r.session.id} for r in base],
+            [{"session_id": h["session_id"]} for h in hits],
+            k=60, limit=limit)
+        chunk_info = {h["session_id"]: h for h in hits}
+        out = []
+        for row in merged:
+            result = by_id[row["session_id"]]
+            info = chunk_info.get(result.session.id)
+            if info is not None:
+                if include_passages:
+                    result.passages = list(info["passages"])
+                if not result.match_score:
+                    result.match_score = abs(info["rank"])
+            out.append(result)
+        return out
+
     def search_sessions(
         self, query: str, persona: Optional[str] = None,
         tags: Optional[List[str]] = None, skills: Optional[List[str]] = None,
@@ -3531,8 +3637,12 @@ class SessionDatabase:
         include_expired: bool = False,
         after: Optional[str] = None,
         before: Optional[str] = None,
+        include_passages: bool = True,
     ) -> List[SearchResult]:
         normalized_project = normalize_project_name(project) if project else None
+        filter_sql, filter_params = self._search_filter_sql(
+            persona, tags, skills, normalized_project,
+            include_external, include_expired, after, before)
         # Semantic path: Pro tier + Lance index available
         if semantic and self.config.is_pro:
             lance = self._get_lance_index()
@@ -3544,11 +3654,14 @@ class SessionDatabase:
                     half_life_days=SEARCH_HALF_LIFE_DAYS,
                 )
                 if session_ids:
-                    return self._fetch_sessions_for_semantic(
+                    base = self._fetch_sessions_for_semantic(
                         session_ids, persona, tags, skills, limit, include_external,
                         include_expired=include_expired,
                         after=after, before=before, project=normalized_project,
                     )
+                    return self._merge_chunk_hits(
+                        base, query, limit, include_passages,
+                        filter_sql, filter_params)
             # Fall through to FTS5 if Lance unavailable or no results
 
         fts_query = self._sanitize_fts_query(query)
@@ -3558,39 +3671,8 @@ class SessionDatabase:
             JOIN sessions_fts ON s.rowid = sessions_fts.rowid
             WHERE sessions_fts MATCH ?
         """
-        sql += session_visibility_clause(
-            "s.", include_external=include_external, include_expired=include_expired
-        )
-        params = [fts_query]
-
-        if after is not None:
-            sql += " AND s.start_date >= ?"
-            params.append(after)
-        if before is not None:
-            sql += " AND s.start_date < ?"
-            params.append(before)
-
-        if persona:
-            sql += " AND s.id IN (SELECT session_id FROM persona_sessions WHERE persona_name LIKE ?)"
-            params.append(persona + "%")
-
-        if normalized_project:
-            sql += " AND s.project = ?"
-            params.append(normalized_project)
-
-        if skills:
-            placeholders = ",".join("?" * len(skills))
-            sql += f" AND s.id IN (SELECT session_id FROM session_skills WHERE skill_name IN ({placeholders}))"
-            params.extend(skills)
-
-        if tags:
-            tag_checks = " OR ".join(
-                "loreconvo_tag_matches(s.tags, ?) = 1" for _ in tags
-            )
-            sql += (
-                f" AND ({tag_checks})"
-            )
-            params.extend(tags)
+        sql += filter_sql
+        params = [fts_query] + list(filter_params)
 
         sql += " ORDER BY sessions_fts.rank LIMIT ?"
         params.append(limit)
@@ -3618,7 +3700,8 @@ class SessionDatabase:
                 match_score=abs(row["rank"]) if row["rank"] else 0.0
             ))
 
-        return results
+        return self._merge_chunk_hits(
+            results, query, limit, include_passages, filter_sql, filter_params)
 
     def get_context_for(
         self,
@@ -3627,6 +3710,7 @@ class SessionDatabase:
         include_external: bool = False,
         semantic: bool = False,
         half_life_days: int = SEARCH_HALF_LIFE_DAYS,
+        include_passages: bool = True,
     ) -> List[SearchResult]:
         # SH-103918: normalize the topic for project-name tolerance.
         # When the topic looks like a project identifier, also run a
@@ -3638,6 +3722,7 @@ class SessionDatabase:
             query=topic,
             limit=max_results,
             include_external=include_external,
+            include_passages=include_passages,
         )
         if semantic and self.config.is_pro:
             lance = self._get_lance_index()
@@ -3666,6 +3751,7 @@ class SessionDatabase:
                 project=normalized_topic,
                 limit=max_results,
                 include_external=include_external,
+                include_passages=include_passages,
             )
             seen = {r.session.id for r in fts_results}
             merged = list(fts_results)

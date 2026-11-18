@@ -229,6 +229,8 @@ def save_session(
     external_tool_session: bool = False,
     reasoning_notes: str | None = None,
     summarize: bool = False,
+    external_session_id: str | None = None,
+    external_surface: str | None = None,
 ) -> dict:
     """Save a session summary to persistent memory.
 
@@ -276,7 +278,17 @@ def save_session(
         lore_session_id: Use this parameter for remote-devices bridge clients (e.g.,
             Cowork). The bridge drops session_id, so use lore_session_id instead. If both
             session_id and lore_session_id are provided, they must match.
+        external_session_id: The calling tool's own id for this conversation,
+            if it exposes one. Lets LoreConvo find the conversation's
+            transcript later. Read it from your environment when present:
+            CODEX_THREAD_ID (Codex), CURSOR_CONVERSATION_ID (Cursor),
+            HERMES_SESSION_ID (Hermes). Omit it if none is set.
+        external_surface: Which tool that id belongs to: 'codex', 'cursor',
+            'hermes', 'claude_code' or 'cowork'. Required when
+            external_session_id is given.
     """
+    if external_session_id and not external_surface:
+        return {"error": "external_surface is required with external_session_id"}
     session_id = resolve_session_id(session_id, lore_session_id, required=False)
     summary_source = None
     if summarize:
@@ -346,6 +358,14 @@ def save_session(
             "error": str(e),
             "upgrade_url": LORECONVO_UPGRADE_URL,
         }
+
+    if external_session_id:
+        try:
+            _get_db().record_session_source(
+                saved_id, external_surface,
+                external_session_id=external_session_id, id_source="arg:save_session")
+        except Exception as exc:
+            logger.warning("Could not record session source: %s", exc)
 
     # first-use nudge
     config_exists = _onboard_config_path(_get_db()).exists()
@@ -621,6 +641,7 @@ def search_sessions(
     include_expired: bool = False,
     after: str | None = None,
     before: str | None = None,
+    include_passages: bool = True,
 ) -> list[dict]:
     """Search session memory by keyword, with optional filters.
 
@@ -663,12 +684,14 @@ def search_sessions(
             the range yourself -- you know the user's local date, the server
             does not -- and pass the two instants. Do not put date words in
             `query`; they are matched as literal keywords, not parsed.
+        include_passages: Return up to three matching passages of stored
+            conversation text per session. Default True.
     """
     error = _validate_date_range(after, before)
     if error:
         return {"error": error}
 
-    results = _get_db().search_sessions(query, persona, tags, skills, project, limit, include_external=include_external, semantic=semantic, include_expired=include_expired, after=after, before=before)
+    results = _get_db().search_sessions(query, persona, tags, skills, project, limit, include_external=include_external, semantic=semantic, include_expired=include_expired, after=after, before=before, include_passages=include_passages)
     return [
         {
             "id": r.session.id,
@@ -679,6 +702,7 @@ def search_sessions(
             "summary_preview": r.session.summary[:300] + "..." if len(r.session.summary) > 300 else r.session.summary,
             "decisions": r.session.decisions,
             "match_score": r.match_score,
+            "passages": r.passages,
         }
         for r in results
     ]
@@ -690,6 +714,7 @@ def get_context_for(
     max_results: int = 5,
     include_external: bool = False,
     semantic: bool = False,
+    include_passages: bool = True,
 ) -> list[dict]:
     """Get relevant session context for a topic.
 
@@ -703,9 +728,12 @@ def get_context_for(
             Default False.
         semantic: If True, use LanceDB hybrid search (Pro only). Falls back to FTS5
             if index not yet built.
+        include_passages: Return up to three matching passages of stored
+            conversation text per session. Default True.
     """
     return _get_db().context_for_payload(
-        topic, max_results, include_external=include_external, semantic=semantic
+        topic, max_results, include_external=include_external, semantic=semantic,
+        include_passages=include_passages,
     )
 
 

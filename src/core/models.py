@@ -70,3 +70,4 @@ class SearchResult:
     session: Session
     relevance_excerpt: str = ""
     match_score: float = 0.0
+    passages: List[str] = field(default_factory=list)

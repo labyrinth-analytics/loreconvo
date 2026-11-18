@@ -166,6 +166,7 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
             results = self._db.get_context_for(
                 topic=query,
                 max_results=3,
+                include_passages=False,
             )
             # get_context_for returns List[SearchResult]
             if not results:
@@ -268,7 +269,15 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
                     source="hermes",
                     external_tool_session=False,
                 )
-                self._db.save_session(session)
+                saved_id = self._db.save_session(session)
+                if self._session_id:
+                    try:
+                        self._db.record_session_source(
+                            saved_id, "hermes",
+                            external_session_id=self._session_id,
+                            id_source="hermes:initialize")
+                    except Exception as exc:
+                        logger.warning("LoreConvo: could not record Hermes source: %s", exc)
                 logger.info(
                     "LoreConvo on_session_end saved: %s (%d messages)",
                     title, len(messages),
