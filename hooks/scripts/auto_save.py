@@ -17,12 +17,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 # Bootstrap: resolve storage_core and timeutil for non-package callers.
-from _bootstrap import resolve_storage_core, resolve_timeutil, BootstrapError
+from _bootstrap import resolve_storage_core, resolve_timeutil, resolve_verbatim, BootstrapError
 from surface_utils import get_surface_from_hook_input
 
 try:
     _storage = resolve_storage_core(Path(__file__))
     utc_now_iso = resolve_timeutil(Path(__file__)).utc_now_iso
+    _verbatim = resolve_verbatim(Path(__file__))
 except BootstrapError as exc:
     # Write breadcrumb before exiting so the MCP server can surface it.
     from _bootstrap import _write_breadcrumb
@@ -378,6 +379,32 @@ def save_to_db(db_path, session_id, parsed, project=None, surface=None, source="
         conn.close()
 
 
+def capture_verbatim(db_path, session_id, transcript_path):
+    """Store the session's conversation text (SH-106224). Never raises.
+
+    Runs after the summary save on its own connection, so a failure here
+    cannot block or roll back the summary. Returns capture_transcript's
+    result, or None when there was nothing to do or it failed.
+    """
+    if not transcript_path:
+        return None
+    try:
+        conn = _open_conn(db_path, busy_timeout_ms=2000)
+        try:
+            ensure_schema(conn)
+            return _verbatim.capture_transcript(
+                conn, session_id, transcript_path, redact_text,
+                os.path.dirname(db_path), surface="claude_code",
+                external_session_id=session_id, id_source="hook:session_id",
+                source="hook")
+        finally:
+            conn.close()
+    except Exception as exc:
+        sys.stderr.write(
+            f"LoreConvo verbatim capture failed (summary was saved): {exc}\n")
+        return None
+
+
 def main():
     """Main entry point for SessionEnd hook."""
     try:
@@ -411,6 +438,7 @@ def main():
 
         if saved:
             sys.stderr.write(f"LoreConvo: Auto-saved session '{parsed['title']}'\n")
+            capture_verbatim(db_path, session_id, transcript_path)
             if _is_valid_transcript_path(transcript_path):
                 _dispatch_async_summarizer(session_id, transcript_path)
             # Dispatch proactive consolidation trigger (SH-12693 r5)
@@ -428,15 +456,15 @@ def main():
 def _is_valid_transcript_path(transcript_path):
     """Validate that transcript_path is within expected Claude directory (SH-10880).
 
-    Returns True if path is under ~/.claude, False otherwise.
-    Logs a warning if validation fails.
+    Delegates the decision to verbatim.is_allowed_transcript_path so the hook
+    path and the server path share one allow-list (SH-106224). Returns True if
+    the path is under an allowed transcript root, False otherwise. Logs a
+    warning if validation fails.
     """
     if not transcript_path:
         return False
     try:
-        normalized = Path(transcript_path).resolve()
-        expected_base = Path.home() / ".claude"
-        if normalized.is_relative_to(expected_base):
+        if _verbatim.is_allowed_transcript_path(transcript_path):
             return True
         sys.stderr.write(
             f"LoreConvo: transcript_path outside expected directory boundaries: "

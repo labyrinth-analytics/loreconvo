@@ -33,7 +33,7 @@ redact_parsed_session = _storage.redact_parsed_session
 # Reuse transcript parsing from auto_save.py
 _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
-from auto_save import parse_transcript, _has_explicit_save_signature
+from auto_save import parse_transcript, _has_explicit_save_signature, capture_verbatim
 from surface_utils import get_surface_from_hook_input
 
 
@@ -178,6 +178,8 @@ def main():
 
         db_path = get_db_path()
         saved = save_pre_compact(db_path, session_id, parsed, trigger, project, surface)
+        if saved:
+            capture_verbatim(db_path, session_id, transcript_path)
 
         if saved:
             sys.stderr.write(

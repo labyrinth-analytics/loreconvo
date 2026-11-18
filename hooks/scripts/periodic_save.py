@@ -23,7 +23,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
 # auto_save resolves utc_now_iso through _bootstrap; reuse it rather than
 # bootstrapping a second copy (this module already reuses its helpers).
-from auto_save import get_db_path, parse_transcript, save_to_db, utc_now_iso
+from auto_save import capture_verbatim, get_db_path, parse_transcript, save_to_db, utc_now_iso
 
 
 STATE_FILE = os.path.expanduser("~/.loreconvo/periodic_state.json")
@@ -109,6 +109,8 @@ def main():
 
         db_path = get_db_path()
         saved = save_to_db(db_path, session_id, parsed, project, source="periodic")
+        if saved:
+            capture_verbatim(db_path, session_id, transcript_path)
 
         if saved:
             sys.stderr.write(

@@ -18,6 +18,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
 from auto_save import (
     auto_save_tags,
+    capture_verbatim,
     get_db_path,
     parse_transcript,
     save_to_db,
@@ -51,6 +52,8 @@ def main():
         # SessionEnd will overwrite this to source='session' on normal exit
         db_path = get_db_path()
         saved = save_to_db(db_path, session_id, parsed, project, surface, source="stop")
+        if saved:
+            capture_verbatim(db_path, session_id, transcript_path)
 
         if saved:
             sys.stderr.write(
