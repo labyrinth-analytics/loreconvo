@@ -1,6 +1,7 @@
 """Session Bridge CLI - human interface for session memory."""
 
 import json
+import sqlite3
 import sys
 import os
 from datetime import datetime, timezone
@@ -651,7 +652,11 @@ def verbatim_delete(session_id, delete_all):
     if bool(session_id) == bool(delete_all):
         click.echo("error: pass exactly one of --session ID or --all")
         sys.exit(2)
-    removed = db.delete_verbatim(None if delete_all else session_id)
+    try:
+        removed = db.delete_verbatim(None if delete_all else session_id)
+    except sqlite3.OperationalError as exc:
+        click.echo("error: %s" % exc)
+        sys.exit(1)
     click.echo("[OK] Deleted %d chunk(s)." % removed)
 
 
