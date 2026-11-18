@@ -346,22 +346,29 @@ def format_backfill(report):
     return lines
 
 
-def delete_chunks(conn, session_id=None):
-    """Delete stored text for one session, or for all. Returns chunks removed.
+def delete_chunks(conn, session_id=None, project=None):
+    """Delete verbatim chunks from the database via forensic purge.
 
-    Source records are kept and their progress reset, so the session can be
-    captured or backfilled again.
+    Implements SH-106224-F09 purge semantics: for every scope (session, project,
+    all), deletes chunks + source rows in one BEGIN IMMEDIATE transaction, then
+    FTS5 rebuild, wal_checkpoint(TRUNCATE), VACUUM, and final wal_checkpoint.
+
+    Args:
+        conn: writable database connection
+        session_id: optional session ID to delete chunks for (scope='session')
+        project: optional project name to delete chunks for (scope='project')
+
+    If neither session_id nor project is provided, all chunks are deleted
+    (scope='all').
+
+    Returns:
+        Number of chunks deleted
     """
-    if session_id is None:
-        n = conn.execute("SELECT count(*) FROM session_chunks").fetchone()[0]
-        conn.execute("DELETE FROM session_chunks")
-        conn.execute("UPDATE session_sources SET captured_exchange = -1")
+    from . import storage_core
+
+    if session_id is not None:
+        return storage_core.purge_verbatim(conn, 'session', session_id)
+    elif project is not None:
+        return storage_core.purge_verbatim(conn, 'project', project)
     else:
-        n = conn.execute(
-            "SELECT count(*) FROM session_chunks WHERE session_id = ?",
-            (session_id,)).fetchone()[0]
-        conn.execute("DELETE FROM session_chunks WHERE session_id = ?", (session_id,))
-        conn.execute(
-            "UPDATE session_sources SET captured_exchange = -1 WHERE session_id = ?",
-            (session_id,))
-    return n
+        return storage_core.purge_verbatim(conn, 'all', None)
