@@ -3561,6 +3561,13 @@ class SessionDatabase:
             written = 0
             with _connect_readwrite(ld_db) as conn:
                 _verify_schema(conn)
+                # SH-106636: acquire the write lock BEFORE count/rank/insert/
+                # evict so concurrent writers are serialized.  Without this,
+                # two save_session calls can both count 500, both select the
+                # same lowest-similarity victim, both INSERT, and both attempt
+                # to DELETE that victim -- one DELETE is a no-op (row already
+                # gone) and the document ends up at 501 auto links.
+                conn.execute("BEGIN IMMEDIATE")
                 for did, dist in sorted(best.items(), key=lambda x: x[1])[:CROSS_LINK_CAP]:
                     if written >= CROSS_LINK_CAP:
                         break
