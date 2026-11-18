@@ -155,6 +155,7 @@ def _connect_readwrite(db_path: Path):
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA secure_delete=ON")
     try:
         yield conn
         conn.commit()

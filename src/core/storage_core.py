@@ -236,8 +236,8 @@ VERBATIM_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS session_chunks (
     id          INTEGER PRIMARY KEY,
     session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-    seq         INTEGER NOT NULL,
-    exchange    INTEGER NOT NULL,
+    seq         INTEGER NOT NULL CHECK (seq >= 0),
+    exchange    INTEGER NOT NULL CHECK (exchange >= 0),
     kind        TEXT NOT NULL DEFAULT 'text',
     text        TEXT NOT NULL,
     char_count  INTEGER NOT NULL,
@@ -415,6 +415,13 @@ def _open_conn(db_path, busy_timeout_ms=10000) -> sqlite3.Connection:
     # writable connection opens through _open_conn, so this covers the
     # capture hooks, backfill, and the session-delete cascade.
     conn.execute("PRAGMA secure_delete=ON")
+    # SH-106568: verify secure_delete actually took effect. Some SQLite builds
+    # silently ignore the pragma; a 0 return means deleted conversation text
+    # would linger in the raw DB file. Fail closed.
+    sd = conn.execute("PRAGMA secure_delete").fetchone()
+    if not sd or sd[0] != 1:
+        raise RuntimeError(
+            "secure_delete=ON was not accepted by SQLite at %s" % db_path)
     # sessions.db is created with umask-derived permissions (644 on standard 022
     # systems). Force 600 unconditionally so session data is never world-readable.
     # WAL sidecar files are chmod'd if they already exist; they are created lazily

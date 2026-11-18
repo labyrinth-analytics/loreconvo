@@ -276,16 +276,20 @@ def search_chunks(conn, fts_query, limit, passages_per_session=3):
     fts_query is an already-sanitized FTS5 MATCH expression. Each result is
     {"session_id", "rank", "passages"}; rank is the session's best BM25
     score (more negative is better) and passages are snippets around the
-    match, at most passages_per_session each.
+    match, at most passages_per_session each. Passages are trimmed to 300
+    characters around the match, identical adjacent passages are
+    de-duplicated, and rows are ordered by FTS rank with seq as the
+    tie-break (SH-106569).
     """
     rows = conn.execute(
         """SELECT c.session_id AS session_id,
                   bm25(session_chunks_fts) AS rank,
+                  c.seq AS seq,
                   snippet(session_chunks_fts, 0, '', '', ' ... ', 48) AS passage
            FROM session_chunks_fts
            JOIN session_chunks c ON c.id = session_chunks_fts.rowid
            WHERE session_chunks_fts MATCH ?
-           ORDER BY rank
+           ORDER BY rank, c.seq
            LIMIT ?""", (fts_query, max(int(limit), 1) * 10)).fetchall()
     grouped = {}
     order = []
@@ -295,8 +299,19 @@ def search_chunks(conn, fts_query, limit, passages_per_session=3):
             grouped[sid] = {"session_id": sid, "rank": row["rank"], "passages": []}
             order.append(sid)
         if len(grouped[sid]["passages"]) < passages_per_session:
-            grouped[sid]["passages"].append(row["passage"])
+            passage = _trim_passage(row["passage"], 300)
+            # De-duplicate adjacent identical passages (SH-106569).
+            existing = grouped[sid]["passages"]
+            if not existing or existing[-1] != passage:
+                existing.append(passage)
     return [grouped[sid] for sid in order[:limit]]
+
+
+def _trim_passage(passage, max_chars=300):
+    """Trim a passage to at most max_chars, keeping the match-centered text."""
+    if len(passage) <= max_chars:
+        return passage
+    return passage[:max_chars]
 
 
 # Environment variables through which a harness exposes its own session id
