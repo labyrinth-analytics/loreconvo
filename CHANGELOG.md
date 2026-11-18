@@ -1,5 +1,47 @@
 # LoreConvo Changelog
 
+## v0.12.0 (2026-11-18)
+
+### Added
+
+- SH-106224 / SH-106540: verbatim conversation text recall.
+  `SessionDatabase` now stores the text of your conversations (your messages
+  and the assistant's text replies) in two new tables, `session_chunks` and
+  `session_sources`, with a chunk FTS index (`session_chunks_fts`); schema
+  revision 4. Capture is on by default and is governed by a
+  `verbatim_capture` key in `~/.loreconvo/config.json` with an
+  `LORECONVO_VERBATIM_CAPTURE` env override (malformed config = off). Only
+  user and assistant text is captured; tool calls, tool output, the
+  assistant's thinking and system reminders are excluded. Known secret
+  formats (API keys, tokens, private key blocks) are replaced with
+  `[REDACTED]` before storage, using the same redactor as the save path.
+  Roughly 50 to 70 KB per session. Team export, import and the Anthropic
+  export do not include the stored text.
+- `search_sessions` and `get_context_for` gained an `include_passages`
+  argument (default True); matching passages from stored text are surfaced
+  alongside summary hits and merged via reciprocal rank fusion.
+- `save_session` gained an `external_session_id` argument, auto-detected
+  from CODEX_THREAD_ID, CURSOR_CONVERSATION_ID and HERMES_SESSION_ID when
+  present.
+- New `verbatim` commands -- status, on, off, delete, backfill -- on all
+  three surfaces: the bypass CLI (`python -m loreconvo.cli verbatim ...`),
+  the fallback script (`save_to_loreconvo.py --verbatim ...`,
+  `--verbatim-delete`, `--verbatim-backfill [--apply]`), and loreconvo-cli
+  (`loreconvo-cli verbatim ...`). No MCP tool for the switch, delete or backfill
+  (deliberate three-surface parity exception).
+- `backfill_verbatim` stores text for past sessions whose transcript
+  survives on disk; dry run by default, resumable, refuses to run when
+  capture is off.
+
+### Fixed
+
+- `save_to_loreconvo.py` `search_rows` now returns passages alongside each
+  row; the fallback script and loreconvo-cli print matching passages as
+  `> <passage>` lines under each session.
+- `_bootstrap.py` verbatim resolver error message no longer names a
+  non-working CLI invocation form (caught by the cli-invocation doc-sync
+  rule).
+
 ## v0.11.1 (2026-11-10)
 
 ### Added

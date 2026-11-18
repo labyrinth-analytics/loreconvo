@@ -755,6 +755,69 @@ When `summarize=True`:
 
 ---
 
+## Automatic secret redaction (v0.11.0+)
+
+LoreConvo redacts common secret patterns before anything is written to your store,
+before content is sent to Claude for summarization, and before results are returned.
+Patterns that are redacted automatically:
+
+- AWS access keys and secret keys (`AKIA...`, `aws_secret_access_key = ...`)
+- Generic credential assignments (`password=...`, `token: ...`, `api_key = ...`)
+- Bearer tokens and JWTs in authorization-style values
+- PEM private keys (`-----BEGIN ... PRIVATE KEY-----` headers and similar)
+
+The redaction covers all write paths: `save_session`, `save_memory_item`,
+`update_memory_item`, `merge_session`, and `import_session`.
+
+### Scanning sessions saved before v0.11.0
+
+To clean up any secrets stored before this update, run:
+
+```bash
+loreconvo-scan-secrets
+```
+
+This command scans your store (default: `~/.loreconvo/sessions.db`) and reports any
+matches without changing anything. Add `--apply` to redact matches in place:
+
+```bash
+loreconvo-scan-secrets --apply
+```
+
+The apply mode is transactional and fails closed on any lock or row error. If matches
+are found, rotate the credential -- redacting the value from the store does not
+invalidate it elsewhere.
+
+Pro users should run `loreconvo-rebuild-index` after `--apply` to remove any
+redacted content from the semantic search index.
+
+---
+
+## Conversation text (v0.12.0+)
+
+LoreConvo stores the text of your conversations (your messages and the
+assistant's text replies) in the local database for sessions captured by the
+Claude Code hooks, so search can find details a summary leaves out. Tool
+calls, tool output, the assistant's thinking and system reminders are not
+stored. The text stays on your machine; team export, import and the
+Anthropic export do not include it. Known secret formats (API keys, tokens,
+private key blocks) are replaced with `[REDACTED]` before storage -- this is
+pattern matching and does not recognize every sensitive thing you might
+paste. Storage is on by default (roughly 50 to 70 KB per session).
+
+Turn it off, delete what is stored, or add past sessions from the bypass CLI:
+
+```
+python -m loreconvo.cli verbatim status
+python -m loreconvo.cli verbatim off
+python -m loreconvo.cli verbatim delete --all
+python -m loreconvo.cli verbatim backfill          # dry run
+python -m loreconvo.cli verbatim backfill --apply  # write
+```
+
+You can also set `LORECONVO_VERBATIM_CAPTURE=0` to turn capture off. Turning
+it off keeps text already stored until you delete it.
+
 ## Security note for Pro users
 
 When you enable the Pro tier and build the semantic index, LoreConvo creates a

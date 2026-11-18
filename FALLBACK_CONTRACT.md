@@ -26,6 +26,10 @@ while the MCP server is down:
 | `get_memory_digest` | `--digest --project P [--surface S]` | Prints the digest markdown; no_digest exits 1. |
 | `get_context_for` | `--context-for --context-topic TOPIC` | Trust-framed excerpts (SH-13436 boundary), same as MCP. |
 | `query_memory_items` | `--query-memory-items [--memory-item-type T] [--project P] [--memory-item-status S] [--memory-item-artifact-type A] [--memory-item-days N] [--memory-item-limit N]` | Structured decisions/questions/artifacts; result JSON on stdout. |
+| `verbatim status` (no MCP tool) | `--verbatim status` | Shows whether conversation text is stored, and how much. Three-surface parity exception (SH-106224): the switch, delete and backfill have no MCP tool by design. |
+| `verbatim on` / `off` (no MCP tool) | `--verbatim on` / `--verbatim off` | Sets the `verbatim_capture` switch in `config.json`. `off` keeps already-stored text. |
+| `verbatim delete` (no MCP tool) | `--verbatim-delete SESSION_ID\|all` | Deletes stored conversation text for one session (`--verbatim-delete <id>`) or every session (`--verbatim-delete all`). Summaries are not touched. |
+| `verbatim backfill` (no MCP tool) | `--verbatim-backfill [--apply]` | Stores conversation text for past sessions whose transcript survives on disk. Dry run unless `--apply`; resumable; refuses when capture is off. |
 
 Keyword search and `--read-id` predate this contract; `--semantic` and the
 `LORECONVO_DB` env-var precedence fix are what this contract adds. The

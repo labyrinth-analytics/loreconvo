@@ -1,4 +1,4 @@
-# LoreConvo v0.11.0
+# LoreConvo v0.12.0
 
 [![LoreConvo MCP server](https://mcprush.com/badge/loreconvo-mcp/card.svg)](https://mcprush.com/to/loreconvo-mcp?ref=badge)
 
@@ -42,6 +42,38 @@ LoreConvo captures two types of memory for each session:
 - **Semantic memory:** what was decided -- stable conclusions about the project that persist across sessions
 
 Together these give Claude a structured, searchable record of your project's history, not just a pile of chat transcripts.
+
+## Conversation text
+
+Starting with version 0.12.0, LoreConvo also stores the text of your
+conversations (what you typed and what the assistant replied) in the local
+database, for sessions captured by the Claude Code hooks, so search can find
+details a summary leaves out.
+
+- **What is not stored:** tool calls, tool output, the assistant's thinking,
+  and system reminders. Only your messages and the assistant's text replies.
+- **It stays on your machine.** Team export, import and the Anthropic export
+  do not include it.
+- **Known secret formats** (API keys, tokens, private key blocks) are replaced
+  with `[REDACTED]` before storage. This is pattern matching; it does not
+  recognize every sensitive thing you might paste.
+- **Size:** roughly 50 to 70 KB per session.
+- **Which sessions get text:** Claude Code hook-captured sessions, and Cowork
+  sessions added through backfill. Sessions saved by hand from Chat, Codex,
+  Cursor or Hermes are summary-only in this release.
+
+Turn it off, delete what is stored, or add past sessions from the bypass CLI:
+
+```
+python -m loreconvo.cli verbatim status
+python -m loreconvo.cli verbatim off
+python -m loreconvo.cli verbatim delete --all
+python -m loreconvo.cli verbatim backfill          # dry run
+python -m loreconvo.cli verbatim backfill --apply  # write
+```
+
+You can also set `LORECONVO_VERBATIM_CAPTURE=0` to turn capture off. Turning
+it off keeps text already stored until you delete it.
 
 ## Recall Benchmark
 
@@ -419,6 +451,23 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 ## What's New
 
 <!-- WHATS_NEW:START -->
+
+## v0.12.0 (2026-11-18)
+
+### Added
+
+- Verbatim conversation text recall. LoreConvo now stores the text of your
+  conversations (your messages and the assistant's text replies) in the local
+  database for sessions captured by the Claude Code hooks, so search can find
+  details a summary leaves out. Tool calls, tool output, the assistant's
+  thinking and system reminders are not stored. Known secret formats are
+  redacted before storage. Search results surface matching passages from the
+  stored text. `search_sessions` and `get_context_for` gained an
+  `include_passages` argument; `save_session` gained `external_session_id`.
+  New `verbatim` commands (status, on, off, delete, backfill) on the bypass
+  CLI, the fallback script and loreconvo-cli. Schema revision 4. See
+  "Conversation text" above. On by default; turn it off with
+  `python -m loreconvo.cli verbatim off` or `LORECONVO_VERBATIM_CAPTURE=0`.
 
 ## v0.11.0 (2026-11-06)
 
