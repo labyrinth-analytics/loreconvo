@@ -835,6 +835,83 @@ def normalize_project_name(project: str | None) -> str | None:
     return collapsed if collapsed else None
 
 
+def purge_verbatim(conn: sqlite3.Connection, scope_type: str, scope_value=None) -> int:
+    """Forensic delete of verbatim text with VACUUM, checkpoint, FTS rebuild.
+
+    Implements SH-106224-F09 purge semantics: for every scope (session, project,
+    all), delete chunks + source rows in one BEGIN IMMEDIATE transaction, then
+    FTS5 rebuild, wal_checkpoint(TRUNCATE), VACUUM (even for session scope), and
+    final wal_checkpoint(TRUNCATE). After a successful purge, deleted text is not
+    returned by any LoreConvo query and does not appear as a byte string in the
+    live database file or its -wal file.
+
+    Args:
+        conn: writable database connection
+        scope_type: 'session', 'project', or 'all'
+        scope_value: session_id (for 'session'), project name (for 'project'),
+                     ignored for 'all'
+
+    Returns:
+        Number of chunks deleted
+
+    Raises:
+        ValueError: if scope_type or scope_value invalid
+        sqlite3.OperationalError: on SQLITE_BUSY (non-zero exit with message)
+    """
+    # Build WHERE clause for the scope
+    if scope_type == 'session':
+        if not scope_value:
+            raise ValueError("scope_value required for session scope")
+        where_chunk = "WHERE session_id = ?"
+        where_source = "WHERE session_id = ?"
+        params = [scope_value]
+    elif scope_type == 'project':
+        if not scope_value:
+            raise ValueError("scope_value required for project scope")
+        where_chunk = "WHERE session_id IN (SELECT id FROM sessions WHERE project = ?)"
+        where_source = "WHERE session_id IN (SELECT id FROM sessions WHERE project = ?)"
+        params = [scope_value]
+    elif scope_type == 'all':
+        where_chunk = ""
+        where_source = ""
+        params = []
+    else:
+        raise ValueError(f"Invalid scope_type: {scope_type}")
+
+    count_query = f"SELECT count(*) FROM session_chunks {where_chunk}"
+    n = conn.execute(count_query, params).fetchone()[0]
+
+    if n == 0:
+        return 0
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+
+        conn.execute(f"DELETE FROM session_chunks {where_chunk}", params)
+        conn.execute(f"UPDATE session_sources SET captured_exchange = -1 {where_source}", params)
+
+        conn.execute("INSERT INTO session_chunks_fts(session_chunks_fts) VALUES('rebuild')")
+
+        conn.execute("COMMIT")
+
+        result = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        if result[1] != 0:
+            raise sqlite3.OperationalError("text removed from index; database file not yet compacted, close other LoreConvo clients and re-run the same command")
+
+        conn.execute("VACUUM")
+
+        result = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        if result[1] != 0:
+            raise sqlite3.OperationalError("text removed from index; database file not yet compacted, close other LoreConvo clients and re-run the same command")
+
+        return n
+
+    except sqlite3.OperationalError as e:
+        if "busy" in str(e).lower():
+            raise sqlite3.OperationalError("text removed from index; database file not yet compacted, close other LoreConvo clients and re-run the same command")
+        raise
+
+
 def session_visibility_clause(
     alias: str = "",
     include_external: bool = False,
