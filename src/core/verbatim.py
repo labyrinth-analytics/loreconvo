@@ -320,6 +320,32 @@ def detect_external_session(environ=None):
     return None
 
 
+def format_status(status):
+    return [
+        "Verbatim capture: %s" % ("on" if status["enabled"] else "off"),
+        "Sessions with stored text: %d" % status["sessions_with_text"],
+        "Chunks: %d (%d characters)" % (status["chunks"], status["chars"]),
+    ]
+
+
+def format_backfill(report):
+    lines = [
+        "Sessions: %d" % report["sessions_total"],
+        "  already have text: %d" % report["already_filled"],
+        "  can be filled: %d (about %d KB of text)"
+        % (report["fillable"], report["estimated_chars"] // 1024),
+        "  no transcript known: %d" % report["no_source"],
+        "  transcript no longer on disk: %d" % report["no_transcript"],
+        "  from a tool with no reader yet: %d" % report["no_reader"],
+    ]
+    if report["applied"]:
+        lines.append("[OK] Filled %d session(s), %d chunk(s)."
+                     % (report["filled"], report["chunks_written"]))
+    else:
+        lines.append("Dry run. Nothing was written. Re-run with --apply to store the text.")
+    return lines
+
+
 def delete_chunks(conn, session_id=None):
     """Delete stored text for one session, or for all. Returns chunks removed.
 

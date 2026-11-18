@@ -444,7 +444,7 @@ def search_rows(args):
             args.search, limit=args.limit, project=project,
             include_external=include_external, include_expired=include_expired,
         )
-        rows = [_session_preview(result.session) for result in results]
+        rows = [(_session_preview(result.session), result.passages) for result in results]
     except sqlite3.OperationalError:
         # Sanitized input should always parse. If MATCH still fails (corrupt
         # or missing FTS index), degrade to a per-term AND over LIKE.
@@ -463,7 +463,7 @@ def search_rows(args):
             params.extend([f"%{term}%", f"%{term}%"])
         params.extend(project_params)
         params.append(args.limit)
-        rows = conn.execute(
+        like_rows = conn.execute(
             f"""SELECT id, surface, title,
                        substr(summary, 1, 300) as summary_preview,
                        datetime(created_at) as created
@@ -473,6 +473,7 @@ def search_rows(args):
                 ORDER BY created_at DESC LIMIT ?""",
             params
         ).fetchall()
+        rows = [(r, []) for r in like_rows]
     conn.close()
     return rows
 
@@ -549,10 +550,12 @@ def search_sessions(args):
 
     print(f"Found {len(rows)} session(s) matching '{args.search}':")
     print()
-    for row in rows:
+    for row, passages in rows:
         print(f"[{row['created']}] ({row['surface']}) {row['title']}")
         print(f"  ID: {row['id']}")
         print(f"  {row['summary_preview']}")
+        for p in passages:
+            print(f"  > {p}")
         print()
 
 
@@ -1073,6 +1076,41 @@ def cmd_update_memory_item(args):
 
 # -- CLI --
 
+def _verbatim_cmd(args):
+    """Dispatch --verbatim / --verbatim-delete / --verbatim-backfill."""
+    try:
+        _vmod = _bootstrap.resolve_verbatim(Path(__file__))
+    except _bootstrap.BootstrapError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
+    db = _session_database(args)
+    try:
+        if args.verbatim == "status":
+            print("\n".join(_vmod.format_status(db.verbatim_status())))
+        elif args.verbatim == "on":
+            db.set_verbatim_capture(True)
+            print("\n".join(_vmod.format_status(db.verbatim_status())))
+        elif args.verbatim == "off":
+            db.set_verbatim_capture(False)
+            print("\n".join(_vmod.format_status(db.verbatim_status())))
+            print("Text already stored is kept. Remove it with: verbatim delete --all")
+        elif args.verbatim_delete:
+            if args.verbatim_delete == "all":
+                removed = db.delete_verbatim(None)
+            else:
+                removed = db.delete_verbatim(args.verbatim_delete)
+            print(f"[OK] Deleted {removed} chunk(s).")
+        elif args.verbatim_backfill:
+            try:
+                report = db.backfill_verbatim(apply=args.apply)
+            except RuntimeError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                sys.exit(1)
+            print("\n".join(_vmod.format_backfill(report)))
+    finally:
+        db.close()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Direct LoreConvo query tool (fallback for MCP tools)"
@@ -1087,6 +1125,16 @@ def main():
     parser.add_argument("--semantic", action="store_true",
                         help="Use semantic (hybrid vector+keyword) search with --search. "
                              "Pro tier only; degrades to keyword search if unavailable.")
+    parser.add_argument("--verbatim", choices=["status", "on", "off"],
+                        help="Show or set storage of conversation text")
+    parser.add_argument("--verbatim-delete", dest="verbatim_delete",
+                        metavar="SESSION_ID|all",
+                        help="Delete stored conversation text for one session, or 'all'")
+    parser.add_argument("--verbatim-backfill", dest="verbatim_backfill",
+                        action="store_true",
+                        help="Store conversation text for past sessions (dry run unless --apply)")
+    parser.add_argument("--apply", action="store_true",
+                        help="With --verbatim-backfill: write the text")
 
     # Observability mode flags (SH-101927)
     parser.add_argument("--skill-history", action="store_true",
@@ -1292,7 +1340,9 @@ def main():
 
     args = parser.parse_args()
 
-    if args.skill_history:
+    if args.verbatim or args.verbatim_delete or args.verbatim_backfill:
+        _verbatim_cmd(args)
+    elif args.skill_history:
         if not args.skill_name:
             parser.error("--skill-history requires --skill-name")
         skill_history(args)

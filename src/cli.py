@@ -22,6 +22,7 @@ from core.database import (
 )
 from core.config import Config
 from core.storage_core import redact_text
+from core import verbatim as _verbatim_core
 
 db = SessionDatabase(Config())
 
@@ -613,6 +614,58 @@ def license_clear(suite):
     else:
         for warning in warnings:
             click.echo(warning)
+
+
+@cli.group()
+def verbatim():
+    """Stored conversation text: status, on/off, delete, backfill."""
+
+
+@verbatim.command(name="status")
+def verbatim_status_cmd():
+    """Show whether conversation text is stored, and how much."""
+    click.echo("\n".join(_verbatim_core.format_status(db.verbatim_status())))
+
+
+@verbatim.command(name="on")
+def verbatim_on():
+    """Store conversation text for new sessions."""
+    db.set_verbatim_capture(True)
+    click.echo("\n".join(_verbatim_core.format_status(db.verbatim_status())))
+
+
+@verbatim.command(name="off")
+def verbatim_off():
+    """Stop storing conversation text. Text already stored is kept."""
+    db.set_verbatim_capture(False)
+    click.echo("\n".join(_verbatim_core.format_status(db.verbatim_status())))
+    click.echo("Text already stored is kept. Remove it with: verbatim delete --all")
+
+
+@verbatim.command(name="delete")
+@click.option("--session", "session_id", default=None, help="Delete one session's text.")
+@click.option("--all", "delete_all", is_flag=True, default=False,
+              help="Delete stored text for every session.")
+def verbatim_delete(session_id, delete_all):
+    """Delete stored conversation text. Summaries are not touched."""
+    if bool(session_id) == bool(delete_all):
+        click.echo("error: pass exactly one of --session ID or --all")
+        sys.exit(2)
+    removed = db.delete_verbatim(None if delete_all else session_id)
+    click.echo("[OK] Deleted %d chunk(s)." % removed)
+
+
+@verbatim.command(name="backfill")
+@click.option("--apply", "apply_", is_flag=True, default=False,
+              help="Write the text. Without this flag the command only reports.")
+def verbatim_backfill(apply_):
+    """Store conversation text for past sessions whose transcript survives."""
+    try:
+        r = db.backfill_verbatim(apply=apply_)
+    except RuntimeError as exc:
+        click.echo("error: %s" % exc)
+        sys.exit(1)
+    click.echo("\n".join(_verbatim_core.format_backfill(r)))
 
 
 if __name__ == "__main__":

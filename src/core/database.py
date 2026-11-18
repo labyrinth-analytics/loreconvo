@@ -1,6 +1,7 @@
 """SQLite database operations with FTS5 search."""
 
 import calendar
+import glob
 import hashlib
 import json
 import logging
@@ -18,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 
-from .config import Config
+from .config import Config, save_verbatim_capture
 from .hybrid_search import SEARCH_HALF_LIFE_DAYS, AUTOLOAD_HALF_LIFE_DAYS, _rrf_merge
 from .license import LORECONVO_UPGRADE_URL, get_license_status
 from .models import (
@@ -42,6 +43,7 @@ from .storage_core import (
     _MAX_DIRECT_LIST_ITEM_LENGTH,
     ensure_schema,
     upsert_session,
+    redact_text,
     remediate_permissions,
     expand_compound_token,
     sanitize_fts_query,
@@ -3202,6 +3204,122 @@ class SessionDatabase:
                 self.conn, session_id, surface,
                 external_session_id=external_session_id,
                 id_source=id_source, transcript_path=transcript_path)
+
+    # Where each surface keeps transcripts, as glob patterns under the root.
+    _TRANSCRIPT_ROOTS = {
+        "claude_code": "~/.claude/projects",
+        "cowork": "~/Library/Application Support/Claude/local-agent-mode-sessions",
+    }
+    _TRANSCRIPT_GLOBS = {
+        "claude_code": "*/*.jsonl",
+        "cowork": "*/*/local_*/.claude/projects/*/*.jsonl",
+    }
+
+    def verbatim_status(self) -> dict:
+        row = self.conn.execute(
+            "SELECT count(DISTINCT session_id), count(*), coalesce(sum(char_count), 0) "
+            "FROM session_chunks").fetchone()
+        return {
+            "enabled": _verbatim.verbatim_capture_enabled(Path(self.config.db_path).parent),
+            "sessions_with_text": row[0], "chunks": row[1], "chars": row[2],
+        }
+
+    def set_verbatim_capture(self, enabled: bool) -> None:
+        save_verbatim_capture(Path(self.config.db_path).parent, enabled)
+
+    def delete_verbatim(self, session_id=None) -> int:
+        with self._write_context():
+            return _verbatim.delete_chunks(self.conn, session_id)
+
+    def _transcript_index(self, transcript_roots=None) -> dict:
+        """Map (surface, transcript file stem) -> path for files on disk."""
+        roots = dict(self._TRANSCRIPT_ROOTS)
+        if transcript_roots:
+            roots = dict(transcript_roots)
+        index = {}
+        for surface, root in roots.items():
+            pattern = os.path.join(os.path.expanduser(root), self._TRANSCRIPT_GLOBS[surface])
+            for path in glob.glob(pattern):
+                stem = os.path.basename(path)[:-len(".jsonl")]
+                index.setdefault((surface, stem), path)
+        return index
+
+    def backfill_verbatim(self, apply: bool = False, transcript_roots=None) -> dict:
+        """Store conversation text for past sessions whose transcript survives.
+
+        Dry run by default: reports what it would do and writes nothing.
+        Sessions that already have text are skipped, so an interrupted run
+        can be restarted. A session with no source record is first matched
+        to a transcript by its own id (hook-saved Claude Code and Cowork
+        sessions use the tool's id as their key); that is the only place the
+        id match is used, and with apply=True it is written down as a source
+        record.
+        """
+        db_dir = Path(self.config.db_path).parent
+        if apply and not _verbatim.verbatim_capture_enabled(db_dir):
+            raise RuntimeError(
+                "Verbatim capture is off. Turn it on before running a backfill.")
+        index = self._transcript_index(transcript_roots)
+        report = {
+            "applied": bool(apply), "sessions_total": 0, "already_filled": 0,
+            "seeded": 0, "fillable": 0, "filled": 0, "chunks_written": 0,
+            "no_source": 0, "no_reader": 0, "no_transcript": 0, "estimated_chars": 0,
+        }
+        filled = {r[0] for r in self.conn.execute(
+            "SELECT DISTINCT session_id FROM session_chunks")}
+        sources = {}
+        for r in self.conn.execute(
+                "SELECT session_id, surface, external_session_id, transcript_path "
+                "FROM session_sources"):
+            sources.setdefault(r[0], []).append((r[1], r[2], r[3]))
+        session_ids = [r[0] for r in self.conn.execute("SELECT id FROM sessions")]
+        for sid in session_ids:
+            report["sessions_total"] += 1
+            if sid in filled:
+                report["already_filled"] += 1
+                continue
+            candidates = list(sources.get(sid, []))
+            seeded_surface = None
+            if not candidates:
+                for surface in self._TRANSCRIPT_GLOBS:
+                    if (surface, sid) in index:
+                        candidates = [(surface, sid, index[(surface, sid)])]
+                        seeded_surface = surface
+                        break
+            if not candidates:
+                report["no_source"] += 1
+                continue
+            readable = [c for c in candidates if c[0] in _verbatim.READERS]
+            if not readable:
+                report["no_reader"] += 1
+                continue
+            surface, external_id, stored_path = readable[0]
+            path = stored_path if stored_path and os.path.exists(stored_path) else None
+            if path is None and external_id:
+                path = index.get((surface, external_id))
+            if path is None or not _verbatim.is_allowed_transcript_path(path):
+                report["no_transcript"] += 1
+                continue
+            exchanges = _verbatim.READERS[surface](path)
+            if not exchanges:
+                report["no_transcript"] += 1
+                continue
+            if seeded_surface is not None:
+                report["seeded"] += 1
+            report["fillable"] += 1
+            report["estimated_chars"] += sum(len(e) for e in exchanges)
+            if not apply:
+                continue
+            with self._write_context():
+                _verbatim.record_source(
+                    self.conn, sid, surface, external_session_id=external_id,
+                    id_source="seed:session_id" if seeded_surface else None,
+                    transcript_path=path)
+                written = _verbatim.store_exchanges(
+                    self.conn, sid, surface, exchanges, redact_text, source="backfill")
+            report["filled"] += 1
+            report["chunks_written"] += written
+        return report
 
     def save_session(self, session: Session) -> str:
         if not session.id:

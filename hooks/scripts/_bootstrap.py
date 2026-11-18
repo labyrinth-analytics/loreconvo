@@ -358,7 +358,7 @@ def resolve_verbatim(origin):
                 return _load_by_path(cand, "_loreconvo_verbatim")
 
     # Both paths failed -- raise with full diagnostics.
-    parts = ["Cannot resolve loreconvo verbatim."]
+    parts = ["Cannot resolve the verbatim module."]
     parts.append(f"Probed paths ({len(probed)}):")
     for p in probed:
         parts.append(f"  {p}")
