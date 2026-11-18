@@ -281,7 +281,43 @@ END;
 
 
 def ensure_verbatim_schema(conn: sqlite3.Connection) -> None:
-    """Create the verbatim recall tables, index and triggers. Idempotent."""
+    """Create the verbatim recall tables, index and triggers. Idempotent.
+
+    For pre-existing databases where session_chunks was created without
+    CHECK constraints (SH-106607), rebuild the table to add them. SQLite
+    has no ALTER TABLE ADD CONSTRAINT, so we use the standard table
+    rebuild: create new table, copy data, drop old, rename.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master "
+        "WHERE type='table' AND name='session_chunks'"
+    ).fetchone()
+    if row and "CHECK (seq >= 0)" not in (row[0] or ""):
+        conn.executescript("""
+            CREATE TABLE session_chunks_new (
+                id          INTEGER PRIMARY KEY,
+                session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                seq         INTEGER NOT NULL CHECK (seq >= 0),
+                exchange    INTEGER NOT NULL CHECK (exchange >= 0),
+                kind        TEXT NOT NULL DEFAULT 'text',
+                text        TEXT NOT NULL,
+                char_count  INTEGER NOT NULL,
+                source      TEXT NOT NULL,
+                created_at  TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                UNIQUE (session_id, seq)
+            );
+            INSERT INTO session_chunks_new
+                SELECT * FROM session_chunks;
+            DROP TABLE session_chunks;
+            ALTER TABLE session_chunks_new RENAME TO session_chunks;
+        """)
+        # Rebuild the FTS5 index to re-sync with the recreated content table.
+        try:
+            conn.execute(
+                "INSERT INTO session_chunks_fts(session_chunks_fts) VALUES('rebuild')"
+            )
+        except sqlite3.OperationalError:
+            pass  # FTS5 table may not exist yet; VERBATIM_SCHEMA_SQL creates it.
     conn.executescript(VERBATIM_SCHEMA_SQL)
 
 

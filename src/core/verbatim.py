@@ -308,10 +308,17 @@ def search_chunks(conn, fts_query, limit, passages_per_session=3):
 
 
 def _trim_passage(passage, max_chars=300):
-    """Trim a passage to at most max_chars, keeping the match-centered text."""
+    """Trim a passage to at most max_chars, keeping the match-centered text.
+
+    FTS5 snippet() centers around the match, so the matched keyword is
+    near the middle of the passage. When trimming is needed, keep the
+    middle portion rather than the beginning so deep matches are not
+    dropped (SH-106606).
+    """
     if len(passage) <= max_chars:
         return passage
-    return passage[:max_chars]
+    start = (len(passage) - max_chars) // 2
+    return passage[start:start + max_chars]
 
 
 # Environment variables through which a harness exposes its own session id
