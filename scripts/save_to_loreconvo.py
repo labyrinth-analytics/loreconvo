@@ -231,6 +231,7 @@ def save_session(args):
         SessionLimitReachedError = core.SessionLimitReachedError
         Config = core.Config
         Session = core.Session
+        _verbatim = _bootstrap.resolve_verbatim(Path(__file__))
     except _bootstrap.BootstrapError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(1)
@@ -305,6 +306,16 @@ def save_session(args):
         except SessionLimitReachedError as exc:
             print(str(exc))
             return None
+
+        try:
+            detected = _verbatim.detect_external_session()
+            if detected is not None:
+                _surface, _external_id, _id_source = detected
+                db.record_session_source(
+                    saved_id, _surface,
+                    external_session_id=_external_id, id_source=_id_source)
+        except Exception as exc:
+            sys.stderr.write(f"Could not record session source: {exc}\n")
     finally:
         db.close()
 
