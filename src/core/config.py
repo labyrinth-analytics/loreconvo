@@ -119,6 +119,18 @@ def save_tool_groups(db_dir: Path, groups: list[str]) -> None:
     _locked_config_update(config_path, _apply)
 
 
+def save_verbatim_capture(db_dir: Path, enabled: bool) -> None:
+    """Persist the verbatim capture switch to config.json (SH-106224)."""
+    if not isinstance(enabled, bool):
+        raise ValueError("enabled must be True or False")
+    config_path = Path(db_dir) / "config.json"
+
+    def _apply(cfg: dict) -> None:
+        cfg["verbatim_capture"] = enabled
+
+    _locked_config_update(config_path, _apply)
+
+
 @dataclass
 class Config:
     db_path: str = ""
