@@ -77,7 +77,7 @@ def redact_parsed_session(parsed):
 
 # Schema revision -- increment on any DDL change.
 # Used as PRAGMA user_version for cross-environment compatibility gating.
-SCHEMA_REVISION = 3
+SCHEMA_REVISION = 4
 
 # ---------------------------------------------------------------------------
 # DDL constants
@@ -229,6 +229,62 @@ CREATE TRIGGER IF NOT EXISTS sessions_ad AFTER DELETE ON sessions BEGIN
 END;
 """
 
+# Verbatim recall (SH-106224). session_chunks_fts is an EXTERNAL-CONTENT
+# table like sessions_fts: rows are removed with the special 'delete'
+# command carrying the OLD values. Do not replace with plain DML (SH-13438).
+VERBATIM_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS session_chunks (
+    id          INTEGER PRIMARY KEY,
+    session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    seq         INTEGER NOT NULL,
+    exchange    INTEGER NOT NULL,
+    kind        TEXT NOT NULL DEFAULT 'text',
+    text        TEXT NOT NULL,
+    char_count  INTEGER NOT NULL,
+    source      TEXT NOT NULL,
+    created_at  TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE (session_id, seq)
+);
+CREATE INDEX IF NOT EXISTS idx_session_chunks_session
+    ON session_chunks(session_id, exchange);
+
+CREATE TABLE IF NOT EXISTS session_sources (
+    session_id          TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    surface             TEXT NOT NULL,
+    external_session_id TEXT,
+    id_source           TEXT,
+    transcript_path     TEXT,
+    captured_exchange   INTEGER NOT NULL DEFAULT -1,
+    updated_at          TEXT,
+    PRIMARY KEY (session_id, surface)
+);
+CREATE INDEX IF NOT EXISTS idx_session_sources_external
+    ON session_sources(surface, external_session_id);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS session_chunks_fts USING fts5(
+    text, content=session_chunks, content_rowid=id
+);
+
+CREATE TRIGGER IF NOT EXISTS session_chunks_ai AFTER INSERT ON session_chunks BEGIN
+    INSERT INTO session_chunks_fts(rowid, text) VALUES (new.id, new.text);
+END;
+CREATE TRIGGER IF NOT EXISTS session_chunks_ad AFTER DELETE ON session_chunks BEGIN
+    INSERT INTO session_chunks_fts(session_chunks_fts, rowid, text)
+    VALUES ('delete', old.id, old.text);
+END;
+CREATE TRIGGER IF NOT EXISTS session_chunks_au AFTER UPDATE ON session_chunks BEGIN
+    INSERT INTO session_chunks_fts(session_chunks_fts, rowid, text)
+    VALUES ('delete', old.id, old.text);
+    INSERT INTO session_chunks_fts(rowid, text) VALUES (new.id, new.text);
+END;
+"""
+
+
+def ensure_verbatim_schema(conn: sqlite3.Connection) -> None:
+    """Create the verbatim recall tables, index and triggers. Idempotent."""
+    conn.executescript(VERBATIM_SCHEMA_SQL)
+
+
 ANTI_PATTERN_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS anti_pattern_sessions (
     session_id TEXT NOT NULL,
@@ -354,6 +410,11 @@ def _open_conn(db_path, busy_timeout_ms=10000) -> sqlite3.Connection:
             actual_mode,
         )
     conn.execute("PRAGMA foreign_keys=ON")
+    # SH-106224-F09: secure_delete zero-fills freed pages/cells so deleted
+    # conversation text does not linger in the raw database file. Every
+    # writable connection opens through _open_conn, so this covers the
+    # capture hooks, backfill, and the session-delete cascade.
+    conn.execute("PRAGMA secure_delete=ON")
     # sessions.db is created with umask-derived permissions (644 on standard 022
     # systems). Force 600 unconditionally so session data is never world-readable.
     # WAL sidecar files are chmod'd if they already exist; they are created lazily
@@ -380,6 +441,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     lower (never downgrades).
     """
     conn.executescript(SCHEMA_SQL)
+    ensure_verbatim_schema(conn)
     session_cols = {
         row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
     }

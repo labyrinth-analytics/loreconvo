@@ -32,6 +32,8 @@ from .storage_core import (
     FTS_SQL,
     FTS_TRIGGERS,
     ANTI_PATTERN_SCHEMA_SQL,
+    VERBATIM_SCHEMA_SQL,
+    ensure_verbatim_schema,
     _is_in_memory_db,
     _open_conn,
     _truncate_if_needed,
@@ -689,6 +691,7 @@ class SessionDatabase:
             self.conn.commit()
             self._fts_created_over_rows = False
         self.conn.executescript(ANTI_PATTERN_SCHEMA_SQL)
+        ensure_verbatim_schema(self.conn)
         _validate_anti_pattern_schema(self.conn)
         self._sweep_anti_pattern_orphans()
         self._sweep_cooccurrence_orphans()
