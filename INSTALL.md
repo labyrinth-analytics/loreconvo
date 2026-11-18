@@ -674,10 +674,10 @@ If you see this banner, upgrade to the latest version:
 # Update your Claude Code config to pin the latest version
 claude mcp add --scope user \
   loreconvo -- \
-  uvx --from loreconvo[server]==0.11.1 loreconvo
+  uvx --from loreconvo[server]==0.12.0 loreconvo
 ```
 
-(Replace `0.11.1` with the actual latest version -- check `https://pypi.org/project/loreconvo/`.)
+(Replace `0.12.0` with the actual latest version -- check `https://pypi.org/project/loreconvo/`.)
 
 Then restart Claude Code or Desktop. The server will no longer hard-exit on idle.
 
