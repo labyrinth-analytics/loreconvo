@@ -895,19 +895,21 @@ def purge_verbatim(conn: sqlite3.Connection, scope_type: str, scope_value=None) 
         conn.execute("COMMIT")
 
         result = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
-        if result[1] != 0:
+        if result[0] != 0:
             raise sqlite3.OperationalError("text removed from index; database file not yet compacted, close other LoreConvo clients and re-run the same command")
 
         conn.execute("VACUUM")
 
         result = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
-        if result[1] != 0:
+        if result[0] != 0:
             raise sqlite3.OperationalError("text removed from index; database file not yet compacted, close other LoreConvo clients and re-run the same command")
 
         return n
 
     except sqlite3.OperationalError as e:
-        if "busy" in str(e).lower():
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        if "busy" in str(e).lower() or "locked" in str(e).lower():
             raise sqlite3.OperationalError("text removed from index; database file not yet compacted, close other LoreConvo clients and re-run the same command")
         raise
 
