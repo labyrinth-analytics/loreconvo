@@ -35,6 +35,19 @@
 
 ### Fixed
 
+- SH-106620: `cross_link_session` (session-save auto linking into LoreDocs)
+  now honours LoreDocs' 500-link per-document lifetime cap. Before, it
+  capped links per session (5) but never per document, so a document's
+  inbound auto links grew without bound (one reached 13,479; WG-32 D-40b).
+  At cap it replaces the lowest-similarity auto link only when the new one
+  scores higher, otherwise skips -- the same rule as LoreDocs'
+  `cross_link_doc`. `src/core/loredocs_bridge.py` vendors
+  `LIFETIME_AUTO_LINK_CAP`, `DOC_AUTO_LINK_WHERE_SQL`,
+  `DOC_AUTO_LINK_RANK_SQL`, `count_doc_auto_links` and
+  `doc_auto_links_lowest_first` as a checked copy of the loredocs.storage
+  rule (LoreConvo cannot import loredocs in an isolated install);
+  `tests/test_loredocs_bridge.py::TestConstantSync` asserts equality.
+  Tests: `TestCrossLinkSessionLifetimeCap` (mutation-verified).
 - `save_to_loreconvo.py` `search_rows` now returns passages alongside each
   row; the fallback script and loreconvo-cli print matching passages as
   `> <passage>` lines under each session.

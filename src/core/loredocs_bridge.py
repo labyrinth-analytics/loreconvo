@@ -46,6 +46,23 @@ CROSS_LINK_EMBEDDING_DIM = 384
 CROSS_LINK_L2_THRESHOLD = 0.6  # L2-normalized distance ceiling (cosine 0.80 ~ dist 0.632)
 CROSS_LINK_CAP = 5               # max cross-product links per session/doc
 CROSS_LINK_DEBOUNCE_SECS = 600   # 10-minute per-entity debounce
+LIFETIME_AUTO_LINK_CAP = 500     # max total auto session links per doc (both directions)
+
+# SH-106620: vendored copy of the document-endpoint auto-link rule from
+# loredocs.storage (_DOC_AUTO_LINK_WHERE_SQL / _DOC_AUTO_LINK_RANK_SQL). A
+# doc's auto session links are the rows where it is the loredocs endpoint in
+# EITHER direction; this writer (loreconvo->loredocs) is the dominant one and
+# must honour the same per-doc cap or a trimmed store refills. Checked, not
+# trusted: TestConstantSync asserts byte equality with loredocs.storage.
+DOC_AUTO_LINK_WHERE_SQL = (
+    "link_type = 'auto' AND ("
+    "(source_product = 'loredocs' AND source_id = ?) OR "
+    "(target_product = 'loredocs' AND target_id = ?))"
+)
+DOC_AUTO_LINK_RANK_SQL = (
+    "similarity_score ASC, created_at ASC, "
+    "CASE WHEN source_product = 'loreconvo' THEN source_id ELSE target_id END ASC"
+)
 
 LOREDOCS_DEFAULT_ROOT = Path.home() / ".loredocs"
 LOREDOCS_DB_FILENAME = "loredocs.db"
@@ -358,6 +375,35 @@ def write_cross_product_link(
             ),
         )
         return "created"
+
+
+# ---------------------------------------------------------------------------
+# Per-document auto-link cap -- mirrors loredocs.storage.count_doc_auto_links
+# and doc_auto_links_lowest_first (SH-106620)
+# ---------------------------------------------------------------------------
+
+def count_doc_auto_links(conn: sqlite3.Connection, doc_id: str) -> int:
+    """Number of auto session links on ``doc_id``, both directions."""
+    return conn.execute(
+        f"SELECT COUNT(*) FROM cross_product_links WHERE {DOC_AUTO_LINK_WHERE_SQL}",
+        (doc_id, doc_id),
+    ).fetchone()[0]
+
+
+def doc_auto_links_lowest_first(
+    conn: sqlite3.Connection, doc_id: str, limit: Optional[int] = None
+) -> List[sqlite3.Row]:
+    """``doc_id``'s auto session links (both directions) as rows of
+    ``(id, similarity_score)``, lowest similarity first."""
+    sql = (
+        f"SELECT id, similarity_score FROM cross_product_links "
+        f"WHERE {DOC_AUTO_LINK_WHERE_SQL} ORDER BY {DOC_AUTO_LINK_RANK_SQL}"
+    )
+    params: tuple = (doc_id, doc_id)
+    if limit is not None:
+        sql += " LIMIT ?"
+        params = params + (limit,)
+    return conn.execute(sql, params).fetchall()
 
 
 # ---------------------------------------------------------------------------

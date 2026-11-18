@@ -61,9 +61,12 @@ from .loredocs_bridge import (
     CROSS_LINK_EMBEDDING_MODEL,
     CROSS_LINK_DEBOUNCE_SECS,
     CROSS_LINK_L2_THRESHOLD,
+    LIFETIME_AUTO_LINK_CAP,
     LoreDocsAccessError,
     LoreDocsSchemaError,
+    count_doc_auto_links,
     discover_loredocs_db,
+    doc_auto_links_lowest_first,
     get_cross_product_links,
     get_lancedb_path,
     write_cross_product_link,
@@ -3571,18 +3574,35 @@ class SessionDatabase:
                     if not vault_row or vault_row[0]:
                         continue
                     cosine = max(0.0, 1.0 - dist)
-                    write_cross_product_link(
+                    new_score = round(cosine, 4)
+                    # SH-106620: per-document lifetime cap, counted on the
+                    # doc endpoint in both directions (same rule as
+                    # VaultStorage.cross_link_doc). At cap, replace the
+                    # lowest-similarity auto link only if this one scores
+                    # higher; otherwise skip. Manual links never count.
+                    lowest_to_evict = None
+                    if count_doc_auto_links(conn, did) >= LIFETIME_AUTO_LINK_CAP:
+                        lowest = doc_auto_links_lowest_first(conn, did, limit=1)
+                        if not lowest or not (new_score > lowest[0]["similarity_score"]):
+                            continue
+                        lowest_to_evict = lowest[0]["id"]
+                    status = write_cross_product_link(
                         conn,
                         source_product="loreconvo",
                         source_id=session_id,
                         target_product="loredocs",
                         target_id=did,
-                        similarity_score=round(cosine, 4),
+                        similarity_score=new_score,
                         embedding_model=CROSS_LINK_EMBEDDING_MODEL,
                         embedding_dim=CROSS_LINK_EMBEDDING_DIM,
                         link_type="auto",
                         tier_required="pro",
                     )
+                    if lowest_to_evict is not None and status == "created":
+                        conn.execute(
+                            "DELETE FROM cross_product_links WHERE id = ?",
+                            (lowest_to_evict,),
+                        )
                     written += 1
 
             self.conn.execute(
