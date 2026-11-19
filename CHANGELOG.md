@@ -1,5 +1,24 @@
 # LoreConvo Changelog
 
+## Unreleased
+
+### Fixed
+
+- `search_chunks` retains FTS match positions through private snippet markers;
+  `_trim_passage` preserves boundary matches and removes markers before output.
+  Populated legacy-schema coverage detects an omitted FTS rebuild.
+- MCP and bundled fallback passages use the established untrusted-recall
+  framing. Summary, hook capture and backfill share the descriptor-based,
+  read-only transcript boundary; capture failures report only the error class.
+- Session storage is private from creation, including hook-first directories.
+  Purge removes complete source rows, handles source-only scopes, rolls back
+  failed transactions and retries checkpoint/VACUUM after committed deletion.
+- Cross-product cap tests import the canonical document-endpoint count/rank
+  helpers and verify atomic concurrent saves against the shared cap.
+- Release checks now exercise actual installed hooks under approved transcript
+  roots, bounded initialized MCP clients and deterministic data-guard mutation
+  checks. Full product and artifact gates remain separate release requirements.
+
 ## v0.12.0 (2026-11-18)
 
 ### Added
