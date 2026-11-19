@@ -39,9 +39,11 @@
 - `search_sessions` and `get_context_for` gained an `include_passages`
   argument (default True); matching passages from stored text are surfaced
   alongside summary hits and merged via reciprocal rank fusion.
-- `save_session` gained an `external_session_id` argument, auto-detected
-  from CODEX_THREAD_ID, CURSOR_CONVERSATION_ID and HERMES_SESSION_ID when
-  present.
+- MCP `save_session` accepts explicit `external_session_id` and
+  `external_surface` arguments; the surface is required when an external ID
+  is supplied. The bundled fallback save script and separate pre-production
+  CLI save path can auto-detect CODEX_THREAD_ID, CURSOR_CONVERSATION_ID and
+  HERMES_SESSION_ID when present. The MCP function does not auto-detect them.
 - New `verbatim` commands -- status, on, off, delete, backfill -- on all
   three surfaces: the bypass CLI (`python -m loreconvo.cli verbatim ...`),
   the fallback script (`save_to_loreconvo.py --verbatim ...`,
@@ -49,8 +51,9 @@
   (`loreconvo-cli verbatim ...`). No MCP tool for the switch, delete or backfill
   (deliberate three-surface parity exception).
 - `backfill_verbatim` stores text for past sessions whose transcript
-  survives on disk; dry run by default, resumable, refuses to run when
-  capture is off.
+  survives on disk; dry run by default, resumable, and skips sessions already
+  holding text. Capture-off blocks applying a backfill; a dry run can still
+  inspect and report without storing text.
 
 ### Fixed
 
