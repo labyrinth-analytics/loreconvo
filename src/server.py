@@ -2407,6 +2407,36 @@ def _apply_tool_group_gating() -> None:
         )
 
 
+_COVERAGE_THREAD_NAME = "loreconvo-coverage-check"
+
+
+def _run_coverage_check() -> None:
+    try:
+        _get_db().check_lance_coverage()
+    except Exception as exc:
+        logger.warning("Lance coverage check failed: %s", exc)
+
+
+def _start_background_coverage_check():
+    """Run the Lance coverage guard (SH-103940) off the startup path (SH-106690).
+
+    Returns the started daemon thread so tests can join it.
+
+    check_lance_coverage() scans every session row and opens the Lance table
+    (a cold lancedb/pyarrow import in a fresh process). Run inline before
+    mcp.run() it held up the first initialize response; Hermes cancels an
+    MCP connect after 60s and a cold uvx cache on a loaded machine got there.
+    The low-coverage warning is still emitted, from this thread. Failures
+    are logged and never reach the transport.
+    """
+    import threading
+    thread = threading.Thread(
+        target=_run_coverage_check, name=_COVERAGE_THREAD_NAME, daemon=True,
+    )
+    thread.start()
+    return thread
+
+
 def _close_db_and_exit(exit_code: int) -> None:
     try:
         if _db is not None:
@@ -2454,17 +2484,6 @@ def main():
     # Apply tool group gating before starting the server.
     _apply_tool_group_gating()
 
-    # Startup guard: warn if Lance index coverage is critically low (SH-103940).
-    # This catches the silent degradation that left 85% of sessions unindexed
-    # for months -- the gap is invisible without an explicit check.
-    try:
-        _get_db().check_lance_coverage()
-    except Exception as exc:
-        import logging as _log
-        _log.getLogger("loreconvo.server").warning(
-            "Lance coverage check failed at startup: %s", exc
-        )
-
     from core import idle_watchdog
     # Release the DB connection (and its write lock) when the client parks
     # this process idle -- stays alive so Claude Code/Desktop (which do not
@@ -2480,6 +2499,11 @@ def main():
     # SH-105344: checkpoint the WAL into sessions.db on both clean stdin EOF
     # (the finally below) and SIGTERM, so sessions.db alone stays portable.
     signal.signal(signal.SIGTERM, _shutdown_on_sigterm)
+    # Startup guard: warn if Lance index coverage is critically low (SH-103940).
+    # This catches the silent degradation that left 85% of sessions unindexed
+    # for months -- the gap is invisible without an explicit check. Runs on a
+    # background thread so initialize is not blocked (SH-106690).
+    _start_background_coverage_check()
     try:
         mcp.run(transport="stdio")
     finally:
