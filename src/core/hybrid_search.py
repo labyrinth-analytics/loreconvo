@@ -19,6 +19,7 @@ import shutil
 import tempfile
 import threading
 import time
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -39,6 +40,27 @@ AUTOLOAD_HALF_LIFE_DAYS = 30   # auto-load hook default
 REBUILD_BATCH_SIZE = 256
 
 _log = logging.getLogger(__name__)
+
+_INDEX_SOURCE_FIELDS = (
+    'id', 'title', 'summary', 'project', 'surface', 'start_date', 'tags',
+    'external_tool_session', 'source',
+)
+
+
+def _index_source_snapshot(row):
+    """Freeze the authoritative inputs to indexing, before slow embedding."""
+    values = []
+    for name in _INDEX_SOURCE_FIELDS:
+        value = row.get(name)
+        if name == 'tags':
+            if isinstance(value, str):
+                from .database import SessionDatabase
+                value = SessionDatabase._parse_json_field(value)
+            value = json.dumps(value or [])
+        elif name == 'external_tool_session':
+            value = bool(value)
+        values.append(value)
+    return tuple(values)
 
 # SH-104068: one embedding model per process, shared by every caller.
 # Building a fresh fastembed/ONNX session per LanceIndex (one per
@@ -325,6 +347,8 @@ class LanceIndex:
         tags,
         external_tool: bool = False,
         source: Optional[str] = None,
+        *,
+        _publication_context=None,
     ) -> bool:
         """Add or update one session in the Lance index. Returns True on success.
 
@@ -335,43 +359,56 @@ class LanceIndex:
             return True
 
         try:
+            tags_str = tags if isinstance(tags, str) else json.dumps(tags or [])
+            snapshot = _index_source_snapshot({
+                'id': session_id, 'title': title, 'summary': summary,
+                'project': project, 'surface': surface, 'start_date': start_date,
+                'tags': tags_str, 'external_tool_session': external_tool, 'source': source,
+            })
             embedding = self._embed_one(f"{title} {summary or ''}")
 
-            tags_str = tags if isinstance(tags, str) else json.dumps(tags or [])
             row = {
                 'session_id': session_id,
                 'project': project or '',
                 'surface': surface or '',
                 'session_date': _parse_date(start_date),
-                'agent': _extract_agent(tags),
+                'agent': _extract_agent(tags_str),
                 'title': title or '',
                 'summary': (summary or '')[:2000],
                 'tags': tags_str,
                 'vector': embedding,
             }
 
-            table = self._open_table()
-            if table is None:
-                self._table = self._get_db().create_table(
-                    'sessions', [row], schema=self._make_schema()
-                )
-                self._table.create_fts_index('title', replace=True)
-                self._table.create_fts_index('summary', replace=True)
-                self._table.create_fts_index('tags', replace=True)
-            else:
-                # Validate UUID format to prevent SQL injection via session_id.
-                # LanceDB 0.34.0 has parameterized filter API via Expr, but UUID
-                # validation provides defense-in-depth. Current approach: constrain
-                # input space to [0-9a-f-] so no SQL metacharacters can reach
-                # the Arrow DataFusion engine. Revisit on every LanceDB upgrade.
-                if not _UUID_RE.match(session_id):
-                    _log.warning("index_session: non-UUID session_id rejected: %.64s", session_id)
-                    return True
-                table.delete(f"session_id = '{session_id}'")
-                table.add([row])
-                self._write_count += 1
-                self.compact_if_needed()
-
+            context = (_publication_context([session_id])
+                       if _publication_context else nullcontext(None))
+            with context as current:
+                if current is not None:
+                    if current.get(session_id) != snapshot:
+                        return True
+                    # Another instance may have replaced the live directory.
+                    self._db = None
+                    self._table = None
+                table = self._open_table()
+                if table is None:
+                    self._table = self._get_db().create_table(
+                        'sessions', [row], schema=self._make_schema()
+                    )
+                    self._table.create_fts_index('title', replace=True)
+                    self._table.create_fts_index('summary', replace=True)
+                    self._table.create_fts_index('tags', replace=True)
+                else:
+                    # Validate UUID format to prevent SQL injection via session_id.
+                    # LanceDB 0.34.0 has parameterized filter API via Expr, but UUID
+                    # validation provides defense-in-depth. Current approach: constrain
+                    # input space to [0-9a-f-] so no SQL metacharacters can reach
+                    # the Arrow DataFusion engine. Revisit on every LanceDB upgrade.
+                    if not _UUID_RE.match(session_id):
+                        _log.warning("index_session: non-UUID session_id rejected: %.64s", session_id)
+                        return True
+                    self._delete_session_rows(table, [session_id])
+                    table.add([row])
+                    self._write_count += 1
+                    self.compact_if_needed()
             return True
         except Exception as exc:
             _log.error("Lance index_session failed for %s: %s", session_id, exc)
@@ -475,6 +512,14 @@ class LanceIndex:
             _log.error("get_vectors_by_session_ids failed: %s", exc)
             return {}
 
+    @staticmethod
+    def _delete_session_rows(table, session_ids):
+        """Delete validated UUIDs; the caller owns errors and publication."""
+        safe_ids = [sid for sid in session_ids if sid and _UUID_RE.match(sid)]
+        if safe_ids:
+            quoted = ",".join(f"'{sid}'" for sid in safe_ids)
+            table.delete(f"session_id IN ({quoted})")
+
     def delete_sessions(self, session_ids) -> bool:
         """Delete one or more sessions from the Lance index by session_id.
 
@@ -489,17 +534,14 @@ class LanceIndex:
         if table is None:
             return True
         try:
-            safe_ids = [sid for sid in session_ids if sid and _UUID_RE.match(sid)]
-            if not safe_ids:
-                return True
-            quoted = ",".join(f"'{sid}'" for sid in safe_ids)
-            table.delete(f"session_id IN ({quoted})")
+            self._delete_session_rows(table, session_ids)
             return True
         except Exception as exc:
             _log.error("Lance delete_sessions failed for %d id(s): %s", len(session_ids), exc)
             return False
 
-    def rebuild(self, sessions: list, state: Optional[dict] = None) -> dict:
+    def rebuild(self, sessions: list, state: Optional[dict] = None, *,
+                _publication_context=None) -> dict:
         """Rebuild the Lance index from a list of session dicts.
 
         Each dict must have: id, title, summary (nullable), project, surface,
@@ -560,16 +602,7 @@ class LanceIndex:
         _set('exclusions', exclusions)
         _set('valid_count', len(valid))
 
-        if not valid:
-            _set('phase', 'done')
-            _set('done', True)
-            return {
-                'status': 'ok',
-                'indexed': 0,
-                'total_in_db': len(sessions),
-                'exclusions': exclusions,
-                'elapsed_s': time.time() - state['started_at'],
-            }
+        snapshots = {s['id']: _index_source_snapshot(s) for s in valid}
 
         texts = [f"{s['title']} {s.get('summary', '')}" for s in valid]
         _set('total', len(valid))
@@ -601,50 +634,70 @@ class LanceIndex:
             })
 
         # Build in a temp directory, then atomically swap
-        tmp_dir = Path(tempfile.mkdtemp(prefix='loreconvo_lance_tmp_'))
+        self._lance_dir.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+        tmp_dir = Path(tempfile.mkdtemp(
+            prefix='loreconvo_lance_tmp_', dir=self._lance_dir.parent
+        ))
+        backup_dir = tmp_dir.with_name(tmp_dir.name + '.old')
+        promoted = False
+        indexed = len(data)
         try:
             import lancedb as _lancedb
             tmp_db = _lancedb.connect(str(tmp_dir))
             schema = self._make_schema()
-            tmp_table = tmp_db.create_table('sessions', data, schema=schema)
+            tmp_table = tmp_db.create_table('sessions', data or None, schema=schema)
             tmp_table.create_fts_index('title', replace=True)
             tmp_table.create_fts_index('summary', replace=True)
             tmp_table.create_fts_index('tags', replace=True)
-            # Close to release file handles before the rename
-            del tmp_table
-            del tmp_db
-
-            _set('phase', 'swapping')
-
-            # Atomically replace the live directory
-            live_dir = self._lance_dir
-            if live_dir.exists():
-                backup_dir = Path(str(live_dir) + '.old')
-                if backup_dir.exists():
-                    shutil.rmtree(backup_dir)
-                shutil.move(str(live_dir), str(backup_dir))
-            shutil.move(str(tmp_dir), str(live_dir))
-            os.chmod(live_dir, 0o700)
-
-            # Clean up backup
-            backup_dir = Path(str(live_dir) + '.old')
-            if backup_dir.exists():
+            context = (_publication_context(list(snapshots))
+                       if _publication_context else nullcontext(None))
+            with context as current:
+                if current is not None:
+                    rejected = []
+                    for sid, captured in snapshots.items():
+                        if current.get(sid) != captured:
+                            reason = ('deleted_during_rebuild' if sid not in current
+                                      else 'changed_during_rebuild')
+                            exclusions[reason] = exclusions.get(reason, 0) + 1
+                            rejected.append(sid)
+                    self._delete_session_rows(tmp_table, rejected)
+                    indexed = len(data) - len(rejected)
+                if tmp_table.count_rows() != indexed:
+                    raise RuntimeError('Rebuild candidate row count mismatch')
+                # Release candidate handles before exact same-filesystem renames.
+                del tmp_table
+                del tmp_db
+                _set('phase', 'swapping')
+                live_dir = self._lance_dir
+                retired = False
                 try:
-                    shutil.rmtree(str(backup_dir))
+                    if live_dir.exists():
+                        os.rename(live_dir, backup_dir)
+                        retired = True
+                    # Unlike shutil.move, this cannot nest staging inside live.
+                    os.replace(tmp_dir, live_dir)
+                    promoted = True
+                    os.chmod(live_dir, 0o700)
                 except Exception:
-                    pass
-
-            # Reset cached state so next access reconnects
-            self._db = None
-            self._table = None
-        except Exception:
-            # Clean up temp dir on failure
-            try:
-                if tmp_dir.exists():
-                    shutil.rmtree(str(tmp_dir))
-            except Exception:
-                pass
-            raise
+                    if retired:
+                        try:
+                            # Replaces only an absent/empty destination; never
+                            # removes unexpected nonempty reader-created data.
+                            os.replace(backup_dir, live_dir)
+                        except OSError:
+                            pass
+                    raise
+                self._db = None
+                self._table = None
+        finally:
+            # Each publication owns its unique staging/retired paths. Recursive
+            # cleanup is outside primary writer exclusion.
+            for owned in (tmp_dir, backup_dir if promoted else None):
+                if owned is not None and owned.exists():
+                    try:
+                        shutil.rmtree(owned)
+                    except OSError:
+                        pass
 
         elapsed = time.time() - state['started_at']
         _set('phase', 'done')
@@ -653,7 +706,7 @@ class LanceIndex:
 
         return {
             'status': 'ok',
-            'indexed': len(data),
+            'indexed': indexed,
             'total_in_db': len(sessions),
             'exclusions': exclusions,
             'elapsed_s': elapsed,

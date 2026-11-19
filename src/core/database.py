@@ -2227,11 +2227,42 @@ class SessionDatabase:
 
     def _get_lance_index(self):
         """Return the LanceIndex instance, creating it lazily on first call."""
+        if _is_in_memory_db(self.config.db_path):
+            raise ValueError("Semantic index requires a persistent SQLite store")
         if self._lance_index is None:
             from .hybrid_search import LanceIndex
             lance_dir = Path(self.config.db_path).parent / 'sessions.lance'
             self._lance_index = LanceIndex(lance_dir)
         return self._lance_index
+
+    @contextmanager
+    def _lance_publication_context(self, candidate_ids=None):
+        """Serialize final derived mutations with all primary SQLite writers."""
+        from .hybrid_search import _INDEX_SOURCE_FIELDS, _index_source_snapshot
+        conn = _open_conn(self.config.db_path)
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            current = None
+            if candidate_ids is not None:
+                current = {}
+                ids = list(dict.fromkeys(candidate_ids))
+                batch_size = min(900, conn.getlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER))
+                columns = ", ".join(_INDEX_SOURCE_FIELDS)
+                for start in range(0, len(ids), batch_size):
+                    batch = ids[start:start + batch_size]
+                    placeholders = ",".join("?" for _ in batch)
+                    rows = conn.execute(
+                        f"SELECT {columns} FROM sessions WHERE id IN ({placeholders})",
+                        batch,
+                    ).fetchall()
+                    current.update({r["id"]: _index_source_snapshot(dict(r)) for r in rows})
+            yield current
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def _maybe_upgrade_lance_compaction(self) -> None:
         """One-time compaction for Lance stores that pre-date SH-106077 compaction.
@@ -2245,7 +2276,7 @@ class SessionDatabase:
         """
         if not self.config.is_pro:
             return
-        if str(self.config.db_path) == ':memory:':
+        if _is_in_memory_db(self.config.db_path):
             # No store directory: Path(':memory:').parent is the CWD, so the
             # marker (and any sessions.lance found there) would belong to
             # whatever directory the process happens to run in.
@@ -2255,10 +2286,14 @@ class SessionDatabase:
         if marker.exists() or not lance_dir.exists():
             return
         try:
-            # threshold=0 forces compaction regardless of this process's
-            # (freshly zeroed) in-memory write counter.
-            self._get_lance_index().compact_if_needed(threshold=0)
-            marker.touch()
+            with self._lance_publication_context():
+                if marker.exists() or not lance_dir.exists():
+                    return
+                from .hybrid_search import LanceIndex
+                index = LanceIndex(lance_dir)
+                if index.compact_if_needed(threshold=0):
+                    marker.touch()
+                self._lance_index = index
         except Exception as exc:
             logger.warning("Lance upgrade compaction failed: %s", exc)
 
@@ -2268,7 +2303,7 @@ class SessionDatabase:
         Skipped while a background rebuild is in progress -- the rebuild
         will include this session when it completes.
         """
-        if not self.config.is_pro:
+        if not self.config.is_pro or _is_in_memory_db(self.config.db_path):
             return
         with self._rebuild_lock:
             if self._rebuild_state.get('in_progress'):
@@ -2284,6 +2319,7 @@ class SessionDatabase:
                 tags=session.tags,
                 external_tool=session.external_tool_session,
                 source=session.source,
+                _publication_context=self._lance_publication_context,
             )
         except Exception as exc:
             import logging as _log
@@ -2371,6 +2407,8 @@ class SessionDatabase:
           background=False:
             The full result dict from LanceIndex.rebuild().
         """
+        if _is_in_memory_db(self.config.db_path):
+            return {"error": "rebuild-index requires a persistent SQLite store"}
         if not self.config.is_pro:
             return {"error": "rebuild-index requires LoreConvo Pro"}
 
@@ -2418,7 +2456,10 @@ class SessionDatabase:
                     index = LanceIndex(lance_dir)
 
                     # Pass state dict so rebuild() can update progress
-                    result = index.rebuild(sessions_list, state=state)
+                    result = index.rebuild(
+                        sessions_list, state=state,
+                        _publication_context=self._lance_publication_context,
+                    )
 
                     # Replace cached instance with the freshly built one
                     self._lance_index = index
@@ -2458,7 +2499,17 @@ class SessionDatabase:
         from .hybrid_search import LanceIndex
         lance_dir = Path(self.config.db_path).parent / 'sessions.lance'
         index = LanceIndex(lance_dir)
-        result = index.rebuild(sessions_list, state=self._rebuild_state)
+        try:
+            result = index.rebuild(
+                sessions_list, state=self._rebuild_state,
+                _publication_context=self._lance_publication_context,
+            )
+        except Exception as exc:
+            with self._rebuild_lock:
+                self._rebuild_state.update(
+                    in_progress=False, done=True, phase='error', error=str(exc)
+                )
+            raise
         self._lance_index = index
         with self._rebuild_lock:
             self._rebuild_state['in_progress'] = False
@@ -4886,21 +4937,23 @@ class SessionDatabase:
         return self.get_session(session_id)
 
     def _lance_delete_safe(self, session_ids: List[str]) -> None:
-        """Remove deleted session ids from the Lance index, if Pro. Best-effort.
-
-        Mirrors _lance_write_safe's never-fail contract: a Lance error is
-        logged and never propagated, so it cannot block or roll back the
-        SQLite delete it accompanies (SH-105579).
-        """
-        if not self.config.is_pro:
+        """Best-effort cleanup of an existing derived index, on every tier."""
+        if not session_ids or _is_in_memory_db(self.config.db_path):
+            return
+        lance_dir = Path(self.config.db_path).parent / 'sessions.lance'
+        if not lance_dir.is_dir():
             return
         try:
-            self._get_lance_index().delete_sessions(session_ids)
+            with self._lance_publication_context():
+                if not lance_dir.is_dir():
+                    return
+                from .hybrid_search import LanceIndex
+                index = LanceIndex(lance_dir)
+                if not index.delete_sessions(session_ids):
+                    raise RuntimeError('Derived index cleanup failed')
+                self._lance_index = index
         except Exception as exc:
-            import logging as _log
-            _log.getLogger(__name__).error(
-                "Lance delete failed for %d session(s): %s", len(session_ids), exc
-            )
+            logger.warning("Lance cleanup failed for %d session(s): %s", len(session_ids), exc)
 
     def get_usage_stats(self) -> dict:
         """Return aggregate usage statistics for the get_stats MCP tool.
