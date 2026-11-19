@@ -1,6 +1,6 @@
 # LoreConvo MCP Tool Catalog
 
-LoreConvo provides <!-- mcp-tool-count:user_facing -->41<!-- /mcp-tool-count --> MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all <!-- mcp-tool-count:user_facing -->41<!-- /mcp-tool-count -->.
+LoreConvo provides <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count --> MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count -->.
 
 This catalog explains what each tool does, when Claude uses it, and what parameters it accepts.
 
@@ -42,6 +42,15 @@ Save a session summary to persistent memory. Claude calls this at the end of a s
 These are the caps for `save_session`, the direct save path. Sessions written by the optional automatic capture hook use tighter caps (8,000 and 500), because that path stores machine-generated transcript text rather than authored content.
 
 If a value exceeds its cap, it is stored truncated and ends with a `[TRUNCATED: <field> exceeds <cap> chars]` marker, so a cut is always visible on recall. The marker is reserved inside the cap, so a stored value never exceeds the stated limit. The response also includes `"truncated": true` when any cap fired, but does not identify which field or item was affected. To keep entries within their caps: keep each `decisions` and `open_questions` entry to a short, self-contained claim (one sentence is usually enough). Use `summary` for narrative detail -- its 15,000-character budget is large enough for several paragraphs.
+
+**Automatic secret redaction (v0.11.0+):** Before anything is stored -- and before any
+content is sent to Claude for summarization -- LoreConvo automatically redacts common
+secret patterns: AWS access keys and secret keys, generic `name=value` or `name: value`
+credential assignments, bearer tokens, JWTs, and PEM private keys. If your store was
+created before v0.11.0, run `loreconvo-scan-secrets` from the command line to clean up
+any previously saved secrets (dry-run by default; use `--apply` to redact in place).
+Rotate any credential that appears in a scan result -- redacting the value from the
+store does not invalidate it.
 
 **Returns:** The new session ID and a confirmation.
 
@@ -665,7 +674,7 @@ LoreConvo and LoreDocs from separate marketplace installs is sufficient.
 
 ## Tool Groups (v0.10.20+)
 
-You can choose which of the <!-- mcp-tool-count:user_facing -->41<!-- /mcp-tool-count --> tools your AI assistant sees. Fewer tools means
+You can choose which of the <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count --> tools your AI assistant sees. Fewer tools means
 a shorter tool list for the assistant to read and less context used. Available
 on all tiers. By default every group is on, so nothing changes unless you opt in.
 
@@ -698,7 +707,7 @@ below) rather than guessing.
 ### `configure_tools`
 
 Lists or sets the enabled tool groups. Always available, whatever groups are
-selected, and not counted in the <!-- mcp-tool-count:user_facing -->41<!-- /mcp-tool-count --> tools (like the `get_server_info`
+selected, and not counted in the <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count --> tools (like the `get_server_info`
 diagnostic).
 
 **Parameters:**
