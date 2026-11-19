@@ -322,6 +322,10 @@ def capture_transcript(conn, session_id, transcript_path, redact, db_dir,
     return {"stored": stored, "reason": "ok"}
 
 
+_SNIPPET_MATCH_START = "\x01"
+_SNIPPET_MATCH_END = "\x02"
+
+
 def search_chunks(conn, fts_query, limit, passages_per_session=3):
     """Keyword search over stored text, grouped by session, best first.
 
@@ -337,12 +341,13 @@ def search_chunks(conn, fts_query, limit, passages_per_session=3):
         """SELECT c.session_id AS session_id,
                   bm25(session_chunks_fts) AS rank,
                   c.seq AS seq,
-                  snippet(session_chunks_fts, 0, '', '', ' ... ', 48) AS passage
+                  snippet(session_chunks_fts, 0, ?, ?, ' ... ', 48) AS passage
            FROM session_chunks_fts
            JOIN session_chunks c ON c.id = session_chunks_fts.rowid
            WHERE session_chunks_fts MATCH ?
            ORDER BY rank, c.seq
-           LIMIT ?""", (fts_query, max(int(limit), 1) * 10)).fetchall()
+           LIMIT ?""", (_SNIPPET_MATCH_START, _SNIPPET_MATCH_END,
+                        fts_query, max(int(limit), 1) * 10)).fetchall()
     grouped = {}
     order = []
     for row in rows:
@@ -360,17 +365,19 @@ def search_chunks(conn, fts_query, limit, passages_per_session=3):
 
 
 def _trim_passage(passage, max_chars=300):
-    """Trim a passage to at most max_chars, keeping the match-centered text.
-
-    FTS5 snippet() centers around the match, so the matched keyword is
-    near the middle of the passage. When trimming is needed, keep the
-    middle portion rather than the beginning so deep matches are not
-    dropped (SH-106606).
-    """
-    if len(passage) <= max_chars:
-        return passage
-    start = (len(passage) - max_chars) // 2
-    return passage[start:start + max_chars]
+    """Trim around the first FTS-owned match and remove its internal markers."""
+    match_start = passage.find(_SNIPPET_MATCH_START)
+    marker_length = len(_SNIPPET_MATCH_START)
+    match_end = passage.find(_SNIPPET_MATCH_END, match_start + marker_length)
+    clean = passage.replace(_SNIPPET_MATCH_START, "").replace(_SNIPPET_MATCH_END, "")
+    if len(clean) <= max_chars:
+        return clean
+    start = 0
+    if match_start >= 0 and match_end > match_start:
+        # The start marker is not part of the visible matched span.
+        center = (match_start + match_end - marker_length) // 2
+        start = max(0, min(center - max_chars // 2, len(clean) - max_chars))
+    return clean[start:start + max_chars]
 
 
 # Environment variables through which a harness exposes its own session id
