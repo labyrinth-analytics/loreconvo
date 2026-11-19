@@ -427,6 +427,17 @@ def _open_conn(db_path, busy_timeout_ms=10000) -> sqlite3.Connection:
     open paths must use this helper so FK enforcement is guaranteed on every
     connection.
     """
+    if not _is_in_memory_db(db_path):
+        # Create with owner-only permissions before SQLite can expose the file
+        # or create sidecars. fchmod also repairs an existing broad-mode DB.
+        fd = os.open(str(db_path), os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            os.fchmod(fd, 0o600)
+        finally:
+            os.close(fd)
+        for sidecar in (str(db_path) + '-shm', str(db_path) + '-wal'):
+            if os.path.exists(sidecar):
+                os.chmod(sidecar, 0o600)
     conn = sqlite3.connect(str(db_path), isolation_level=None, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
@@ -458,17 +469,6 @@ def _open_conn(db_path, busy_timeout_ms=10000) -> sqlite3.Connection:
     if not sd or sd[0] != 1:
         raise RuntimeError(
             "secure_delete=ON was not accepted by SQLite at %s" % db_path)
-    # sessions.db is created with umask-derived permissions (644 on standard 022
-    # systems). Force 600 unconditionally so session data is never world-readable.
-    # WAL sidecar files are chmod'd if they already exist; they are created lazily
-    # by SQLite on first write and will be corrected on the next open.
-    if not _is_in_memory_db(db_path):
-        _p = str(db_path)
-        if os.path.exists(_p):
-            os.chmod(_p, 0o600)
-        for _sidecar in (_p + '-shm', _p + '-wal'):
-            if os.path.exists(_sidecar):
-                os.chmod(_sidecar, 0o600)
     return conn
 
 
@@ -924,18 +924,17 @@ def purge_verbatim(conn: sqlite3.Connection, scope_type: str, scope_value=None) 
     count_query = f"SELECT count(*) FROM session_chunks {where_chunk}"
     n = conn.execute(count_query, params).fetchone()[0]
 
-    if n == 0:
-        return 0
-
+    delete_committed = False
     try:
         conn.execute("BEGIN IMMEDIATE")
 
         conn.execute(f"DELETE FROM session_chunks {where_chunk}", params)
-        conn.execute(f"UPDATE session_sources SET captured_exchange = -1 {where_source}", params)
+        conn.execute(f"DELETE FROM session_sources {where_source}", params)
 
         conn.execute("INSERT INTO session_chunks_fts(session_chunks_fts) VALUES('rebuild')")
 
         conn.execute("COMMIT")
+        delete_committed = True
 
         result = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
         if result[0] != 0:
@@ -953,7 +952,12 @@ def purge_verbatim(conn: sqlite3.Connection, scope_type: str, scope_value=None) 
         if conn.in_transaction:
             conn.execute("ROLLBACK")
         if "busy" in str(e).lower() or "locked" in str(e).lower():
-            raise sqlite3.OperationalError("text removed from index; database file not yet compacted, close other LoreConvo clients and re-run the same command")
+            if not delete_committed:
+                raise sqlite3.OperationalError(
+                    "verbatim purge not completed; stored text unchanged, "
+                    "close other LoreConvo clients and re-run the same command"
+                ) from None
+            raise sqlite3.OperationalError("text removed from index; database file not yet compacted, close other LoreConvo clients and re-run the same command") from None
         raise
 
 

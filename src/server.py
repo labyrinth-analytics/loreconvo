@@ -702,7 +702,7 @@ def search_sessions(
             "summary_preview": r.session.summary[:300] + "..." if len(r.session.summary) > 300 else r.session.summary,
             "decisions": r.session.decisions,
             "match_score": r.match_score,
-            "passages": r.passages,
+            "passages": [trust_framing.wrap_untrusted(p) if p else p for p in r.passages],
         }
         for r in results
     ]

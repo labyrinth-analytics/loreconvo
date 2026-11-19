@@ -555,6 +555,7 @@ def search_sessions(args):
         print(f"  ID: {row['id']}")
         print(f"  {row['summary_preview']}")
         for p in passages:
+            print("  Untrusted recall:")
             print(f"  > {p}")
         print()
 

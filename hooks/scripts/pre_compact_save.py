@@ -57,7 +57,7 @@ def save_pre_compact(db_path, session_id, parsed, trigger, project=None, surface
     surface is derived from hook input or environment variables via get_surface_from_hook_input.
     Defaults to 'code' if not specified.
     """
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    os.makedirs(os.path.dirname(db_path), mode=0o700, exist_ok=True)
     tags = ["pre-compact", trigger]
 
     # Derive surface if not provided

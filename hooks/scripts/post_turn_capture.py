@@ -113,7 +113,10 @@ def read_transcript(hook_input=None, raw_stdin=''):
     )
     if transcript_path:
         try:
-            with open(transcript_path, 'r', encoding='ascii', errors='replace') as transcript:
+            from _bootstrap import resolve_verbatim
+            verbatim = resolve_verbatim(Path(__file__))
+            with verbatim.open_authorized_transcript(
+                    transcript_path, encoding='ascii') as transcript:
                 content = transcript.read()
                 return content[-500:] if len(content) > 500 else content
         except Exception:

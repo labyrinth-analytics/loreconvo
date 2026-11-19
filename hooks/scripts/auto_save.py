@@ -76,12 +76,9 @@ def parse_transcript(transcript_path):
     Extracts: title (from first user message), surface, summary of key exchanges,
     decisions (lines starting with decision-like language), and artifacts.
     """
-    if not transcript_path or not os.path.exists(transcript_path):
-        return None
-
     messages = []
     try:
-        with open(transcript_path, "r") as f:
+        with _verbatim.open_authorized_transcript(transcript_path) as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -91,7 +88,7 @@ def parse_transcript(transcript_path):
                     messages.append(entry)
                 except json.JSONDecodeError:
                     continue
-    except (IOError, PermissionError):
+    except (OSError, RuntimeError, ValueError):
         return None
 
     if not messages:
@@ -261,7 +258,7 @@ def save_to_db(db_path, session_id, parsed, project=None, surface=None, source="
     """
     if surface is None:
         surface = "code"
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    os.makedirs(os.path.dirname(db_path), mode=0o700, exist_ok=True)
 
     conn = _open_conn(db_path, busy_timeout_ms=2000)
     try:
@@ -401,7 +398,7 @@ def capture_verbatim(db_path, session_id, transcript_path):
             conn.close()
     except Exception as exc:
         sys.stderr.write(
-            f"LoreConvo verbatim capture failed (summary was saved): {exc}\n")
+            f"LoreConvo verbatim capture failed (summary was saved): {type(exc).__name__}\n")
         return None
 
 

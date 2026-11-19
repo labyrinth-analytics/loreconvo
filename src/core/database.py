@@ -3300,7 +3300,7 @@ class SessionDatabase:
             path = stored_path if stored_path and os.path.exists(stored_path) else None
             if path is None and external_id:
                 path = index.get((surface, external_id))
-            if path is None or not _verbatim.is_allowed_transcript_path(path):
+            if path is None:
                 report["no_transcript"] += 1
                 continue
             exchanges = _verbatim.READERS[surface](path)

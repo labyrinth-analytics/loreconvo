@@ -30,8 +30,10 @@ from pathlib import Path
 # context), fall back to absolute import (monorepo-root test context).
 try:
     from .core.storage_core import _open_conn, redact_parsed_session, redact_text
+    from .core.verbatim import open_authorized_transcript
 except ImportError:
     from core.storage_core import _open_conn, redact_parsed_session, redact_text
+    from core.verbatim import open_authorized_transcript
 
 # Module-level constants.
 MAX_SUMMARY_RETRIES = 5
@@ -440,14 +442,15 @@ def summarize_session(session_id: str, transcript_path: str = None) -> bool:
 
         # Build transcript excerpt.
         transcript_text = ""
-        if transcript_path and Path(transcript_path).exists():
+        if transcript_path:
             try:
-                transcript_text = Path(transcript_path).read_text(encoding="utf-8", errors="replace")
+                with open_authorized_transcript(transcript_path) as transcript:
+                    transcript_text = transcript.read()
                 # SH-105853: redact before the cut (a key straddling it would
                 # otherwise survive as an unmatchable prefix).
                 transcript_text = redact_text(transcript_text)[:_MAX_TRANSCRIPT_CHARS]
             except Exception as exc:
-                log.warning("Could not read transcript at %s: %s", transcript_path, exc)
+                log.warning("Could not read authorized transcript: %s", type(exc).__name__)
                 transcript_text = row["summary"] or ""
         else:
             transcript_text = row["summary"] or ""

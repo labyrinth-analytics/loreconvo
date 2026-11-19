@@ -9,6 +9,8 @@ storage_core.ensure_verbatim_schema; there is no DDL in this file.
 import json
 import os
 import re
+import stat
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 CONFIG_KEY = "verbatim_capture"
@@ -63,7 +65,7 @@ def _text_of(content):
     return ""
 
 
-def read_claude_code_exchanges(transcript_path):
+def read_claude_code_exchanges(transcript_path, extra_roots=()):
     """Return one string per exchange from a Claude Code JSONL transcript.
 
     An exchange is a user message and the assistant text that follows it.
@@ -71,7 +73,7 @@ def read_claude_code_exchanges(transcript_path):
     """
     exchanges = []
     try:
-        with open(transcript_path, "r", encoding="utf-8", errors="replace") as fh:
+        with open_authorized_transcript(transcript_path, extra_roots=extra_roots) as fh:
             for line in fh:
                 line = line.strip()
                 if not line:
@@ -155,21 +157,71 @@ ALLOWED_TRANSCRIPT_ROOTS = (
 )
 
 
-def is_allowed_transcript_path(path, extra_roots=()):
-    """True when path resolves inside an allowed transcript directory."""
+def _transcript_target(path, extra_roots=()):
+    """Resolve an allowed regular file and remember the authorized identity."""
     if not path:
-        return False
-    try:
-        resolved = Path(path).resolve()
-    except (OSError, RuntimeError, ValueError):
-        return False
+        raise PermissionError("transcript path is not allowed")
+    resolved = Path(path).resolve(strict=True)
     for root in tuple(ALLOWED_TRANSCRIPT_ROOTS) + tuple(extra_roots):
         try:
-            resolved.relative_to(Path(os.path.expanduser(root)).resolve())
-            return True
+            root = Path(os.path.expanduser(root)).resolve(strict=True)
+            resolved.relative_to(root)
         except (ValueError, OSError, RuntimeError):
             continue
-    return False
+        identity = resolved.stat(follow_symlinks=False)
+        if stat.S_ISREG(identity.st_mode):
+            return resolved, root, identity
+        break
+    raise PermissionError("transcript path is not an allowed regular file")
+
+
+def is_allowed_transcript_path(path, extra_roots=()):
+    """True for an existing regular file inside an approved transcript root.
+
+    This predicate is only a dispatch hint. Content readers must use
+    open_authorized_transcript to retain the validated identity through open.
+    """
+    try:
+        _transcript_target(path, extra_roots)
+        return True
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+
+@contextmanager
+def open_authorized_transcript(path, extra_roots=(), encoding="utf-8", errors="replace"):
+    """Open an authorized regular transcript read-only, without a path reopen.
+
+    Directory descriptors anchor the walk beneath the approved root. No-follow
+    opens reject replacement symlinks, and stat/fstat equality rejects replaced
+    files before a text stream can read any bytes.
+    """
+    resolved, root, expected = _transcript_target(path, extra_roots)
+    parts = resolved.relative_to(root).parts
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    with ExitStack() as stack:
+        root_identity = root.stat(follow_symlinks=False)
+        parent_fd = os.open(root, directory_flags)
+        stack.callback(os.close, parent_fd)
+        opened_root = os.fstat(parent_fd)
+        if (opened_root.st_dev, opened_root.st_ino) != (root_identity.st_dev, root_identity.st_ino):
+            raise PermissionError("transcript root changed")
+        for part in parts[:-1]:
+            parent_fd = os.open(part, directory_flags, dir_fd=parent_fd)
+            stack.callback(os.close, parent_fd)
+        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_fd)
+        stack.callback(os.close, fd)
+        opened = os.fstat(fd)
+        if (not stat.S_ISREG(opened.st_mode)
+                or (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino)
+                or Path(path).resolve(strict=True) != resolved):
+            raise PermissionError("transcript identity changed")
+        current = resolved.stat(follow_symlinks=False)
+        if (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino):
+            raise PermissionError("transcript identity changed")
+        stream = stack.enter_context(os.fdopen(
+            fd, "r", encoding=encoding, errors=errors, closefd=False))
+        yield stream
 
 
 def record_source(conn, session_id, surface, external_session_id=None,
@@ -262,7 +314,7 @@ def capture_transcript(conn, session_id, transcript_path, redact, db_dir,
         return {"stored": 0, "reason": "no_reader"}
     if not is_allowed_transcript_path(transcript_path, extra_roots=extra_roots):
         return {"stored": 0, "reason": "path_not_allowed"}
-    exchanges = reader(transcript_path)
+    exchanges = reader(transcript_path, extra_roots=extra_roots)
     if not exchanges:
         return {"stored": 0, "reason": "no_text"}
     stored = store_exchanges(conn, session_id, surface, exchanges, redact,
