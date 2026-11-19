@@ -106,7 +106,7 @@ The `--env=LORECONVO_PRO=<your-license-key>` flag is optional -- omit it if you 
 | Variable | What it is for | How to set it |
 |----------|---------------|--------------|
 | `LORECONVO_PRO` | Your Pro license key (optional) | `--env=LORECONVO_PRO=<key>` in the `claude mcp add` command |
-| `LORECONVO_DB_PATH` | Path to your session memory database (optional) | `--env=LORECONVO_DB_PATH=/path/to/sessions.db` in the command |
+| `LORECONVO_DB` | Path to your session memory database (optional) | `--env=LORECONVO_DB=/path/to/sessions.db` in the command |
 | `LORECONVO_PROJECT_PATH` | Directory to scan for MEMORY.md at session start (optional) | `--env=LORECONVO_PROJECT_PATH=/path/to/project` in the command |
 | `LORECONVO_DREAM_INJECT` | Controls whether the memory digest is injected at session start (optional) | Set to `false` to disable digest injection globally: `--env=LORECONVO_DREAM_INJECT=false` |
 | `LORECONVO_ANTHROPIC_API_KEY` | Anthropic API key for all LLM summarization: async session summaries (Pro), post-turn capture (Pro), and `save_session(summarize=True)` -- optional | `--env=LORECONVO_ANTHROPIC_API_KEY=<key>` in the `claude mcp add` command. Note: this is separate from `ANTHROPIC_API_KEY`; LoreConvo uses its own key so it never interferes with your main Claude session budget. |
@@ -115,7 +115,7 @@ The `--env=LORECONVO_PRO=<your-license-key>` flag is optional -- omit it if you 
 | `LORECONVO_TOOL_GROUPS` | Which tool groups to load, comma-separated (optional; default: all). `core` is always loaded. Overrides the `tool_groups` setting that the `configure_tools` tool saves. See [Tool Groups](docs/mcp_tool_catalog.md#tool-groups-v01020) | `--env=LORECONVO_TOOL_GROUPS=memory,graph` in the command |
 | `HF_HUB_OFFLINE` | Blocks HuggingFace Hub network calls after the initial model download (Pro tier only, optional) | Set to `1` to prevent all post-download hub requests: `--env=HF_HUB_OFFLINE=1` |
 
-If `LORECONVO_DB_PATH` is not set, LoreConvo defaults to `~/.loreconvo/sessions.db`.
+If `LORECONVO_DB` is not set, LoreConvo defaults to `~/.loreconvo/sessions.db`.
 If `LORECONVO_PRO` is not set, LoreConvo runs on the free tier (up to 50 sessions). To upgrade, use the Pro link in README.md; your license key is emailed automatically to your checkout address, usually within a few minutes.
 If `LORECONVO_PROJECT_PATH` is not set, LoreConvo scans the current working directory for a MEMORY.md file.
 
