@@ -15,22 +15,22 @@ import tomllib
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def _product_version() -> str:
-    product_toml = os.path.join(ROOT, "pyproject.toml")
+def _product_version(root: str = ROOT) -> str:
+    product_toml = os.path.join(root, "pyproject.toml")
     with open(product_toml, "rb") as fh:
         data = tomllib.load(fh)
     return str(data["project"]["version"])
 
 
-def _hermes_version() -> str:
-    hermes_toml = os.path.join(ROOT, "integrations", "hermes", "pyproject.toml")
+def _hermes_version(root: str = ROOT) -> str:
+    hermes_toml = os.path.join(root, "integrations", "hermes", "pyproject.toml")
     with open(hermes_toml, "rb") as fh:
         data = tomllib.load(fh)
     return str(data["project"]["version"])
 
 
-def _hermes_dep_version() -> str:
-    hermes_toml = os.path.join(ROOT, "integrations", "hermes", "pyproject.toml")
+def _hermes_dep_version(root: str = ROOT) -> str:
+    hermes_toml = os.path.join(root, "integrations", "hermes", "pyproject.toml")
     with open(hermes_toml, "rb") as fh:
         data = tomllib.load(fh)
     deps = data["project"].get("dependencies", [])
@@ -40,11 +40,11 @@ def _hermes_dep_version() -> str:
     return ""
 
 
-def check() -> bool:
+def check(root: str = ROOT) -> bool:
     """Return True if versions match (and dep version matches too)."""
-    pv = _product_version()
-    hv = _hermes_version()
-    dv = _hermes_dep_version()
+    pv = _product_version(root)
+    hv = _hermes_version(root)
+    dv = _hermes_dep_version(root)
     if pv != hv:
         print(f"MISMATCH: product version={pv} hermes-plugin version={hv}", file=sys.stderr)
         return False
@@ -55,64 +55,51 @@ def check() -> bool:
 
 
 def _test_mode():
-    """Mutation test: verify that mismatched version is detected as red (exit 2)."""
+    """Mutation test: verify that mismatched version is detected as red (exit 2).
+
+    Mutations are applied to a private copy of the two files the check reads.
+    The committed tree is never written (SH-106819: the previous in-place
+    mutate-then-restore raced with concurrent suite runs and could leave the
+    real integrations/hermes/pyproject.toml mutated).
+    """
     import tempfile
     import shutil
 
-    # --- Mutate: hermes version mismatched ---
     product_version = _product_version()
     hermes_toml = os.path.join(ROOT, "integrations", "hermes", "pyproject.toml")
+    with open(hermes_toml, "r", encoding="utf-8") as fh:
+        content = fh.read()
 
     with tempfile.TemporaryDirectory() as td:
-        # Copy the real file and mutate it
-        backup = os.path.join(td, "pyproject.toml")
-        shutil.copy2(hermes_toml, backup)
+        shutil.copy2(os.path.join(ROOT, "pyproject.toml"), os.path.join(td, "pyproject.toml"))
+        hermes_dir = os.path.join(td, "integrations", "hermes")
+        os.makedirs(hermes_dir)
+        hermes_copy = os.path.join(hermes_dir, "pyproject.toml")
 
-        # Read + modify
-        with open(hermes_toml, "r", encoding="utf-8") as fh:
-            content = fh.read()
-
+        # --- Mutate: hermes version mismatched ---
         bad = product_version + ".999"
         mutated = content.replace(f'version = "{product_version}"', f'version = "{bad}"')
-
-        with open(hermes_toml, "w", encoding="utf-8") as fh:
+        with open(hermes_copy, "w", encoding="utf-8") as fh:
             fh.write(mutated)
 
-        try:
-            ok = check()
-            if ok:
-                print("FAIL: mutation test should have detected version mismatch", file=sys.stderr)
-                sys.exit(1)
-            print("OK: version mismatch correctly detected (exit 2)")
-        finally:
-            # Restore
-            shutil.copy2(backup, hermes_toml)
+        if check(td):
+            print("FAIL: mutation test should have detected version mismatch", file=sys.stderr)
+            sys.exit(1)
+        print("OK: version mismatch correctly detected (exit 2)")
 
-    # --- Mutate: hermes dep version mismatched ---
-    with tempfile.TemporaryDirectory() as td:
-        backup = os.path.join(td, "pyproject.toml")
-        shutil.copy2(hermes_toml, backup)
-
-        with open(hermes_toml, "r", encoding="utf-8") as fh:
-            content = fh.read()
-
+        # --- Mutate: hermes dep version mismatched ---
         bad = product_version + ".998"
         mutated = content.replace(
             f"loreconvo=={product_version}",
             f"loreconvo=={bad}",
         )
-
-        with open(hermes_toml, "w", encoding="utf-8") as fh:
+        with open(hermes_copy, "w", encoding="utf-8") as fh:
             fh.write(mutated)
 
-        try:
-            ok = check()
-            if ok:
-                print("FAIL: mutation test should have detected dep version mismatch", file=sys.stderr)
-                sys.exit(1)
-            print("OK: dep version mismatch correctly detected (exit 2)")
-        finally:
-            shutil.copy2(backup, hermes_toml)
+        if check(td):
+            print("FAIL: mutation test should have detected dep version mismatch", file=sys.stderr)
+            sys.exit(1)
+        print("OK: dep version mismatch correctly detected (exit 2)")
 
     print("ALL MUTATION TESTS PASSED")
 
