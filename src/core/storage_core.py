@@ -16,6 +16,8 @@ import logging
 import os
 import re
 import sqlite3
+import stat
+import tempfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -428,13 +430,31 @@ def _open_conn(db_path, busy_timeout_ms=10000) -> sqlite3.Connection:
     connection.
     """
     if not _is_in_memory_db(db_path):
-        # Create with owner-only permissions before SQLite can expose the file
-        # or create sidecars. fchmod also repairs an existing broad-mode DB.
-        fd = os.open(str(db_path), os.O_CREAT | os.O_RDWR, 0o600)
+        # Never bare-open/close an inode already owned by SQLite: a close can
+        # release this process's POSIX locks. Publish new files only after the
+        # private creation descriptor is closed, including concurrent creators.
         try:
-            os.fchmod(fd, 0o600)
-        finally:
-            os.close(fd)
+            metadata = os.stat(db_path)
+        except FileNotFoundError:
+            fd, staged_path = tempfile.mkstemp(
+                prefix=".loreconvo-db-", dir=Path(db_path).parent)
+            try:
+                try:
+                    os.fchmod(fd, 0o600)
+                finally:
+                    os.close(fd)
+                try:
+                    os.link(staged_path, db_path)
+                except FileExistsError:
+                    pass  # Another creator published first; never replace it.
+            finally:
+                os.unlink(staged_path)
+            metadata = os.stat(db_path)
+        if stat.S_ISDIR(metadata.st_mode):
+            raise IsADirectoryError(str(db_path))
+        if not stat.S_ISREG(metadata.st_mode):
+            raise sqlite3.OperationalError("Database path must be a regular file")
+        os.chmod(db_path, 0o600)
         for sidecar in (str(db_path) + '-shm', str(db_path) + '-wal'):
             if os.path.exists(sidecar):
                 os.chmod(sidecar, 0o600)
