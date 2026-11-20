@@ -159,3 +159,20 @@ def wrap_untrusted(body, *, session_nonce=None):
     open_block = _OPEN_TEMPLATE.format(nonce=session_nonce)
     close_block = _CLOSE_TEMPLATE.format(nonce=session_nonce)
     return f"{open_block}\n{neutralized}\n{close_block}"
+
+def unwrap_untrusted(text):
+    """Return the body of a wrap_untrusted() block; other values unchanged.
+
+    The inverse of wrap_untrusted for callers that need the stored value
+    itself (comparisons, round-trip checks). Literal markers that were
+    neutralized on wrap stay neutralized.
+    """
+    if isinstance(text, list):
+        return [unwrap_untrusted(t) for t in text]
+    if not isinstance(text, str) or not text.startswith("<!-- " + _MARKER + "#"):
+        return text
+    open_end = text.find("\n-->\n")
+    close_start = text.rfind("\n<!-- " + _MARKER_END + "#")
+    if open_end < 0 or close_start < open_end:
+        return text
+    return text[open_end + len("\n-->\n"):close_start]

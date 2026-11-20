@@ -50,8 +50,9 @@ conversations (what you typed and what the assistant replied) in the local
 database, for sessions captured by the Claude Code hooks, so search can find
 details a summary leaves out.
 
-- **What is not stored:** tool calls, tool output, the assistant's thinking,
-  and system reminders. Only your messages and the assistant's text replies.
+- **What is not stored:** tool calls, tool results, shell/slash-command
+  output, the assistant's thinking and system reminders are excluded. Only
+  your messages and the assistant's text replies are kept.
 - **It stays on your machine.** Team export, import and the Anthropic export
   do not include it.
 - **Known secret formats** (API keys, tokens, private key blocks) are replaced
@@ -85,9 +86,6 @@ LoreConvo's FTS5 search is benchmarked against a 60-session synthetic corpus (6 
 | FTS5 baseline (no expansion) | 72.2% | 0.708 |
 
 Compound token expansion (camelCase/PascalCase query preprocessing) lifts Recall@5 by **+35.7 pp** on queries using technical identifiers like `autoSave`, `PreCompact`, and `get_context_for`. Snake_case tokens like `pipeline_tracker` are matched as-is (not split), which avoids false matches on common subwords.
-
-[Full benchmark report](docs/agent-reports/benchmarks/loreconvo_recall_benchmark_20260522.md) |
-[Reproduce](scripts/run_loreconvo_recall_benchmark.py)
 
 ## Quick Start
 
@@ -452,48 +450,35 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.12.0 (2026-11-18)
+## v0.12.0 (2026-11-22)
 
 ### Added
 
-- Verbatim conversation text recall. LoreConvo now stores the text of your
-  conversations (your messages and the assistant's text replies) in the local
-  database for sessions captured by the Claude Code hooks, so search can find
-  details a summary leaves out. Tool calls, tool output, the assistant's
-  thinking and system reminders are not stored. Known secret formats are
-  redacted before storage. Search results surface matching passages from the
-  stored text. `search_sessions` and `get_context_for` gained an
-  `include_passages` argument; `save_session` gained `external_session_id`.
-  New `verbatim` commands (status, on, off, delete, backfill) on the bypass
-  CLI, the fallback script and loreconvo-cli. Schema revision 4. See
-  "Conversation text" above. On by default; turn it off with
-  `python -m loreconvo.cli verbatim off` or `LORECONVO_VERBATIM_CAPTURE=0`.
-
-## v0.11.0 (2026-11-06)
-
-### Added
-
-- Secrets (AWS keys; API keys, passwords and tokens of 16 or more
-  characters written as `name=value` or `name: value`; bearer tokens; JWTs;
-  PEM private keys) are
-  now automatically redacted before anything is saved, before
-  a summary is sent to Claude for summarization, and before results are
-  returned -- across saved sessions and memory items. A new maintenance
-  command, `loreconvo-scan-secrets`, can scan and clean up anything saved
-  before this update (dry-run by default). Pro users should run
-  `rebuild_index` afterwards so the semantic search index is cleaned too.
-  If it finds a match, rotate that credential -- redacting it here does not
-  invalidate it elsewhere.
+- Search and project context can include matching text from conversations
+  captured by supported hooks. Capture is on by default when those hooks are
+  used; an MCP-only installation does not install capture hooks. Only user
+  messages and assistant text replies are captured, with known secret formats
+  redacted before local storage. Tool calls, tool results, shell/slash-command
+  output, the assistant's thinking and system reminders are excluded.
+- Set `LORECONVO_VERBATIM_CAPTURE=0` to stop new capture. Maintenance controls
+  can inspect, delete or backfill captured text; backfill starts as a dry run.
+  Turning capture off leaves existing text in place. Deleting captured text
+  preserves saved summaries. Team export/import and export for Anthropic omit
+  captured conversation text.
 
 ### Fixed
 
-- Deleted and expired sessions no longer linger in Pro semantic search
-  results. If you used semantic search before this update, run
-  `rebuild_index` once to clear out any old entries.
-- Agent context now stays within the requested project. Consolidation status
-  is available when viewing a project without selecting a surface.
-- The Python fallback now matches recent-session filtering and search ranking.
-  Expiry changes require an explicit timestamp or a request to clear it.
+- Release-review hardening (SH-106804): see below.
+- Matching passages retain the search term near the start or end of long text.
+  Recalled passages are explicitly marked as untrusted conversation content.
+- Transcript reads are limited to approved locations and regular files opened
+  read-only. New databases and hook-created storage use private permissions.
+- Deleting captured text also removes its transcript-source records. A busy
+  database reports whether deletion committed and allows cleanup to be retried.
+- Automatic links to LoreDocs respect the shared document cap during concurrent
+  saves and preserve manual links.
+- Session tools accept `lore_session_id` as an alias for `session_id`, including
+  through bridges that remove arguments named `session_id`.
 
 <!-- WHATS_NEW:END -->
 

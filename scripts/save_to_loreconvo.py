@@ -1101,6 +1101,7 @@ def _verbatim_cmd(args):
             else:
                 removed = db.delete_verbatim(args.verbatim_delete)
             print(f"[OK] Deleted {removed} chunk(s).")
+            print(_vmod.DELETE_NOTE)
         elif args.verbatim_backfill:
             try:
                 report = db.backfill_verbatim(apply=args.apply)

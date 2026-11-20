@@ -658,6 +658,7 @@ def verbatim_delete(session_id, delete_all):
         click.echo("error: %s" % exc)
         sys.exit(1)
     click.echo("[OK] Deleted %d chunk(s)." % removed)
+    click.echo(_verbatim_core.DELETE_NOTE)
 
 
 @verbatim.command(name="backfill")

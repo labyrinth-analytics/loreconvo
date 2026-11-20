@@ -798,8 +798,8 @@ redacted content from the semantic search index.
 LoreConvo stores the text of your conversations (your messages and the
 assistant's text replies) in the local database for sessions captured by the
 Claude Code hooks, so search can find details a summary leaves out. Tool
-calls, tool output, the assistant's thinking and system reminders are not
-stored. The text stays on your machine; team export, import and the
+calls, tool results, shell/slash-command output, the assistant's thinking and
+system reminders are excluded. The text stays on your machine; team export, import and the
 Anthropic export do not include it. Known secret formats (API keys, tokens,
 private key blocks) are replaced with `[REDACTED]` before storage -- this is
 pattern matching and does not recognize every sensitive thing you might

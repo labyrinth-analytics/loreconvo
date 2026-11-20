@@ -490,7 +490,7 @@ Permanently deletes a session from the database and removes it from all search i
 | `confirm` | boolean | yes | false | Must be `true` to confirm deletion. Prevents accidental deletes. |
 
 **Example conversation:**
-> You: "Delete that broken test session SH-106303."
+> You: "Delete that broken test session from this morning."
 > Claude: *calls delete_session with the session UUID and confirm=true*
 
 ---

@@ -3314,6 +3314,10 @@ class SessionDatabase:
             raise RuntimeError(
                 "Verbatim capture is off. Turn it on before running a backfill.")
         index = self._transcript_index(transcript_roots)
+        # Custom roots are scanned above, so the reader must accept them too
+        # (SH-106804); otherwise every such transcript reads as missing.
+        extra_roots = tuple(os.path.expanduser(r) for r in
+                            (transcript_roots or {}).values())
         report = {
             "applied": bool(apply), "sessions_total": 0, "already_filled": 0,
             "seeded": 0, "fillable": 0, "filled": 0, "chunks_written": 0,
@@ -3354,7 +3358,7 @@ class SessionDatabase:
             if path is None:
                 report["no_transcript"] += 1
                 continue
-            exchanges = _verbatim.READERS[surface](path)
+            exchanges = _verbatim.READERS[surface](path, extra_roots=extra_roots)
             if not exchanges:
                 report["no_transcript"] += 1
                 continue
@@ -3369,6 +3373,10 @@ class SessionDatabase:
                     self.conn, sid, surface, external_session_id=external_id,
                     id_source="seed:session_id" if seeded_surface else None,
                     transcript_path=path)
+                # An explicit backfill is the user asking for the text back,
+                # so it lifts an earlier delete's watermark (SH-106804).
+                self.conn.execute(
+                    "DELETE FROM session_text_purges WHERE session_id = ?", (sid,))
                 written = _verbatim.store_exchanges(
                     self.conn, sid, surface, exchanges, redact_text, source="backfill")
             report["filled"] += 1
@@ -3783,6 +3791,25 @@ class SessionDatabase:
         return [SearchResult(session=self._row_to_session(row), match_score=0.0)
                 for row in rows]
 
+    def _search_chunk_hits(self, query, limit, filter_sql, filter_params):
+        """Chunk search with the session filters applied inside the query.
+
+        Falls back to an any-word match when the all-words match finds
+        nothing, unless the query holds a precise lookup token.
+        """
+        fts_query = self._sanitize_fts_query(query)
+        hits = _verbatim.search_chunks(
+            self.conn, fts_query, limit,
+            session_filter_sql=filter_sql, session_filter_params=filter_params)
+        if not hits and not has_precise_lookup_token(query):
+            or_query = self._sanitize_fts_query(query, match_any=True)
+            if or_query != fts_query:
+                hits = _verbatim.search_chunks(
+                    self.conn, or_query, limit,
+                    session_filter_sql=filter_sql,
+                    session_filter_params=filter_params)
+        return hits
+
     def _merge_chunk_hits(self, base, query, limit, include_passages,
                           filter_sql, filter_params):
         """Merge verbatim chunk hits into summary results (SH-106224).
@@ -3791,12 +3818,7 @@ class SessionDatabase:
         Any failure in the chunk index returns the summary results untouched.
         """
         try:
-            fts_query = self._sanitize_fts_query(query)
-            hits = _verbatim.search_chunks(self.conn, fts_query, limit * 3)
-            if not hits and not has_precise_lookup_token(query):
-                or_query = self._sanitize_fts_query(query, match_any=True)
-                if or_query != fts_query:
-                    hits = _verbatim.search_chunks(self.conn, or_query, limit * 3)
+            hits = self._search_chunk_hits(query, limit * 3, filter_sql, filter_params)
         except sqlite3.Error as exc:
             logger.warning("Verbatim chunk search failed; using summaries only: %s", exc)
             return base
@@ -3899,6 +3921,29 @@ class SessionDatabase:
         return self._merge_chunk_hits(
             results, query, limit, include_passages, filter_sql, filter_params)
 
+    def _attach_passages(self, results, query, known):
+        """Give semantic results the same stored-text passages FTS results get.
+
+        Reuses passages already found by the FTS search and runs one chunk
+        search limited to the remaining sessions (SH-106804). Any chunk
+        index failure leaves the results without passages.
+        """
+        found = {r.session.id: r.passages for r in known if r.passages}
+        missing = [r.session.id for r in results if r.session.id not in found]
+        if missing:
+            placeholders = ",".join("?" * len(missing))
+            try:
+                hits = self._search_chunk_hits(
+                    query, len(missing), f" AND s.id IN ({placeholders})", missing)
+            except sqlite3.Error as exc:
+                logger.warning("Verbatim chunk search failed: %s", exc)
+                hits = []
+            for h in hits:
+                found[h["session_id"]] = list(h["passages"])
+        for r in results:
+            if not r.passages and r.session.id in found:
+                r.passages = list(found[r.session.id])
+
     def get_context_for(
         self,
         topic: str,
@@ -3934,6 +3979,8 @@ class SessionDatabase:
                     )
                     # Merge: semantic first, then FTS to fill remaining slots
                     sem_ids = {r.session.id for r in sem_results}
+                    if include_passages and sem_results:
+                        self._attach_passages(sem_results, topic, fts_results)
                     merged = list(sem_results)
                     for r in fts_results:
                         if r.session.id not in sem_ids and len(merged) < max_results:
@@ -4916,8 +4963,16 @@ class SessionDatabase:
 
         params.append(session_id)
         sql = f"UPDATE sessions SET {', '.join(set_parts)} WHERE id = ?"
-        self.conn.execute(sql, params)
-        self.conn.commit()
+        # Same write-lock + BEGIN IMMEDIATE contract as every other mutation
+        # (SH-106804), so a concurrent writer cannot interleave.
+        with self._write_context() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(sql, params)
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
 
         # Invalidate memory digests if summary, project, or surface changed.
         # Source-affecting writes invalidate both old and new (project, surface) scopes.

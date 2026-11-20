@@ -10,6 +10,11 @@ import os
 from typing import Dict, Optional
 
 
+# Accepted explicit surface values. Mirrors the vocabulary documented in the
+# MCP server instructions (src/server.py): code/cowork/chat/codex/custom.
+ALLOWED_SURFACES = frozenset({"code", "cowork", "chat", "codex", "custom"})
+
+
 def get_surface_from_hook_input(hook_input: Dict, env_override: Optional[Dict] = None) -> str:
     """
     Derive surface name from hook input or environment variables.
@@ -36,8 +41,11 @@ def get_surface_from_hook_input(hook_input: Dict, env_override: Optional[Dict] =
         'code'
     """
     # Check for explicit surface in hook input (highest priority)
-    if 'surface' in hook_input:
-        return hook_input['surface']
+    # Only accept it when it is a known surface string; anything else falls
+    # through to environment detection.
+    surface = hook_input.get('surface')
+    if isinstance(surface, str) and surface in ALLOWED_SURFACES:
+        return surface
 
     # Get environment variables (use override for testing)
     env = env_override if env_override is not None else os.environ

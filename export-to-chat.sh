@@ -29,7 +29,13 @@ else
     OUTPUT=$("$PYTHON" "$CLI" export --last --format markdown)
     STATUS=$?
 
-    if [ $STATUS -ne 0 ] || [ -z "$OUTPUT" ] || [ "$OUTPUT" = "No sessions found." ]; then
+    if [ $STATUS -ne 0 ]; then
+        echo "Error: session export failed (exit code $STATUS)." >&2
+        exit $STATUS
+    fi
+
+    # The CLI exits 0 and prints "No sessions found." when the store is empty.
+    if [ -z "$OUTPUT" ] || [ "$OUTPUT" = "No sessions found." ]; then
         echo "No sessions saved yet -- nothing to export."
         exit 1
     fi

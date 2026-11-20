@@ -28,6 +28,7 @@ import ast
 import asyncio
 import json
 import os
+import shutil
 import sys
 import tempfile
 import uuid
@@ -35,6 +36,9 @@ from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+
+# Overall ceiling for the whole stdio session (SH-106804).
+SMOKE_TIMEOUT_SECONDS = 120
 
 # ---------------------------------------------------------------------------
 # Per-product configuration
@@ -252,7 +256,7 @@ async def run(product: str, repo_root: Path) -> int:
         env=env,
     )
 
-    try:
+    async def _run() -> int:
         async with stdio_client(server_params) as (read_stream, write_stream):
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
@@ -283,12 +287,23 @@ async def run(product: str, repo_root: Path) -> int:
                 print(f"[OK] save -> search -> recall round trip ({artifact_id})")
 
         return 0
+
+    try:
+        return await asyncio.wait_for(_run(), timeout=SMOKE_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        print(
+            f"[FAIL] {product} smoke timed out after {SMOKE_TIMEOUT_SECONDS}s "
+            "(server did not complete initialize/list/round trip)"
+        )
+        return 2
     except Exception as exc:  # noqa: BLE001 -- smoke test must fail loudly
         import traceback
 
         print(f"[FAIL] {product} smoke failed: {exc}")
         traceback.print_exc()
         return 1
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def main() -> int:

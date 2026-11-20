@@ -51,6 +51,16 @@ MAX_CHUNK_CHARS = 2000
 # SEQ_STRIDE - 1 pieces.
 SEQ_STRIDE = 1000
 _REMINDER_RE = re.compile(r"<system-reminder>.*?</system-reminder>", re.DOTALL)
+# User-role records the harness writes on the user's behalf: slash-command
+# echoes and their output, shell-mode input/output, background-task
+# notifications and persisted tool output. They are tool output, not the
+# user's words, and are never stored (SH-106804).
+_MACHINE_USER_PREFIXES = (
+    "<command-name>", "<command-message>", "<command-args>",
+    "<local-command-stdout>", "<local-command-stderr>", "<local-command-caveat>",
+    "<bash-input>", "<bash-stdout>", "<bash-stderr>",
+    "<task-notification>", "<persisted-output>",
+)
 
 
 def _text_of(content):
@@ -84,7 +94,8 @@ def read_claude_code_exchanges(transcript_path, extra_roots=()):
                     continue
                 if not isinstance(rec, dict):
                     continue
-                if rec.get("isMeta") or rec.get("isSidechain"):
+                if (rec.get("isMeta") or rec.get("isSidechain")
+                        or rec.get("isCompactSummary")):
                     continue
                 rtype = rec.get("type")
                 if rtype not in ("user", "assistant"):
@@ -94,6 +105,8 @@ def read_claude_code_exchanges(transcript_path, extra_roots=()):
                     continue
                 text = _REMINDER_RE.sub("", _text_of(msg.get("content"))).strip()
                 if not text:
+                    continue
+                if rtype == "user" and text.startswith(_MACHINE_USER_PREFIXES):
                     continue
                 if rtype == "user":
                     exchanges.append([text, []])
@@ -137,7 +150,15 @@ def chunk_exchange(text, max_chars=MAX_CHUNK_CHARS):
             current = para
     if current:
         pieces.append(current)
-    return pieces[:SEQ_STRIDE - 1]
+    limit = SEQ_STRIDE - 1
+    if len(pieces) > limit:
+        # Keep the seq layout intact, but say what was dropped instead of
+        # losing the tail silently (SH-106804).
+        kept = pieces[:limit - 1]
+        dropped = len(text) - sum(len(p) for p in kept)
+        kept.append("[truncated: %d characters not stored]" % dropped)
+        return kept
+    return pieces
 
 
 # surface -> reader. Cowork sessions keep a Claude Code format transcript
@@ -257,10 +278,15 @@ def store_exchanges(conn, session_id, surface, exchanges, redact, source="hook")
         "SELECT captured_exchange FROM session_sources "
         "WHERE session_id = ? AND surface = ?", (session_id, surface)).fetchone()
     captured = row[0] if row else -1
+    purged = conn.execute(
+        "SELECT purged_through FROM session_text_purges WHERE session_id = ?",
+        (session_id,)).fetchone()
+    # Exchanges the user deleted are never stored again (SH-106804).
+    floor = purged[0] + 1 if purged else 0
     last = len(exchanges) - 1
-    if last < 0 or last < captured:
+    start = max(captured, floor, 0)
+    if last < 0 or last < captured or last < start:
         return 0
-    start = max(captured, 0)
     rows = []
     for idx in range(start, len(exchanges)):
         # Redact the WHOLE exchange before chunking, so a secret that spans a
@@ -326,7 +352,8 @@ _SNIPPET_MATCH_START = "\x01"
 _SNIPPET_MATCH_END = "\x02"
 
 
-def search_chunks(conn, fts_query, limit, passages_per_session=3):
+def search_chunks(conn, fts_query, limit, passages_per_session=3,
+                  session_filter_sql="", session_filter_params=()):
     """Keyword search over stored text, grouped by session, best first.
 
     fts_query is an already-sanitized FTS5 MATCH expression. Each result is
@@ -336,7 +363,15 @@ def search_chunks(conn, fts_query, limit, passages_per_session=3):
     characters around the match, identical adjacent passages are
     de-duplicated, and rows are ordered by FTS rank with seq as the
     tie-break (SH-106569).
+
+    session_filter_sql is an optional ' AND ...' fragment over the sessions
+    table aliased s. It is applied inside the query, before the row limit,
+    so filtered-out sessions cannot crowd out matching ones (SH-106804).
     """
+    filter_clause = ""
+    if session_filter_sql:
+        filter_clause = (" AND c.session_id IN (SELECT s.id FROM sessions s "
+                         "WHERE 1=1" + session_filter_sql + ")")
     rows = conn.execute(
         """SELECT c.session_id AS session_id,
                   bm25(session_chunks_fts) AS rank,
@@ -344,10 +379,11 @@ def search_chunks(conn, fts_query, limit, passages_per_session=3):
                   snippet(session_chunks_fts, 0, ?, ?, ' ... ', 48) AS passage
            FROM session_chunks_fts
            JOIN session_chunks c ON c.id = session_chunks_fts.rowid
-           WHERE session_chunks_fts MATCH ?
+           WHERE session_chunks_fts MATCH ?""" + filter_clause + """
            ORDER BY rank, c.seq
-           LIMIT ?""", (_SNIPPET_MATCH_START, _SNIPPET_MATCH_END,
-                        fts_query, max(int(limit), 1) * 10)).fetchall()
+           LIMIT ?""", (_SNIPPET_MATCH_START, _SNIPPET_MATCH_END, fts_query,
+                        *session_filter_params,
+                        max(int(limit), 1) * 10)).fetchall()
     grouped = {}
     order = []
     for row in rows:
@@ -391,6 +427,12 @@ _EXTERNAL_ID_VARS = (
 )
 
 
+# Surfaces an external session id may belong to: the ones with a transcript
+# reader plus the ones whose id is read from the environment (SH-106804).
+EXTERNAL_SURFACES = tuple(sorted(set(READERS) | {s for s, _ in _EXTERNAL_ID_VARS}))
+MAX_EXTERNAL_ID_CHARS = 256
+
+
 def detect_external_session(environ=None):
     """Return (surface, external_session_id, id_source) or None."""
     env = os.environ if environ is None else environ
@@ -399,6 +441,12 @@ def detect_external_session(environ=None):
         if value:
             return surface, value, "env:" + name
     return None
+
+
+# Printed after every delete, on every surface (SH-106804).
+DELETE_NOTE = ("Deleted text is not stored again by later captures. "
+               "Run 'verbatim backfill --apply' to restore it from a "
+               "surviving transcript.")
 
 
 def format_status(status):

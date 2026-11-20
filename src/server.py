@@ -33,6 +33,7 @@ except ModuleNotFoundError as _exc:
 from pydantic import BaseModel, ConfigDict, Field
 from core.models import Session
 from core.secret_redaction import redact_secrets
+from core.verbatim import EXTERNAL_SURFACES, MAX_EXTERNAL_ID_CHARS
 from core.database import (
     SessionDatabase, SessionLimitReachedError,
     _pinning_enabled, parse_session_id, truncate_session_fields, normalize_project_name,
@@ -289,6 +290,14 @@ def save_session(
     """
     if external_session_id and not external_surface:
         return {"error": "external_surface is required with external_session_id"}
+    if external_session_id:
+        if external_surface not in EXTERNAL_SURFACES:
+            return {"error": "external_surface must be one of: "
+                             + ", ".join(EXTERNAL_SURFACES)}
+        if (not isinstance(external_session_id, str)
+                or len(external_session_id) > MAX_EXTERNAL_ID_CHARS):
+            return {"error": "external_session_id must be a string of at most "
+                             "%d characters" % MAX_EXTERNAL_ID_CHARS}
     session_id = resolve_session_id(session_id, lore_session_id, required=False)
     summary_source = None
     if summarize:
@@ -359,6 +368,7 @@ def save_session(
             "upgrade_url": LORECONVO_UPGRADE_URL,
         }
 
+    source_warning = None
     if external_session_id:
         try:
             _get_db().record_session_source(
@@ -366,6 +376,10 @@ def save_session(
                 external_session_id=external_session_id, id_source="arg:save_session")
         except Exception as exc:
             logger.warning("Could not record session source: %s", exc)
+            # The session is saved; tell the caller the link is not (SH-106804).
+            source_warning = ("Session saved, but its link to the external "
+                              "conversation was not recorded (%s)."
+                              % type(exc).__name__)
 
     # first-use nudge
     config_exists = _onboard_config_path(_get_db()).exists()
@@ -375,6 +389,8 @@ def save_session(
     # local `title` parameter -- the response must be built only from
     # redacted values [r4/if-H2].
     result = {"session_id": saved_id, "status": "saved", "title": session.title}
+    if source_warning:
+        result["warning"] = source_warning
     if fields_truncated:
         result["truncated"] = True
     if is_first_session:
@@ -561,12 +577,24 @@ def get_recent_sessions(
             "surface": s.surface,
             "project": s.project,
             "date": s.start_date,
-            "summary_preview": s.summary[:200] + "..." if len(s.summary) > 200 else s.summary,
+            "summary_preview": _framed(s.summary[:200] + "..." if len(s.summary) > 200 else s.summary),
             "decision_count": len(s.decisions),
             "skills": s.skills_used,
         }
         for s in sessions
     ]
+
+
+def _framed(value):
+    """Frame stored session text as untrusted recall (SH-106804).
+
+    Strings and lists of strings are wrapped; empty values pass through.
+    """
+    if isinstance(value, str):
+        return trust_framing.wrap_untrusted(value) if value else value
+    if isinstance(value, list):
+        return [_framed(v) for v in value]
+    return value
 
 
 @mcp.tool(title="Get Session")
@@ -589,14 +617,14 @@ def get_session(session_id: str | None = None, lore_session_id: str | None = Non
         "project": session.project,
         "start_date": session.start_date,
         "end_date": session.end_date,
-        "summary": session.summary,
-        "decisions": session.decisions,
+        "summary": _framed(session.summary),
+        "decisions": _framed(session.decisions),
         "artifacts": session.artifacts,
-        "open_questions": session.open_questions,
+        "open_questions": _framed(session.open_questions),
         "tags": session.tags,
         "skills_used": session.skills_used,
-        "reasoning_notes": session.reasoning_notes,
-        "previous_summary": session.previous_summary,
+        "reasoning_notes": _framed(session.reasoning_notes),
+        "previous_summary": _framed(session.previous_summary),
     }
 
 
@@ -699,8 +727,8 @@ def search_sessions(
             "date": r.session.start_date,
             "surface": r.session.surface,
             "project": r.session.project,
-            "summary_preview": r.session.summary[:300] + "..." if len(r.session.summary) > 300 else r.session.summary,
-            "decisions": r.session.decisions,
+            "summary_preview": _framed(r.session.summary[:300] + "..." if len(r.session.summary) > 300 else r.session.summary),
+            "decisions": _framed(r.session.decisions),
             "match_score": r.match_score,
             "passages": [trust_framing.wrap_untrusted(p) if p else p for p in r.passages],
         }

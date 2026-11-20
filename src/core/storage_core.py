@@ -263,6 +263,15 @@ CREATE TABLE IF NOT EXISTS session_sources (
 CREATE INDEX IF NOT EXISTS idx_session_sources_external
     ON session_sources(surface, external_session_id);
 
+-- Deleted-text watermark (SH-106804). Holds no text: only the highest
+-- exchange index whose text the user deleted, so a later hook or backfill
+-- never stores that text again.
+CREATE TABLE IF NOT EXISTS session_text_purges (
+    session_id     TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    purged_through INTEGER NOT NULL,
+    purged_at      TEXT
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS session_chunks_fts USING fts5(
     text, content=session_chunks, content_rowid=id
 );
@@ -290,12 +299,23 @@ def ensure_verbatim_schema(conn: sqlite3.Connection) -> None:
     has no ALTER TABLE ADD CONSTRAINT, so we use the standard table
     rebuild: create new table, copy data, drop old, rename.
     """
+    tables = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' "
+        "AND name IN ('session_chunks', 'session_chunks_new')")}
+    if "session_chunks_new" in tables and "session_chunks" not in tables:
+        # An earlier rebuild stopped between DROP and RENAME: finish it
+        # rather than create an empty table beside the copied rows.
+        conn.execute("ALTER TABLE session_chunks_new RENAME TO session_chunks")
     row = conn.execute(
         "SELECT sql FROM sqlite_master "
         "WHERE type='table' AND name='session_chunks'"
     ).fetchone()
     if row and "CHECK (seq >= 0)" not in (row[0] or ""):
+        # One transaction, so a crash leaves either the old table or the
+        # new one, never a half-built pair (SH-106804).
         conn.executescript("""
+            BEGIN IMMEDIATE;
+            DROP TABLE IF EXISTS session_chunks_new;
             CREATE TABLE session_chunks_new (
                 id          INTEGER PRIMARY KEY,
                 session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -312,6 +332,7 @@ def ensure_verbatim_schema(conn: sqlite3.Connection) -> None:
                 SELECT * FROM session_chunks;
             DROP TABLE session_chunks;
             ALTER TABLE session_chunks_new RENAME TO session_chunks;
+            COMMIT;
         """)
         # Rebuild the FTS5 index to re-sync with the recreated content table.
         try:
@@ -948,6 +969,18 @@ def purge_verbatim(conn: sqlite3.Connection, scope_type: str, scope_value=None) 
     try:
         conn.execute("BEGIN IMMEDIATE")
 
+        # Remember how far the deleted text went before deleting it, so the
+        # next hook re-reading the same transcript cannot store it again.
+        conn.execute(
+            "INSERT INTO session_text_purges (session_id, purged_through, purged_at) "
+            "SELECT session_id, MAX(x), strftime('%Y-%m-%dT%H:%M:%SZ', 'now') FROM ("
+            f"SELECT session_id, captured_exchange AS x FROM session_sources {where_source} "
+            f"UNION ALL SELECT session_id, exchange AS x FROM session_chunks {where_chunk}"
+            ") WHERE 1 GROUP BY session_id HAVING MAX(x) >= 0 "
+            "ON CONFLICT(session_id) DO UPDATE SET "
+            "purged_through = MAX(session_text_purges.purged_through, excluded.purged_through), "
+            "purged_at = excluded.purged_at",
+            params + params)
         conn.execute(f"DELETE FROM session_chunks {where_chunk}", params)
         conn.execute(f"DELETE FROM session_sources {where_source}", params)
 
