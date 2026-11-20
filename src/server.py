@@ -66,6 +66,9 @@ from core import trust_framing
 from compat_check import check as _compat_check, emit_startup_warnings as _compat_emit
 
 
+ALLOWED_SURFACES = ("code", "chat", "cowork")
+
+
 _EGG_INFO_CANDIDATES = (
     Path("src/loreconvo.egg-info"),
     Path("loreconvo.egg-info"),
@@ -155,7 +158,7 @@ mcp = FastMCP(
         "Use get_recent_sessions to see what was done recently. "
         "Use vault_suggest to get proactive recommendations on what to revisit. "
         "Use loreconvo_onboard to set up your workspace on first install. "
-        "Fields: surface identifies the platform (code/cowork/chat/codex/custom; Claude Desktop uses 'chat' for Chat/Cowork and 'code' for Code tab), "
+        "Fields: surface identifies the platform (code/chat/cowork; for Codex/Cursor/Hermes use surface='code' with external_surface), "
         "project is a snake_case workspace identifier, "
         "tags use conventions status:*, priority:*, agent:* (see your setup doc), "
         "skills_used lists skill names invoked (not tool names). "
@@ -239,13 +242,13 @@ def save_session(
     Captures decisions, artifacts, skills used, and open questions for recall
     in future sessions.
 
-    Surface guidance for Claude Desktop: Desktop app Chat and Cowork tabs use 'chat' surface.
-    Claude Code (IDE, CLI, Code tab) uses 'code' surface. Use 'cowork' only for existing records
-    created before the merge.
+    Surface guidance: 'code' for Claude Code and other development tools (Codex, Cursor, Hermes).
+    'chat' for Claude Chat. 'cowork' for legacy records only. For non-Claude clients: use
+    surface='code' and external_surface=<vendor>.
 
     Args:
         title: Short descriptive title for the session
-        surface: Where this session ran - 'cowork', 'code', or 'chat'. For Claude Desktop: use 'chat' for Chat and Cowork, 'code' for Claude Code tab.
+        surface: Where this session ran - 'code', 'chat', or 'cowork'.
         summary: 2-3 paragraph narrative summary of what happened. Capped at
             15000 chars.
         decisions: List of key decisions made during the session. Each item
@@ -285,9 +288,12 @@ def save_session(
             CODEX_THREAD_ID (Codex), CURSOR_CONVERSATION_ID (Cursor),
             HERMES_SESSION_ID (Hermes). Omit it if none is set.
         external_surface: Which tool that id belongs to: 'codex', 'cursor',
-            'hermes', 'claude_code' or 'cowork'. Required when
-            external_session_id is given.
+            'hermes', 'claude_code' or 'cowork'. Optional; identifies the
+            vendor when saving sessions from external tools even without
+            an external_session_id.
     """
+    if surface not in ALLOWED_SURFACES:
+        return {"error": f"Invalid surface '{surface}'. Must be one of: {', '.join(ALLOWED_SURFACES)}"}
     if external_session_id and not external_surface:
         return {"error": "external_surface is required with external_session_id"}
     if external_session_id:
@@ -298,6 +304,10 @@ def save_session(
                 or len(external_session_id) > MAX_EXTERNAL_ID_CHARS):
             return {"error": "external_session_id must be a string of at most "
                              "%d characters" % MAX_EXTERNAL_ID_CHARS}
+    if external_surface and not external_session_id:
+        if external_surface not in EXTERNAL_SURFACES:
+            return {"error": "external_surface must be one of: "
+                             + ", ".join(EXTERNAL_SURFACES)}
     session_id = resolve_session_id(session_id, lore_session_id, required=False)
     summary_source = None
     if summarize:
@@ -485,7 +495,7 @@ def update_session(
         session_id: ID of the session to update (required)
         title: New title for the session
         summary: New summary text (replaces the existing summary)
-        surface: New surface -- 'code', 'chat', or 'cowork'
+        surface: New surface - 'code' (Claude Code, Codex, Cursor, Hermes), 'chat' (Claude Chat), or 'cowork' (legacy)
         project: New project name
         tags: New tag list (replaces existing tags)
         decisions: New decisions list (replaces existing decisions)
@@ -500,6 +510,12 @@ def update_session(
         {"status": "error", "error": "message"} on failure
     """
     session_id = resolve_session_id(session_id, lore_session_id, required=True)
+
+    if surface is not None and surface not in ALLOWED_SURFACES:
+        return {
+            "status": "error",
+            "error": f"Invalid surface '{surface}'. Must be one of: {', '.join(ALLOWED_SURFACES)}"
+        }
 
     # Verify the session exists before attempting the update.
     existing = _get_db().get_session(session_id)
