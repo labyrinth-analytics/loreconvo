@@ -4,7 +4,16 @@ What changed in each release, written for users (not developers).
 
 ---
 
-## v0.12.0 (2026-11-22)
+## v0.12.1 (2026-11-20)
+
+### Fixed
+
+- LoreConvo no longer fails to start on Windows when it creates its database
+  for the first time. Version 0.12.0 stopped at startup on new Windows
+  installs.
+- Conversation-text capture and backfill now work on Windows.
+
+## v0.12.0 (2026-11-19)
 
 ### Added
 

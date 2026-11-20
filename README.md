@@ -1,4 +1,4 @@
-# LoreConvo v0.12.0
+# LoreConvo v0.12.1
 
 [![LoreConvo MCP server](https://mcprush.com/badge/loreconvo-mcp/card.svg)](https://mcprush.com/to/loreconvo-mcp?ref=badge)
 
@@ -439,51 +439,14 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
 
 <!-- WHATS_NEW:START -->
 
-## v0.12.0 (2026-11-22)
-
-### Added
-
-- Search and project context can include matching text from conversations
-  captured by supported hooks. Capture is on by default when those hooks are
-  used; an MCP-only installation does not install capture hooks. Only user
-  messages and assistant text replies are captured, with known secret formats
-  redacted before local storage. Tool calls, tool results, shell/slash-command
-  output, the assistant's thinking and system reminders are excluded.
-  Matching passages keep the search term in view, are marked as untrusted
-  conversation content, and respect project, tag and date filters.
-- Set `LORECONVO_VERBATIM_CAPTURE=0` to stop new capture. Maintenance controls
-  can inspect, delete or backfill captured text; backfill starts as a dry run.
-  Turning capture off leaves existing text in place. Deleted text stays
-  deleted: later captures do not store it again, and only a backfill you run
-  yourself brings it back. Deleting captured text preserves saved summaries.
-  Team export/import and export for Anthropic omit captured conversation text.
-- Transcripts are read only from approved locations, as regular files opened
-  read-only.
-- `save_session` can record the calling tool's own conversation id
-  (`external_session_id` with `external_surface`), so its transcript can be
-  found later. Unknown surfaces are refused.
-- Session tools accept `lore_session_id` as an alias for `session_id` (and
-  `export_for_anthropic` accepts `lore_session_ids`). This works around
-  bridges, such as the one Claude Cowork uses, that remove arguments named
-  `session_id`. If you pass both, they must match.
-
-### Changed
-
-- `search_sessions`, `get_session` and `get_recent_sessions` now mark stored
-  summaries, decisions, open questions and notes as untrusted recalled
-  content, as `get_context_for` already did. If you compare these fields to
-  exact text, remove the marker first.
-- A few session tools now take their optional parameters by name only. MCP
-  clients always pass names and are unaffected.
+## v0.12.1 (2026-11-20)
 
 ### Fixed
 
-- New databases and hook-created storage use private file permissions.
-- Session-end hooks get 30 seconds to finish instead of 5.
-- `export-to-chat.sh` reports a failed export as a failure instead of saying
-  there was nothing to export.
-- Automatic links to LoreDocs respect the shared document cap during
-  concurrent saves and preserve manual links.
+- LoreConvo no longer fails to start on Windows when it creates its database
+  for the first time. Version 0.12.0 stopped at startup on new Windows
+  installs.
+- Conversation-text capture and backfill now work on Windows.
 
 <!-- WHATS_NEW:END -->
 

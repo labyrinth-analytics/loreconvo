@@ -1,6 +1,22 @@
 # LoreConvo Changelog
 
-## v0.12.0 (2026-11-22)
+## v0.12.1 (2026-11-20)
+
+### Fixed
+
+- `storage_core._open_conn`: `os.fchmod` does not exist on Windows before
+  Python 3.13, so creating a new `sessions.db` raised AttributeError and the
+  MCP server exited at startup (0.12.0 cross-platform-smoke failed on
+  windows-latest py3.11/3.12). Falls back to `os.chmod` on the staged file;
+  POSIX behaviour unchanged.
+- `verbatim.open_authorized_transcript`: Windows has no `O_DIRECTORY`,
+  `O_NOFOLLOW`, `O_NONBLOCK` or `dir_fd`. Where the descriptor walk is
+  unavailable, the authorized path is opened read-only and the opened file
+  must be the authorized regular file with the path still resolving to it;
+  a swapped path is refused. Hook capture, backfill and summary transcript
+  reads previously failed silently on Windows.
+
+## v0.12.0 (2026-11-19)
 
 ### Added
 

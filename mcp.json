@@ -4,7 +4,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "loreconvo[server]==0.12.0",
+        "loreconvo[server]==0.12.1",
         "loreconvo"
       ],
       "env": {
