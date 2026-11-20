@@ -461,9 +461,13 @@ def _open_conn(db_path, busy_timeout_ms=10000) -> sqlite3.Connection:
                 prefix=".loreconvo-db-", dir=Path(db_path).parent)
             try:
                 try:
-                    os.fchmod(fd, 0o600)
+                    if hasattr(os, "fchmod"):
+                        os.fchmod(fd, 0o600)
                 finally:
                     os.close(fd)
+                if not hasattr(os, "fchmod"):
+                    # Windows before Python 3.13 has no fchmod (SH-106812).
+                    os.chmod(staged_path, 0o600)
                 try:
                     os.link(staged_path, db_path)
                 except FileExistsError:

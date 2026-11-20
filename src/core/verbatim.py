@@ -209,6 +209,40 @@ def is_allowed_transcript_path(path, extra_roots=()):
         return False
 
 
+def _has_descriptor_walk():
+    """True where the no-follow directory-descriptor walk is available.
+
+    Windows has no O_DIRECTORY, O_NOFOLLOW or dir_fd support (SH-106812).
+    """
+    return (hasattr(os, "O_DIRECTORY") and hasattr(os, "O_NOFOLLOW")
+            and hasattr(os, "O_NONBLOCK") and os.open in os.supports_dir_fd)
+
+
+@contextmanager
+def _open_transcript_without_dir_fd(path, resolved, expected, encoding, errors):
+    """Fallback for platforms without the descriptor walk (Windows).
+
+    Opens the authorized path read-only, then requires the opened file to be
+    the same regular file that was authorized and the caller's path to still
+    resolve to it. A path swapped between authorization and open is refused.
+    Weaker than the POSIX walk only in that the check follows the open rather
+    than preventing it.
+    """
+    fd = os.open(resolved, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+    try:
+        opened = os.fstat(fd)
+        if (not stat.S_ISREG(opened.st_mode)
+                or (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino)
+                or Path(path).resolve(strict=True) != resolved):
+            raise PermissionError("transcript identity changed")
+        stream = os.fdopen(fd, "r", encoding=encoding, errors=errors)
+    except BaseException:
+        os.close(fd)
+        raise
+    with stream:
+        yield stream
+
+
 @contextmanager
 def open_authorized_transcript(path, extra_roots=(), encoding="utf-8", errors="replace"):
     """Open an authorized regular transcript read-only, without a path reopen.
@@ -219,6 +253,11 @@ def open_authorized_transcript(path, extra_roots=(), encoding="utf-8", errors="r
     """
     resolved, root, expected = _transcript_target(path, extra_roots)
     parts = resolved.relative_to(root).parts
+    if not _has_descriptor_walk():
+        with _open_transcript_without_dir_fd(
+                path, resolved, expected, encoding, errors) as stream:
+            yield stream
+        return
     directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     with ExitStack() as stack:
         root_identity = root.stat(follow_symlinks=False)
