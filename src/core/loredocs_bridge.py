@@ -64,6 +64,18 @@ DOC_AUTO_LINK_RANK_SQL = (
     "CASE WHEN source_product = 'loreconvo' THEN source_id ELSE target_id END ASC"
 )
 
+# SH-106805: vendored copy of loredocs.storage._CROSS_LINK_PAIR_WHERE_SQL. One
+# (session, doc) pair is one link whichever way the row points; LoreDocs writes
+# its auto links loredocs->loreconvo, this bridge writes loreconvo->loredocs, so
+# a writer that matches only its own direction lands a second row for the same
+# pair. Params: the (source_product, source_id, target_product, target_id)
+# tuple twice. Checked, not trusted: TestConstantSync asserts byte equality.
+CROSS_LINK_PAIR_WHERE_SQL = (
+    "(source_product = ? AND source_id = ? AND target_product = ? AND target_id = ?)"
+    " OR "
+    "(target_product = ? AND target_id = ? AND source_product = ? AND source_id = ?)"
+)
+
 LOREDOCS_DEFAULT_ROOT = Path.home() / ".loredocs"
 LOREDOCS_DB_FILENAME = "loredocs.db"
 LOREDOCS_LANCE_DIRNAME = "docs.lance"
@@ -327,7 +339,10 @@ def write_cross_product_link(
 
     Manual links are always free-tier accessible (tier_required='free').
     If a manual link is requested and an auto link already exists for this pair,
-    the auto link is upgraded to manual.
+    the auto link is upgraded to manual. The pair is matched in EITHER direction
+    (SH-106805): a loredocs->loreconvo auto row written by LoreDocs satisfies a
+    loreconvo->loredocs manual request and is upgraded in place, so one pair
+    never holds two rows.
 
     Returns:
         str: "created" (new row inserted), "upgraded_from_auto" (auto upgraded to manual),
@@ -336,11 +351,11 @@ def write_cross_product_link(
     if link_type == "manual":
         tier_required = "free"
 
+    pair_params = (source_product, source_id, target_product, target_id) * 2
     row = conn.execute(
-        """SELECT link_type, tier_required FROM cross_product_links
-           WHERE source_product = ? AND source_id = ?
-           AND target_product = ? AND target_id = ?""",
-        (source_product, source_id, target_product, target_id),
+        f"""SELECT id, link_type FROM cross_product_links
+            WHERE {CROSS_LINK_PAIR_WHERE_SQL}""",
+        pair_params,
     ).fetchone()
 
     if row:
@@ -351,10 +366,9 @@ def write_cross_product_link(
                    SET link_type = ?, tier_required = ?,
                        similarity_score = ?, embedding_model = ?,
                        embedding_dim = ?
-                   WHERE source_product = ? AND source_id = ?
-                   AND target_product = ? AND target_id = ?""",
-                (link_type, tier_required, similarity_score, embedding_model, embedding_dim,
-                 source_product, source_id, target_product, target_id),
+                   WHERE id = ?""",
+                (link_type, tier_required, similarity_score, embedding_model,
+                 embedding_dim, row["id"]),
             )
             return "upgraded_from_auto"
         elif link_type == "manual" and existing_link_type == "manual":
