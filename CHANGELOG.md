@@ -1,5 +1,14 @@
 # LoreConvo Changelog
 
+## Unreleased
+
+### Changed
+
+- SH-106842: `surface` parameter is now validated on `save_session` and
+  `update_session`. Only valid values (`code`, `chat`, `cowork`) are accepted;
+  invalid values return an error immediately. This aligns vendor/client metadata
+  (`external_surface`) with the core session surface vocabulary.
+
 ## v0.12.1 (2026-11-20)
 
 ### Fixed
