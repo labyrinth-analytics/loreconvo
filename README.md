@@ -76,17 +76,6 @@ python -m loreconvo.cli verbatim backfill --apply  # write
 You can also set `LORECONVO_VERBATIM_CAPTURE=0` to turn capture off. Turning
 it off keeps text already stored until you delete it.
 
-## Recall Benchmark
-
-LoreConvo's FTS5 search is benchmarked against a 60-session synthetic corpus (6 topic areas, 36 labeled queries).
-
-| Variant | Recall@5 | MRR |
-|---------|----------|-----|
-| FTS5 + compound token expansion (default) | **88.9%** | **0.875** |
-| FTS5 baseline (no expansion) | 72.2% | 0.708 |
-
-Compound token expansion (camelCase/PascalCase query preprocessing) lifts Recall@5 by **+35.7 pp** on queries using technical identifiers like `autoSave`, `PreCompact`, and `get_context_for`. Snake_case tokens like `pipeline_tracker` are matched as-is (not split), which avoids false matches on common subwords.
-
 ## Quick Start
 
 One command to install:
@@ -460,25 +449,41 @@ The script auto-discovers the database at `~/.loreconvo/sessions.db` (or pass `-
   messages and assistant text replies are captured, with known secret formats
   redacted before local storage. Tool calls, tool results, shell/slash-command
   output, the assistant's thinking and system reminders are excluded.
+  Matching passages keep the search term in view, are marked as untrusted
+  conversation content, and respect project, tag and date filters.
 - Set `LORECONVO_VERBATIM_CAPTURE=0` to stop new capture. Maintenance controls
   can inspect, delete or backfill captured text; backfill starts as a dry run.
-  Turning capture off leaves existing text in place. Deleting captured text
-  preserves saved summaries. Team export/import and export for Anthropic omit
-  captured conversation text.
+  Turning capture off leaves existing text in place. Deleted text stays
+  deleted: later captures do not store it again, and only a backfill you run
+  yourself brings it back. Deleting captured text preserves saved summaries.
+  Team export/import and export for Anthropic omit captured conversation text.
+- Transcripts are read only from approved locations, as regular files opened
+  read-only.
+- `save_session` can record the calling tool's own conversation id
+  (`external_session_id` with `external_surface`), so its transcript can be
+  found later. Unknown surfaces are refused.
+- Session tools accept `lore_session_id` as an alias for `session_id` (and
+  `export_for_anthropic` accepts `lore_session_ids`). This works around
+  bridges, such as the one Claude Cowork uses, that remove arguments named
+  `session_id`. If you pass both, they must match.
+
+### Changed
+
+- `search_sessions`, `get_session` and `get_recent_sessions` now mark stored
+  summaries, decisions, open questions and notes as untrusted recalled
+  content, as `get_context_for` already did. If you compare these fields to
+  exact text, remove the marker first.
+- A few session tools now take their optional parameters by name only. MCP
+  clients always pass names and are unaffected.
 
 ### Fixed
 
-- Release-review hardening (SH-106804): see below.
-- Matching passages retain the search term near the start or end of long text.
-  Recalled passages are explicitly marked as untrusted conversation content.
-- Transcript reads are limited to approved locations and regular files opened
-  read-only. New databases and hook-created storage use private permissions.
-- Deleting captured text also removes its transcript-source records. A busy
-  database reports whether deletion committed and allows cleanup to be retried.
-- Automatic links to LoreDocs respect the shared document cap during concurrent
-  saves and preserve manual links.
-- Session tools accept `lore_session_id` as an alias for `session_id`, including
-  through bridges that remove arguments named `session_id`.
+- New databases and hook-created storage use private file permissions.
+- Session-end hooks get 30 seconds to finish instead of 5.
+- `export-to-chat.sh` reports a failed export as a failure instead of saying
+  there was nothing to export.
+- Automatic links to LoreDocs respect the shared document cap during
+  concurrent saves and preserve manual links.
 
 <!-- WHATS_NEW:END -->
 

@@ -1,25 +1,6 @@
 # LoreConvo Changelog
 
-## Unreleased
-
-### Fixed
-
-- `search_chunks` retains FTS match positions through private snippet markers;
-  `_trim_passage` preserves boundary matches and removes markers before output.
-  Populated legacy-schema coverage detects an omitted FTS rebuild.
-- MCP and bundled fallback passages use the established untrusted-recall
-  framing. Summary, hook capture and backfill share the descriptor-based,
-  read-only transcript boundary; capture failures report only the error class.
-- Session storage is private from creation, including hook-first directories.
-  Purge removes complete source rows, handles source-only scopes, rolls back
-  failed transactions and retries checkpoint/VACUUM after committed deletion.
-- Cross-product cap tests import the canonical document-endpoint count/rank
-  helpers and verify atomic concurrent saves against the shared cap.
-- Release checks now exercise actual installed hooks under approved transcript
-  roots, bounded initialized MCP clients and deterministic data-guard mutation
-  checks. Full product and artifact gates remain separate release requirements.
-
-## v0.12.0 (2026-11-18)
+## v0.12.0 (2026-11-22)
 
 ### Added
 
@@ -30,8 +11,9 @@
   revision 4. Capture is on by default and is governed by a
   `verbatim_capture` key in `~/.loreconvo/config.json` with an
   `LORECONVO_VERBATIM_CAPTURE` env override (malformed config = off). Only
-  user and assistant text is captured; tool calls, tool output, the
-  assistant's thinking and system reminders are excluded. Known secret
+  user and assistant text is captured. Tool calls, tool results,
+  shell/slash-command output, the assistant's thinking and system reminders
+  are excluded. Known secret
   formats (API keys, tokens, private key blocks) are replaced with
   `[REDACTED]` before storage, using the same redactor as the save path.
   Roughly 50 to 70 KB per session. Team export, import and the Anthropic
@@ -44,42 +26,15 @@
   is supplied. The bundled fallback save script and separate pre-production
   CLI save path can auto-detect CODEX_THREAD_ID, CURSOR_CONVERSATION_ID and
   HERMES_SESSION_ID when present. The MCP function does not auto-detect them.
-- New `verbatim` commands -- status, on, off, delete, backfill -- on all
-  three surfaces: the bypass CLI (`python -m loreconvo.cli verbatim ...`),
-  the fallback script (`save_to_loreconvo.py --verbatim ...`,
-  `--verbatim-delete`, `--verbatim-backfill [--apply]`), and loreconvo-cli
-  (`loreconvo-cli verbatim ...`). No MCP tool for the switch, delete or backfill
-  (deliberate three-surface parity exception).
+- New `verbatim` commands -- status, on, off, delete, backfill -- on two
+  surfaces: the bypass CLI (`python -m loreconvo.cli verbatim ...`) and the
+  fallback script (`save_to_loreconvo.py --verbatim ...`,
+  `--verbatim-delete`, `--verbatim-backfill [--apply]`). No MCP tool for the
+  switch, delete or backfill.
 - `backfill_verbatim` stores text for past sessions whose transcript
   survives on disk; dry run by default, resumable, and skips sessions already
   holding text. Capture-off blocks applying a backfill; a dry run can still
   inspect and report without storing text.
-
-### Fixed
-
-- SH-106620: `cross_link_session` (session-save auto linking into LoreDocs)
-  now honours LoreDocs' 500-link per-document lifetime cap. Before, it
-  capped links per session (5) but never per document, so a document's
-  inbound auto links grew without bound (one reached 13,479; WG-32 D-40b).
-  At cap it replaces the lowest-similarity auto link only when the new one
-  scores higher, otherwise skips -- the same rule as LoreDocs'
-  `cross_link_doc`. `src/core/loredocs_bridge.py` vendors
-  `LIFETIME_AUTO_LINK_CAP`, `DOC_AUTO_LINK_WHERE_SQL`,
-  `DOC_AUTO_LINK_RANK_SQL`, `count_doc_auto_links` and
-  `doc_auto_links_lowest_first` as a checked copy of the loredocs.storage
-  rule (LoreConvo cannot import loredocs in an isolated install);
-  `tests/test_loredocs_bridge.py::TestConstantSync` asserts equality.
-  Tests: `TestCrossLinkSessionLifetimeCap` (mutation-verified).
-- `save_to_loreconvo.py` `search_rows` now returns passages alongside each
-  row; the fallback script and loreconvo-cli print matching passages as
-  `> <passage>` lines under each session.
-- `_bootstrap.py` verbatim resolver error message no longer names a
-  non-working CLI invocation form (caught by the cli-invocation doc-sync
-  rule).
-
-## v0.11.1 (2026-11-10)
-
-### Added
 
 - SH-106024: `lore_session_id` alias parameter on 15 tools that accept
   `session_id` (or `session_ids`). The remote-devices bridge (Claude Cowork)
@@ -94,8 +49,75 @@
   `create_project`, `export_for_anthropic`, `inspect_sessions`,
   `set_session_expiry`, `get_docs_for_session`, `session_link_doc`,
   `tag_as_anti_pattern`, `untag_anti_pattern`, `pin_session`,
-  `save_memory_item`. Several tools became keyword-only (`*,`) to
-  accommodate the optional alias before required parameters.
+  `save_memory_item`.
+
+### Changed
+
+- SH-106024: several of the tools above became keyword-only (`*,`) so the
+  optional alias can sit before required parameters. MCP clients pass
+  arguments by name and are unaffected; Python code calling the tool
+  functions positionally must switch to keyword arguments.
+- `search_sessions`, `get_session` and `get_recent_sessions` now return
+  stored summaries, decisions, open questions and notes inside the
+  untrusted-recall boundary, as `get_context_for` already did. Callers that
+  compare these fields to exact text should strip the boundary first
+  (`core.trust_framing.unwrap_untrusted`).
+
+### Fixed
+
+- Release-review hardening:
+  - Deleted conversation text stays deleted. A later hook re-reading the
+    same transcript no longer stores it again; an explicit
+    `verbatim backfill --apply` restores it. `verbatim delete` says so.
+  - Slash-command echoes and output, shell-mode input/output, background
+    task notifications, persisted tool output and compaction summaries are
+    no longer stored as conversation text.
+  - Project, tag, date and visibility filters apply inside the stored-text
+    search, so a filtered search no longer misses matching passages when
+    other sessions rank higher.
+  - `get_context_for(semantic=True)` returns passages like the keyword path.
+  - `save_session` rejects an unknown `external_surface` or an oversized
+    `external_session_id`, and reports a link that could not be recorded.
+  - An exchange too long to store whole ends with a truncation note.
+  - The one-time stored-text table rebuild is atomic and resumes an
+    interrupted run; `update_session` uses the shared write lock;
+    `backfill_verbatim` reads transcripts under custom roots.
+  - Hooks validate the surface they record; Stop and SessionEnd hooks have
+    30s to finish capture; the MCP smoke check has an overall timeout;
+    `export-to-chat.sh` reports a failed export as a failure.
+- `search_chunks` retains FTS match positions through private snippet markers;
+  `_trim_passage` preserves boundary matches and removes markers before output.
+  Populated legacy-schema coverage detects an omitted FTS rebuild.
+- MCP and bundled fallback passages use the established untrusted-recall
+  framing. Summary, hook capture and backfill share the descriptor-based,
+  read-only transcript boundary; capture failures report only the error class.
+- Session storage is private from creation, including hook-first directories.
+  Purge removes complete source rows, handles source-only scopes, rolls back
+  failed transactions and retries checkpoint/VACUUM after committed deletion.
+- Cross-product cap tests import the canonical document-endpoint count/rank
+  helpers and verify atomic concurrent saves against the shared cap.
+- Release checks now exercise actual installed hooks under approved transcript
+  roots, bounded initialized MCP clients and deterministic data-guard mutation
+  checks. Full product and artifact gates remain separate release requirements.
+- SH-106620: `cross_link_session` (session-save auto linking into LoreDocs)
+  now honours LoreDocs' 500-link per-document lifetime cap. Before, it
+  capped links per session (5) but never per document, so a document's
+  inbound auto links grew without bound (one reached 13,479; WG-32 D-40b).
+  At cap it replaces the lowest-similarity auto link only when the new one
+  scores higher, otherwise skips -- the same rule as LoreDocs'
+  `cross_link_doc`. `src/core/loredocs_bridge.py` vendors
+  `LIFETIME_AUTO_LINK_CAP`, `DOC_AUTO_LINK_WHERE_SQL`,
+  `DOC_AUTO_LINK_RANK_SQL`, `count_doc_auto_links` and
+  `doc_auto_links_lowest_first` as a checked copy of the loredocs.storage
+  rule (LoreConvo cannot import loredocs in an isolated install);
+  `tests/test_loredocs_bridge.py::TestConstantSync` asserts equality.
+  Tests: `TestCrossLinkSessionLifetimeCap` (mutation-verified).
+- `save_to_loreconvo.py` `search_rows` now returns passages alongside each
+  row; the fallback script prints matching passages as `> <passage>` lines
+  under each session.
+- `_bootstrap.py` verbatim resolver error message no longer names a
+  non-working CLI invocation form (caught by the cli-invocation doc-sync
+  rule).
 
 ## v0.11.0 (2026-11-06)
 

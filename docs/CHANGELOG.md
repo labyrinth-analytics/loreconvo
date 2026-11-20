@@ -4,7 +4,7 @@ What changed in each release, written for users (not developers).
 
 ---
 
-## Unreleased
+## v0.12.0 (2026-11-22)
 
 ### Added
 
@@ -12,37 +12,43 @@ What changed in each release, written for users (not developers).
   captured by supported hooks. Capture is on by default when those hooks are
   used; an MCP-only installation does not install capture hooks. Only user
   messages and assistant text replies are captured, with known secret formats
-  redacted before local storage. Tool output and assistant thinking are excluded.
+  redacted before local storage. Tool calls, tool results, shell/slash-command
+  output, the assistant's thinking and system reminders are excluded.
+  Matching passages keep the search term in view, are marked as untrusted
+  conversation content, and respect project, tag and date filters.
 - Set `LORECONVO_VERBATIM_CAPTURE=0` to stop new capture. Maintenance controls
   can inspect, delete or backfill captured text; backfill starts as a dry run.
-  Turning capture off leaves existing text in place. Deleting captured text
-  preserves saved summaries. Team export/import and export for Anthropic omit
-  captured conversation text.
+  Turning capture off leaves existing text in place. Deleted text stays
+  deleted: later captures do not store it again, and only a backfill you run
+  yourself brings it back. Deleting captured text preserves saved summaries.
+  Team export/import and export for Anthropic omit captured conversation text.
+- Transcripts are read only from approved locations, as regular files opened
+  read-only.
+- `save_session` can record the calling tool's own conversation id
+  (`external_session_id` with `external_surface`), so its transcript can be
+  found later. Unknown surfaces are refused.
+- Session tools accept `lore_session_id` as an alias for `session_id` (and
+  `export_for_anthropic` accepts `lore_session_ids`). This works around
+  bridges, such as the one Claude Cowork uses, that remove arguments named
+  `session_id`. If you pass both, they must match.
+
+### Changed
+
+- `search_sessions`, `get_session` and `get_recent_sessions` now mark stored
+  summaries, decisions, open questions and notes as untrusted recalled
+  content, as `get_context_for` already did. If you compare these fields to
+  exact text, remove the marker first.
+- A few session tools now take their optional parameters by name only. MCP
+  clients always pass names and are unaffected.
 
 ### Fixed
 
-- Matching passages retain the search term near the start or end of long text.
-  Recalled passages are explicitly marked as untrusted conversation content.
-- Transcript reads are limited to approved locations and regular files opened
-  read-only. New databases and hook-created storage use private permissions.
-- Deleting captured text also removes its transcript-source records. A busy
-  database reports whether deletion committed and allows cleanup to be retried.
-- Automatic links to LoreDocs respect the shared document cap during concurrent
-  saves and preserve manual links.
-- Session tools accept `lore_session_id` as an alias for `session_id`, including
-  through bridges that remove arguments named `session_id`.
-
-## v0.11.1 (2026-11-10)
-
-### Added
-
-- All tools that accept a `session_id` parameter now also accept
-  `lore_session_id` as an alias. This works around the remote-devices
-  bridge (used by Claude Cowork) which strips arguments named
-  `session_id` in transit. If you pass both, they must match. The
-  `export_for_anthropic` tool similarly accepts `lore_session_ids` as
-  an alias for `session_ids`. No existing call needs to change -- the
-  original parameter name still works.
+- New databases and hook-created storage use private file permissions.
+- Session-end hooks get 30 seconds to finish instead of 5.
+- `export-to-chat.sh` reports a failed export as a failure instead of saying
+  there was nothing to export.
+- Automatic links to LoreDocs respect the shared document cap during
+  concurrent saves and preserve manual links.
 
 ## v0.11.0 (2026-11-06)
 
