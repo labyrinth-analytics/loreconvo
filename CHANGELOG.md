@@ -143,6 +143,16 @@
 - `_bootstrap.py` verbatim resolver error message no longer names a
   non-working CLI invocation form (caught by the cli-invocation doc-sync
   rule).
+- SH-106311: idle backstop hard-exit off by default
+  - `server.app_lifespan` passes `backstop_env_var=None` to
+    `idle_watchdog.install` unless `LORECONVO_ENABLE_IDLE_BACKSTOP` is
+    exactly `1` or `true` (case-insensitive); only then is
+    `LORECONVO_IDLE_BACKSTOP_TIMEOUT` honoured. The 24h hard-exit made
+    Claude Desktop show "stopped running" daily; the 5-min `release_func`
+    already frees resources without exiting.
+  - `tests/test_server_backstop_wiring.py` runs the real `app_lifespan`
+    and asserts the argument handed to `idle_watchdog.install`; a
+    hard-coded backstop at the call site fails it (mutation-verified).
 
 ## v0.11.0 (2026-11-06)
 
