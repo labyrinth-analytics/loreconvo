@@ -1403,8 +1403,9 @@ def loreconvo_onboard(
         tag_style: 'simple' (status + priority) or 'detailed' (adds effort,
                    scout-run markers, date tag guidance)
 
-    Surfaces: code (Claude Code), cowork (Claude.ai Projects), chat (Claude.ai
-    chat), codex (Codex CLI). Custom values are allowed for other tools.
+    Surfaces: code (Claude Code, Codex, Cursor, Hermes), cowork (Claude.ai
+    Projects), chat (Claude.ai chat). Use external_surface to identify the
+    originating tool when saving sessions from external tools.
     Agent identity: use tags=['agent:name'] -- not the surface field.
     """
     if tag_style not in ("simple", "detailed"):
