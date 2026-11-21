@@ -36,11 +36,6 @@ What changed in each release, written for users (not developers).
 - `save_session` can record the calling tool's own conversation id
   (`external_session_id` with `external_surface`), so its transcript can be
   found later. Unknown surfaces are refused.
-- Session tools accept `lore_session_id` as an alias for `session_id` (and
-  `export_for_anthropic` accepts `lore_session_ids`). This works around
-  bridges, such as the one Claude Cowork uses, that remove arguments named
-  `session_id`. If you pass both, they must match.
-
 ### Changed
 
 - `search_sessions`, `get_session` and `get_recent_sessions` now mark stored
@@ -58,6 +53,17 @@ What changed in each release, written for users (not developers).
   there was nothing to export.
 - Automatic links to LoreDocs respect the shared document cap during
   concurrent saves and preserve manual links.
+
+## v0.11.1 (2026-11-10)
+
+### Added
+
+- All session tools that accept a `session_id` parameter now also accept
+  `lore_session_id` as an alias. This works around bridges (such as the one
+  Claude Cowork uses) that strip arguments named `session_id` in transit.
+  If you pass both, they must match. The `export_for_anthropic` tool
+  similarly accepts `lore_session_ids` as an alias for `session_ids`. No
+  existing call needs to change -- the original parameter name still works.
 
 ## v0.11.0 (2026-11-06)
 
