@@ -1,6 +1,6 @@
 # LoreConvo MCP Tool Catalog
 
-LoreConvo provides <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count --> MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count -->.
+LoreConvo provides <!-- mcp-tool-count:user_facing -->43<!-- /mcp-tool-count --> MCP tools that Claude calls during your sessions. You do not need to call these directly -- Claude uses them automatically when you ask it to save, search, or recall session context. Detailed entries below cover the core tools; the Quick Reference table at the bottom lists all <!-- mcp-tool-count:user_facing -->43<!-- /mcp-tool-count -->.
 
 This catalog explains what each tool does, when Claude uses it, and what parameters it accepts.
 
@@ -674,7 +674,7 @@ LoreConvo and LoreDocs from separate marketplace installs is sufficient.
 
 ## Tool Groups (v0.10.20+)
 
-You can choose which of the <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count --> tools your AI assistant sees. Fewer tools means
+You can choose which of the <!-- mcp-tool-count:user_facing -->43<!-- /mcp-tool-count --> tools your AI assistant sees. Fewer tools means
 a shorter tool list for the assistant to read and less context used. Available
 on all tiers. By default every group is on, so nothing changes unless you opt in.
 
@@ -707,7 +707,7 @@ below) rather than guessing.
 ### `configure_tools`
 
 Lists or sets the enabled tool groups. Always available, whatever groups are
-selected, and not counted in the <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count --> tools (like the `get_server_info`
+selected, and not counted in the <!-- mcp-tool-count:user_facing -->43<!-- /mcp-tool-count --> tools (like the `get_server_info`
 diagnostic).
 
 **Parameters:**
@@ -754,6 +754,7 @@ error instead of saving, because the environment variable overrides the file.
 | `delete_session` | Permanently delete a session and remove it from all indexes |
 | `set_session_expiry` | Mark a session to expire and be pruned after a given date |
 | `get_stats` | Show usage statistics: session count, surface breakdown |
+| `get_retrieval_health` | Read-only retrieval health check: index sync plus a self-retrieval probe per search arm (Pro adds semantic; opt-in) |
 | `inspect_sessions` | Inspect session internals for debugging |
 | `export_for_anthropic` | Export sessions in Anthropic managed-agent format (Pro) |
 | `rebuild_index` | Rebuild the LanceDB semantic search index (Pro; runs in background) |

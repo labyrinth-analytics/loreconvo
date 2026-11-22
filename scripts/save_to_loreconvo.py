@@ -644,6 +644,41 @@ def cmd_stats(args):
     print(json.dumps(stats, indent=2))
 
 
+def cmd_health(args):
+    """Retrieval health check (get_retrieval_health): read-only, local, no LLM.
+
+    Deliberately does NOT use _session_database(): constructing a
+    SessionDatabase runs schema init and WAL pragmas, which write.
+    --save-history is script-only (the MCP tool never writes).
+    """
+    try:
+        core = _bootstrap.resolve_session_core(Path(__file__), clear_breadcrumb=False)
+    except _bootstrap.BootstrapError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
+    db_path = args.db_path or _find_loreconvo_db()
+    if not db_path:
+        print("ERROR: Could not find LoreConvo sessions.db", file=sys.stderr)
+        sys.exit(1)
+    from loreconvo.core import retrieval_health as rh
+    from loreconvo import __version__
+
+    report = rh.run_retrieval_health(
+        core.Config(db_path=db_path),
+        project=args.project,
+        sample=args.sample,
+        seed=args.seed,
+        include_semantic=args.include_semantic,
+    )
+    print(json.dumps(report, indent=2))
+    if args.save_history:
+        try:
+            rh.append_history(args.save_history, report, __version__)
+        except (ValueError, OSError) as exc:
+            print(f"ERROR: --save-history refused: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+
 def cmd_graph(args):
     """Mermaid knowledge-graph around a session or project (graph_session_map)."""
     db = _session_database(args)
@@ -1151,6 +1186,16 @@ def main():
                         help="With --inspect: include aggregate counts")
     parser.add_argument("--stats", action="store_true",
                         help="Print the usage dashboard (get_stats)")
+    parser.add_argument("--health", action="store_true",
+                        help="Read-only retrieval health check (get_retrieval_health)")
+    parser.add_argument("--sample", type=int, default=10,
+                        help="With --health: probes to run (default 10, max 30)")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="With --health: repeat a previous sample")
+    parser.add_argument("--include-semantic", action="store_true", dest="include_semantic",
+                        help="With --health: also run the Pro semantic arm (loads the model)")
+    parser.add_argument("--save-history", type=str, dest="save_history", default=None,
+                        help="With --health: append a one-line JSON summary to this file")
     parser.add_argument("--graph", action="store_true",
                         help="Print a Mermaid knowledge-graph (graph_session_map)")
     parser.add_argument("--graph-session-id", type=str, dest="graph_session_id",
@@ -1350,6 +1395,8 @@ def main():
         skill_history(args)
     elif args.inspect:
         cmd_inspect(args)
+    elif args.health:
+        cmd_health(args)
     elif args.stats:
         cmd_stats(args)
     elif args.graph:

@@ -108,7 +108,7 @@ Replace `/path/to/loreconvo` with wherever you saved the source folder.
 
 After making code changes, use `/reload-plugins` to refresh without restarting.
 
-Once loaded, Claude has access to all <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count --> LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
+Once loaded, Claude has access to all <!-- mcp-tool-count:user_facing -->43<!-- /mcp-tool-count --> LoreConvo MCP tools automatically. Ask Claude to "save this session" or "recall what we discussed about X" and it will use the tools on its own.
 
 ### Cowork (Desktop App)
 
@@ -334,7 +334,7 @@ After checkout, your license key is emailed automatically to the address you use
 
 ## MCP Tools
 
-LoreConvo provides <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count --> MCP tools that Claude calls automatically during sessions.
+LoreConvo provides <!-- mcp-tool-count:user_facing -->43<!-- /mcp-tool-count --> MCP tools that Claude calls automatically during sessions.
 The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs/mcp_tool_catalog.md) for the complete reference.
 
 | Tool | What it does |
@@ -362,6 +362,7 @@ The table below shows the most commonly used ones -- see [MCP Tool Catalog](docs
 | `delete_session` | Delete a session and export it to a portable JSON for archiving |
 | `update_session` | Update session title, summary, and other metadata |
 | `get_stats` | Show usage statistics (session count, surface breakdown) |
+| `get_retrieval_health` | Read-only check that search finds your saved sessions (index health plus a self-retrieval probe; Pro adds the semantic arm) |
 | `inspect_sessions` | Inspect session internals for debugging |
 | `export_for_anthropic` | Export sessions in Anthropic managed-agent format (Pro) |
 | `rebuild_index` | Rebuild the LanceDB semantic search index (Pro) |

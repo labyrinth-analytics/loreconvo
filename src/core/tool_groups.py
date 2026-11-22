@@ -70,6 +70,7 @@ TOOL_GROUPS: dict[str, tuple[str, ...]] = {
         "export_for_anthropic",
         "export_sessions",
         "get_project",
+        "get_retrieval_health",
         "get_stats",
         "get_tier",
         "import_sessions",

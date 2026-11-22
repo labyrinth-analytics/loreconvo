@@ -180,7 +180,7 @@ LoreConvo is listed in the Hermes plugin catalog and can be installed with one c
 
 This is the simplest way to add LoreConvo to Hermes. The catalog installs LoreConvo as a native Hermes memory provider -- it reads and writes the same `~/.loreconvo/sessions.db` as your other LoreConvo clients.
 
-> **Tool coverage note (v0.10.20+):** The catalog integration exposes a registry-derived tool set with the `loreconvo_` prefix: `loreconvo_search_sessions`, `loreconvo_get_context_for`, `loreconvo_save_memory_item`, and more. MCP-only tools (`configure_tools`, `inject_agent_context`) are excluded. Pro gating applies. If you need the full <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count -->-tool MCP suite for non-Hermes contexts, use Option B instead.
+> **Tool coverage note (v0.10.20+):** The catalog integration exposes a registry-derived tool set with the `loreconvo_` prefix: `loreconvo_search_sessions`, `loreconvo_get_context_for`, `loreconvo_save_memory_item`, and more. MCP-only tools (`configure_tools`, `inject_agent_context`) are excluded. Pro gating applies. If you need the full <!-- mcp-tool-count:user_facing -->43<!-- /mcp-tool-count -->-tool MCP suite for non-Hermes contexts, use Option B instead.
 >
 > **Upgrading from v0.10.19:** Two catalog tool names changed. Update `loreconvo_get_context` to `loreconvo_get_context_for` and `loreconvo_save_memory` to `loreconvo_save_memory_item`. The old names return an error in v0.10.20.
 
@@ -246,7 +246,7 @@ hermes plugins update loreconvo
 
 ### Option B: MCP Server via YAML Config
 
-Hermes Agent also supports LoreConvo as an MCP server through its YAML config file. This gives you the full set of <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count --> LoreConvo MCP tools, providing direct access to advanced features like consolidation, semantic search, and anti-pattern tagging.
+Hermes Agent also supports LoreConvo as an MCP server through its YAML config file. This gives you the full set of <!-- mcp-tool-count:user_facing -->43<!-- /mcp-tool-count --> LoreConvo MCP tools, providing direct access to advanced features like consolidation, semantic search, and anti-pattern tagging.
 
 Add an entry under `mcp_servers:` in `~/.hermes/config.yaml`:
 
@@ -931,5 +931,5 @@ index it at the start of each session.
 
 - [Quickstart Guide](docs/quickstart.md) -- get up and running in 5 minutes
 - [CLI Reference](docs/cli_reference.md) -- manage sessions from the terminal
-- [MCP Tool Catalog](docs/mcp_tool_catalog.md) -- all <!-- mcp-tool-count:user_facing -->42<!-- /mcp-tool-count --> tools explained in plain English
+- [MCP Tool Catalog](docs/mcp_tool_catalog.md) -- all <!-- mcp-tool-count:user_facing -->43<!-- /mcp-tool-count --> tools explained in plain English
 - [Changelog](docs/CHANGELOG.md) -- what changed in each release

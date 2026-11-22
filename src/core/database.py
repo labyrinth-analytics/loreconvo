@@ -589,6 +589,40 @@ class SessionDatabase:
         self._init_schema()
         self._maybe_upgrade_lance_compaction()
 
+    @classmethod
+    def open_readonly(cls, config: "Config") -> "SessionDatabase":
+        """Open a search-capable handle on a `mode=ro` connection (SH-106987).
+
+        Skips every write the normal constructor performs (WAL pragma, schema
+        init, Lance compaction upgrade, directory creation), so it never
+        creates or modifies a file. Raises sqlite3.Error if the store cannot
+        be opened read-only. Release with `release_readonly()`, NOT `close()`
+        (close() checkpoints the WAL, which is a write).
+        """
+        conn = sqlite3.connect(f"file:{config.db_path}?mode=ro", uri=True)
+        try:
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA busy_timeout=10000")
+            cls._register_connection_functions(conn)
+        except sqlite3.Error:
+            conn.close()
+            raise
+        db = cls.__new__(cls)
+        db.config = config
+        db._write_lock = threading.Lock()
+        db._conn = conn
+        db._closed = False
+        db._lance_index = None
+        return db
+
+    def release_readonly(self) -> None:
+        """Close a handle from open_readonly() without checkpointing."""
+        self._closed = True
+        conn, self._conn = self._conn, None
+        self._lance_index = None
+        if conn is not None:
+            conn.close()
+
     @property
     def conn(self) -> sqlite3.Connection:
         """The live connection, reopened lazily if idle-released.

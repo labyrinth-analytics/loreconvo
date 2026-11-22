@@ -1474,6 +1474,50 @@
       }
     },
     {
+      "name": "get_retrieval_health",
+      "description": "Read-only retrieval health check on YOUR store: index sync plus a\nself-retrieval probe (does search find a saved session by 3 distinctive\nterms from its own summary, in the top 3?), per search arm.\n\nFree: index health and the keyword (FTS5) probe. Pro: the semantic arm,\nonly when ``include_semantic=true`` (loads the model; may be slow).\nNot an answer-quality or paraphrase-recall measure. Pass the echoed\n``seed`` to repeat a sample. Bounded by a 60 s deadline; one run at a time.\nNothing is written. ``project`` omitted means the whole store.\n",
+      "parameters": {
+        "properties": {
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Project"
+          },
+          "sample": {
+            "default": 10,
+            "title": "Sample",
+            "type": "integer"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seed"
+          },
+          "include_semantic": {
+            "default": false,
+            "title": "Include Semantic",
+            "type": "boolean"
+          }
+        },
+        "title": "get_retrieval_healthArguments",
+        "type": "object"
+      }
+    },
+    {
       "name": "consolidate_memories",
       "description": "Run memory consolidation for a project to build a structured digest.\n\nAnalyzes recent SESSIONS and extracts decisions, open questions, and tech\nstack facts. Free tier: up to 3 consolidations per day. Pro: unlimited.\n\nReturns a digest dict with status, decisions found, open questions, and\nthe formatted digest_markdown for reference.\n\nAcquires an exclusive lock; returns status='lock_held' if another\nconsolidation is already running.\n\nNote: This consolidation analyzes SESSIONS ONLY. Structured memory items\n(decisions, questions, artifacts saved via save_memory_item) are a separate\nfeature -- use query_memory_items to retrieve them. Users often query both\ndigest and memory items together for complete recall.\n\nArgs:\n    project: Project name (matches the --project tag used when saving sessions)\n    surface: Surface to consolidate ('code', 'cowork', 'chat', etc.) or None for all\n    max_sessions: Maximum number of recent sessions to analyze (default 50)\n    mode: 'heuristic' (free, default). 'llm' requires Pro (v0.6.1).\n    dedup: Semantic dedup pass mode: 'off' (default), 'conservative', or\n        'balanced'. When 'off' (or unset, or unrecognised), the pass does\n        not run and consolidation behaves exactly as before. 'conservative'\n        collapses near-verbatim restatements (cosine > 0.97); 'balanced'\n        collapses paraphrases (cosine > 0.95). Can also be set via the\n        LORECONVO_CONSOLIDATION_DEDUP environment variable; an explicit\n        argument always overrides the env var.\n",
       "parameters": {

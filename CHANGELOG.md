@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- SH-106987: `get_retrieval_health` MCP tool and `save_to_loreconvo.py --health`
+  (read-only, local, no LLM). Reports index sync and a known-item self-retrieval
+  probe (recall@3 on 3 terms from a saved session's own summary) per search arm.
+  Free: keyword arm. Pro: semantic arm, opt-in via `include_semantic`. Bounded by
+  a 60 s deadline, single-flight, never writes. `--save-history PATH` (script
+  only) appends a one-line JSON summary. Not an answer-quality measure.
+
 ### Changed
 
 - SH-106842: `surface` parameter is now validated on `save_session` and

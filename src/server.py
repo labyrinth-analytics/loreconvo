@@ -1793,6 +1793,29 @@ def get_stats() -> dict:
     return _get_db().usage_stats_with_hook_status()
 
 
+@mcp.tool(title="Get Retrieval Health")
+def get_retrieval_health(
+    project: str | None = None,
+    sample: int = 10,
+    seed: int | None = None,
+    include_semantic: bool = False,
+) -> dict:
+    """Read-only retrieval health check on YOUR store: index sync plus a
+    self-retrieval probe (does search find a saved session by 3 distinctive
+    terms from its own summary, in the top 3?), per search arm.
+
+    Free: index health and the keyword (FTS5) probe. Pro: the semantic arm,
+    only when ``include_semantic=true`` (loads the model; may be slow).
+    Not an answer-quality or paraphrase-recall measure. Pass the echoed
+    ``seed`` to repeat a sample. Bounded by a 60 s deadline; one run at a time.
+    Nothing is written. ``project`` omitted means the whole store.
+    """
+    from core.retrieval_health import run_retrieval_health
+    return run_retrieval_health(
+        _get_db().config, project=project, sample=sample, seed=seed,
+        include_semantic=include_semantic)
+
+
 @mcp.tool(title="Consolidate Memories")
 def consolidate_memories(
     project: str,
