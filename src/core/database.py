@@ -6656,14 +6656,19 @@ class SessionDatabase:
         backup_path = target_dir / f"{src.name}.pre-oq-backfill-{stamp}"
         if backup_path.exists():
             raise RuntimeError(f"backup target already exists: {backup_path}")
+        # The copy holds the same conversation text as the live store: 0600
+        # before any page is written, and secure_delete=ON like every
+        # writable connection (_open_conn is not used because the online
+        # backup needs a plain destination handle, not a WAL-mode store).
         dest = sqlite3.connect(str(backup_path))
         try:
+            os.chmod(str(backup_path), 0o600)
+            dest.execute("PRAGMA secure_delete=ON")
             with self._write_lock:
                 self._ensure_conn_locked().backup(dest)
             verdict = dest.execute("PRAGMA integrity_check").fetchone()[0]
         finally:
             dest.close()
-        os.chmod(str(backup_path), 0o600)
         if verdict != "ok":
             raise RuntimeError(
                 f"backup at {backup_path} failed integrity_check: {verdict}")
