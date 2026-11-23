@@ -11,6 +11,7 @@ and FTS5 query sanitization. database.py imports from here and
 re-exports _open_conn so no existing caller changes.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -18,6 +19,7 @@ import re
 import sqlite3
 import stat
 import tempfile
+import unicodedata
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -1049,3 +1051,138 @@ def session_visibility_clause(
             f"OR julianday({alias}expires_at) > julianday('now'))"
         )
     return clause
+
+
+# ---------------------------------------------------------------------------
+# Open-question lifecycle bridge (SH-106986 / proposal SH-106030)
+# ---------------------------------------------------------------------------
+#
+# The legacy per-session free-text list (sessions.open_questions) is bridged
+# to the memory_items lifecycle rows by a stable identity: external_id =
+# "oq:" + sha256(normalize(text)). These helpers are the ONE derivation of
+# that identity and of "which of these strings is resolved". They live here,
+# not in database.py, because the SessionStart hook (auto_load.py) resolves
+# only storage_core and must render the same status every other surface does.
+
+OPEN_QUESTION_EXTERNAL_ID_PREFIX = "oq:"
+OPEN_QUESTION_ITEM_TYPE = "open_question"
+RESOLVED_QUESTION_STATUSES = ("answered", "wont-answer")
+RESOLVED_QUESTION_LABEL = "[resolved] "
+QUESTION_STATUS_APPLIED = "applied"
+QUESTION_STATUS_UNAVAILABLE = "unavailable"
+QUESTION_STATUS_UNAVAILABLE_LINE = "[question status unavailable]"
+# memory_items.project is NOT NULL DEFAULT 'unspecified'; a session with no
+# project mirrors under the same bucket so the lookup key round-trips.
+UNSPECIFIED_PROJECT = "unspecified"
+_ZERO_WIDTH_RE = re.compile("[​‌‍⁠﻿]")
+_WHITESPACE_RUN_RE = re.compile(r"\s+")
+# Keys per IN(...) batch. Well under SQLite's historical 999 bind limit.
+QUESTION_STATUS_BATCH = 500
+
+
+class StatusLookupError(Exception):
+    """The memory_items status lookup itself failed (missing table, I/O,
+    locked database). Distinct from an empty result on purpose: a renderer
+    that cannot look status up must show the full list and SAY so, never
+    quietly treat every question as open."""
+
+
+def normalize_question(text) -> str:
+    """Canonical form of a question string for identity purposes.
+
+    NFKC -> strip zero-width characters -> trim -> collapse whitespace ->
+    casefold. Nothing else: punctuation and wording changes are deliberately
+    DIFFERENT questions (no semantic dedup is claimed).
+    """
+    if text is None:
+        return ""
+    value = unicodedata.normalize("NFKC", str(text))
+    value = _ZERO_WIDTH_RE.sub("", value)
+    value = _WHITESPACE_RUN_RE.sub(" ", value.strip())
+    return value.casefold()
+
+
+def question_key(text):
+    """Full 64-hex sha256 of the normalized text, or None when the question
+    is empty after normalization (whitespace-only strings get no identity)."""
+    normalized = normalize_question(text)
+    if not normalized:
+        return None
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def question_external_id(text):
+    """memory_items.external_id for a question string, or None for a blank."""
+    key = question_key(text)
+    if key is None:
+        return None
+    return OPEN_QUESTION_EXTERNAL_ID_PREFIX + key
+
+
+def question_project(project):
+    """The memory_items.project bucket a session's questions mirror into."""
+    return project if project else UNSPECIFIED_PROJECT
+
+
+def question_statuses(conn, keys) -> dict:
+    """Batched status lookup: {(project, key): status} for every oq: row
+    whose key is in `keys`. Keys with no row are absent from the result.
+
+    Only "oq:"-prefixed external ids are read. Any sqlite error (missing
+    memory_items table on a pre-0.8 store, locked database, I/O) is raised
+    as StatusLookupError so callers can distinguish "no rows" from "could
+    not look".
+    """
+    unique = sorted({k for k in keys if k})
+    found = {}
+    if not unique:
+        return found
+    try:
+        for start in range(0, len(unique), QUESTION_STATUS_BATCH):
+            chunk = unique[start:start + QUESTION_STATUS_BATCH]
+            placeholders = ",".join("?" for _ in chunk)
+            rows = conn.execute(
+                "SELECT project, external_id, status FROM memory_items "
+                "WHERE item_type = ? AND external_id IN (" + placeholders + ")",
+                (OPEN_QUESTION_ITEM_TYPE,
+                 *[OPEN_QUESTION_EXTERNAL_ID_PREFIX + k for k in chunk]),
+            ).fetchall()
+            for row in rows:
+                ext = row["external_id"] if isinstance(row, sqlite3.Row) else row[1]
+                project = row["project"] if isinstance(row, sqlite3.Row) else row[0]
+                status = row["status"] if isinstance(row, sqlite3.Row) else row[2]
+                found[(project, ext[len(OPEN_QUESTION_EXTERNAL_ID_PREFIX):])] = status
+    except sqlite3.Error as exc:
+        raise StatusLookupError(str(exc)) from exc
+    return found
+
+
+def question_keys_for(questions) -> list:
+    """Keys for a list of question strings, blanks dropped."""
+    out = []
+    for q in questions or []:
+        key = question_key(q)
+        if key is not None:
+            out.append(key)
+    return out
+
+
+def filter_open_questions(questions, project, statuses, include_resolved=False) -> list:
+    """Apply lifecycle status to a session's legacy question list.
+
+    Resolved rows (answered / wont-answer) are omitted; with
+    include_resolved they are kept with the "[resolved] " label. A string
+    with no row (or no key, i.e. blank) is treated as open and shown
+    unchanged -- fail-visible, never hides an unknown question.
+    """
+    bucket = question_project(project)
+    out = []
+    for q in questions or []:
+        key = question_key(q)
+        status = statuses.get((bucket, key)) if key is not None else None
+        if status in RESOLVED_QUESTION_STATUSES:
+            if include_resolved:
+                out.append(RESOLVED_QUESTION_LABEL + q)
+            continue
+        out.append(q)
+    return out

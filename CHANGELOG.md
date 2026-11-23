@@ -4,6 +4,24 @@
 
 ### Added
 
+- SH-106986: open-question lifecycle bridge. Every question in a session's
+  `open_questions` list is now mirrored on save into a `memory_items`
+  `open_question` row (identity `oq:<sha256 of the normalized text>`, idempotent,
+  at most 50 per save), so it can be resolved with `transition_memory_item`
+  (`answer` / `wont-answer`). Recall is status-aware: `get_context_for`,
+  `get_recent_sessions`, the SessionStart auto-load hook, the Hermes provider and
+  the fallback script (`--context-for`, `--read`) hide resolved questions by
+  default; `include_resolved` (`--include-resolved`) shows them labelled
+  `[resolved]`. A question with no row is always shown; if the status lookup
+  cannot run the full list is shown with `[question status unavailable]` and
+  MCP results carry `question_status: "unavailable"` (normal path: `"applied"`).
+  `get_recent_sessions` now returns `open_questions` and `question_status`.
+  `query_memory_items` gains `older_than_days` for the stale-open-questions view.
+  Existing stores: `save_to_loreconvo.py --backfill-open-questions [--project P]
+  [--apply]` (dry-run by default; `--apply` takes an integrity-checked backup
+  first, writes in batches of 200, re-run creates 0) and `--suggest-resolved`
+  (suggest-only: open questions whose text appears in a later session's
+  decisions; never auto-closes). No schema change. Free tier.
 - SH-106987: `get_retrieval_health` MCP tool and `save_to_loreconvo.py --health`
   (read-only, local, no LLM). Reports index sync and a known-item self-retrieval
   probe (recall@3 on 3 terms from a saved session's own summary) per search arm.

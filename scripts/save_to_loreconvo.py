@@ -333,6 +333,7 @@ def _session_preview(session):
         "id": session.id, "surface": session.surface, "title": session.title,
         "summary_preview": (session.summary or "")[:300],
         "created": session.created_at.replace("T", " ")[:19],
+        "open_questions": list(session.open_questions or []),
     }
 
 
@@ -357,6 +358,10 @@ def read_sessions(args):
                     and (not tag_filter or tag_filter in session.tags)]
         if args.limit >= 0:
             sessions = sessions[:args.limit]
+        # SH-106986: same status-aware question rendering as MCP
+        # get_recent_sessions (resolved hidden unless --include-resolved).
+        question_status = db.apply_question_status(
+            sessions, include_resolved=getattr(args, "include_resolved", False))
         rows = [_session_preview(session) for session in sessions]
     finally:
         db.close()
@@ -365,10 +370,14 @@ def read_sessions(args):
         print("No sessions found.")
         return
 
+    if question_status != _storage.QUESTION_STATUS_APPLIED:
+        print(_storage.QUESTION_STATUS_UNAVAILABLE_LINE)
     for row in rows:
         print(f"[{row['created']}] ({row['surface']}) {row['title']}")
         print(f"  ID: {row['id']}")
         print(f"  {row['summary_preview']}")
+        for q in row["open_questions"]:
+            print(f"  open: {q}")
         print()
 
 
@@ -880,6 +889,7 @@ def cmd_context_for(args):
             max_results=args.max_results,
             include_external=args.include_external,
             semantic=args.semantic,
+            include_resolved=getattr(args, "include_resolved", False),
         )
     finally:
         db.close()
@@ -888,6 +898,8 @@ def cmd_context_for(args):
         print(f"No context found for topic '{args.context_topic}'.")
         return
     print(f"{len(results)} context result(s) for '{args.context_topic}':")
+    if any(r.get("question_status") != _storage.QUESTION_STATUS_APPLIED for r in results):
+        print(_storage.QUESTION_STATUS_UNAVAILABLE_LINE)
     print()
     for r in results:
         print(f"[{r['date']}] {r['session_title']}")
@@ -899,6 +911,60 @@ def cmd_context_for(args):
         for q in (r["open_questions"] or []):
             print(f"  open: {q}")
         print()
+
+
+# -- Open-question lifecycle bridge (SH-106986) --
+
+BACKFILL_RESTORE_HELP = (
+    "Restore from the backup it prints: stop every LoreConvo process (MCP "
+    "server, hooks, Hermes); move aside sessions.db, sessions.db-wal and "
+    "sessions.db-shm; copy the backup file to sessions.db; restart."
+)
+
+
+def _print_backfill_report(report):
+    mode = "apply" if report["apply"] else "dry-run"
+    scope = report["project"] or "all projects"
+    print(f"Open-question backfill ({mode}) for {scope}")
+    print(f"  sessions scanned:  {report['sessions_scanned']}")
+    print(f"  questions seen:    {report['questions_seen']}")
+    print(f"  skipped (blank):   {report['skipped_blank']}")
+    print(f"  already mirrored:  {report['already_mirrored']}")
+    if report["apply"]:
+        print(f"  created:           {report['created']}")
+        print(f"  batches: {report['batches']}  busy failures: {report['busy_failures']}  "
+              f"longest batch: {report['longest_batch_seconds']:.3f}s")
+        if report["backup_path"]:
+            print(f"  backup: {report['backup_path']}")
+            print(f"  {BACKFILL_RESTORE_HELP}")
+    else:
+        print(f"  would create:      {report['would_create']}")
+        print("Dry run: no rows written. Re-run with --apply to write.")
+    if report.get("error"):
+        print(f"ERROR: {report['error']}", file=sys.stderr)
+
+
+def cmd_backfill_open_questions(args):
+    """Mirror legacy session open_questions into memory_items (dry-run unless --apply)."""
+    db = _session_database(args)
+    try:
+        report = db.backfill_open_questions(project=args.project, apply=args.apply)
+    finally:
+        db.close()
+    _print_backfill_report(report)
+    if not report["ok"]:
+        sys.exit(1)
+
+
+def cmd_suggest_resolved(args):
+    """List open mirrored questions whose text appears in a later session's decisions."""
+    db = _session_database(args)
+    try:
+        result = db.suggest_resolved_open_questions(
+            project=args.project, limit=args.memory_item_limit)
+    finally:
+        db.close()
+    _print_memory_item_result(result)
 
 
 # -- Structured memory items: decisions/questions/artifacts (SH-102285) --
@@ -1068,6 +1134,7 @@ def cmd_query_memory_items(args):
             artifact_type=args.memory_item_artifact_type,
             days=args.memory_item_days,
             limit=args.memory_item_limit,
+            older_than_days=getattr(args, "memory_item_older_than_days", None),
         )
     finally:
         db.close()
@@ -1272,6 +1339,28 @@ def main():
                         help="With --context-for or --search: include external-tool sessions")
     parser.add_argument("--include-expired", action="store_true", dest="include_expired",
                         help="With --search: include sessions whose expiry has passed")
+    parser.add_argument("--include-resolved", action="store_true", dest="include_resolved",
+                        help="With --read or --context-for: show open questions already "
+                             "answered or marked wont-answer (via --transition-memory-item) "
+                             "labelled [resolved] instead of hiding them")
+    parser.add_argument("--backfill-open-questions", action="store_true",
+                        dest="backfill_open_questions",
+                        help="Mirror every session's legacy open_questions list into "
+                             "memory_items so each question can be resolved. Dry-run by "
+                             "default (prints would-create / already-mirrored / skipped "
+                             "counts); --apply writes in batches of 200, idempotent "
+                             "(a re-run creates 0), after taking an integrity-checked "
+                             "backup copy of sessions.db next to it. Optional --project. "
+                             + BACKFILL_RESTORE_HELP)
+    parser.add_argument("--suggest-resolved", action="store_true", dest="suggest_resolved",
+                        help="Suggest-only: list open mirrored questions whose text appears "
+                             "in a LATER session's decisions in the same project, labelled "
+                             "candidate. Never closes anything; resolve with "
+                             "--transition-memory-item. Optional --project, --memory-item-limit")
+    parser.add_argument("--memory-item-older-than-days", type=int,
+                        dest="memory_item_older_than_days", default=None,
+                        help="--query-memory-items: only items created at least N days ago "
+                             "(stale open questions view)")
     parser.add_argument("--max-results", type=int, dest="max_results", default=5,
                         help="With --context-for: max excerpts (default 5)")
 
@@ -1425,6 +1514,10 @@ def main():
         if not args.context_topic:
             parser.error("--context-for requires --context-topic")
         cmd_context_for(args)
+    elif args.backfill_open_questions:
+        cmd_backfill_open_questions(args)
+    elif args.suggest_resolved:
+        cmd_suggest_resolved(args)
     elif args.save_memory_item:
         if not args.memory_item_type or not args.memory_item_title:
             parser.error("--save-memory-item requires --memory-item-type and --memory-item-title")

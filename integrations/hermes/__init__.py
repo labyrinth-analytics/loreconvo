@@ -172,6 +172,8 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
             if not results:
                 self._last_prefetch_count = 0
                 return ""
+            # SH-106986: resolved questions are hidden in the recall block.
+            self._db.apply_question_status([sr.session for sr in results])
 
             # Build a compact recall block from SearchResult objects
             lines: List[str] = ["[LoreConvo recall]"]
@@ -532,6 +534,7 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
     def _handle_context(self, args: Dict[str, Any]) -> str:
         topic = args.get("topic", "")
         max_results = min(int(args.get("max_results", 5)), 15)
+        include_resolved = bool(args.get("include_resolved", False))
 
         # get_context_for returns List[SearchResult]
         results = self._db.get_context_for(
@@ -545,6 +548,10 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
                 "found": False,
                 "message": "No relevant sessions found.",
             })
+
+        # SH-106986: same status-aware rendering as the MCP tool.
+        question_status = self._db.apply_question_status(
+            [sr.session for sr in results], include_resolved=include_resolved)
 
         sessions = []
         decisions: List[str] = []
@@ -573,6 +580,7 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
             "sessions": sessions,
             "decisions": decisions[:10],
             "open_questions": questions[:5],
+            "question_status": question_status,
         })
 
     def _handle_save_memory(self, args: Dict[str, Any]) -> str:
@@ -626,7 +634,11 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
         project = args.get("project") or self._project
         limit = min(int(args.get("limit", 10)), 25)
         surface = args.get("surface")
+        include_resolved = bool(args.get("include_resolved", False))
         results = self._db.get_recent_sessions(project=project, limit=limit, surface=surface)
+        # SH-106986: same status-aware rendering as the MCP tool.
+        question_status = self._db.apply_question_status(
+            results, include_resolved=include_resolved)
         sessions = []
         for s in results:
             sessions.append({
@@ -636,8 +648,12 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
                 "surface": getattr(s, "surface", ""),
                 "summary": (getattr(s, "summary", "") or "")[:300],
                 "tags": getattr(s, "tags", []),
+                "open_questions": list(getattr(s, "open_questions", []) or []),
             })
-        return json.dumps({"project": project, "count": len(sessions), "sessions": sessions})
+        return json.dumps({
+            "project": project, "count": len(sessions), "sessions": sessions,
+            "question_status": question_status,
+        })
 
     def _handle_get_session(self, args: Dict[str, Any]) -> str:
         session_id = args.get("session_id", "")

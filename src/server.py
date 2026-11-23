@@ -574,6 +574,7 @@ def get_recent_sessions(
     days_back: int = 30,
     project: str | None = None,
     skill: str | None = None,
+    include_resolved: bool = False,
 ) -> list[dict]:
     """Get recent session summaries.
 
@@ -584,8 +585,13 @@ def get_recent_sessions(
         days_back: How far back to look (default 30 days)
         project: Filter to sessions in this project
         skill: Filter to sessions that used this skill
+        include_resolved: If True, open questions already answered (or marked
+            wont-answer) via transition_memory_item are shown labelled
+            "[resolved]" instead of hidden. Default False.
     """
-    sessions = _get_db().get_recent_sessions(limit, days_back, project, skill)
+    db = _get_db()
+    sessions = db.get_recent_sessions(limit, days_back, project, skill)
+    question_status = db.apply_question_status(sessions, include_resolved=include_resolved)
     return [
         {
             "id": s.id,
@@ -595,6 +601,8 @@ def get_recent_sessions(
             "date": s.start_date,
             "summary_preview": _framed(s.summary[:200] + "..." if len(s.summary) > 200 else s.summary),
             "decision_count": len(s.decisions),
+            "open_questions": _framed(s.open_questions),
+            "question_status": question_status,
             "skills": s.skills_used,
         }
         for s in sessions
@@ -759,6 +767,7 @@ def get_context_for(
     include_external: bool = False,
     semantic: bool = False,
     include_passages: bool = True,
+    include_resolved: bool = False,
 ) -> list[dict]:
     """Get relevant session context for a topic.
 
@@ -774,10 +783,14 @@ def get_context_for(
             if index not yet built.
         include_passages: Return up to three matching passages of stored
             conversation text per session. Default True.
+        include_resolved: If True, open questions already answered (or marked
+            wont-answer) via transition_memory_item are shown labelled
+            "[resolved]" instead of hidden. Default False. Each result carries
+            question_status 'applied' or 'unavailable'.
     """
     return _get_db().context_for_payload(
         topic, max_results, include_external=include_external, semantic=semantic,
-        include_passages=include_passages,
+        include_passages=include_passages, include_resolved=include_resolved,
     )
 
 
@@ -2300,6 +2313,7 @@ def query_memory_items(
     artifact_type: str | None = None,
     days: int | None = None,
     limit: int = 50,
+    older_than_days: int | None = None,
 ) -> dict:
     """Query structured memory items by type, project, status, and recency.
 
@@ -2311,10 +2325,13 @@ def query_memory_items(
             with item_type='artifact'.
         days: Only items created in the last N days.
         limit: Max rows to return (default 50, max 200).
+        older_than_days: Only items created at least N days ago (e.g. stale
+            open questions: item_type='open_question', status='open').
     """
     return _get_db().query_memory_items(
         item_type=item_type, project=project, status=status,
         artifact_type=artifact_type, days=days, limit=limit,
+        older_than_days=older_than_days,
     )
 
 

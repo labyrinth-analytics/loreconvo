@@ -13,6 +13,7 @@ import sqlite3
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -51,6 +52,17 @@ from .storage_core import (
     normalize_project_name,
     PROJECT_ALIASES,
     session_visibility_clause,
+    OPEN_QUESTION_EXTERNAL_ID_PREFIX,
+    OPEN_QUESTION_ITEM_TYPE,
+    QUESTION_STATUS_APPLIED,
+    QUESTION_STATUS_UNAVAILABLE,
+    StatusLookupError,
+    filter_open_questions,
+    normalize_question,
+    question_external_id,
+    question_keys_for,
+    question_project,
+    question_statuses,
 )
 
 from .secret_redaction import redact_secrets, redact_value
@@ -301,6 +313,78 @@ _MEMORY_ITEM_TERMINAL_STATUSES = {
     'open_question': {'answered', 'wont-answer'},
     'artifact': {'archived'},
 }
+
+# -- Open-question lifecycle bridge (SH-106986) --
+# Mirror-on-save writes at most this many question rows per save, in one
+# short separate transaction; the remainder is picked up by the backfill.
+MIRROR_MAX_QUESTIONS_PER_SAVE = 50
+# Backfill batch size (rows per transaction) and the total BUSY budget.
+BACKFILL_BATCH_SIZE = 200
+BACKFILL_MAX_BUSY_FAILURES = 3
+_SQLITE_BUSY_MARKERS = ("database is locked", "database is busy")
+
+
+def _open_question_rows(session_id, project, questions, origin, run_id, now, cap=None):
+    """Build memory_items rows for a session's open questions.
+
+    One row per distinct question key (dedup within the list), blank
+    questions skipped, title capped by the same _truncate_text rule every
+    memory item uses. Returns (rows, skipped_blank, truncated_to_cap).
+    rows are tuples in _insert_open_question_rows order.
+    """
+    rows = []
+    seen = set()
+    skipped_blank = 0
+    truncated_to_cap = False
+    bucket = question_project(project)
+    metadata_json = json.dumps({"origin": origin, "run_id": run_id})
+    for q in questions or []:
+        ext = question_external_id(q)
+        if ext is None:
+            skipped_blank += 1
+            continue
+        if ext in seen:
+            continue
+        seen.add(ext)
+        if cap is not None and len(rows) >= cap:
+            truncated_to_cap = True
+            break
+        title, _ = _truncate_text(str(q))
+        rows.append((
+            str(uuid.uuid4()), OPEN_QUESTION_ITEM_TYPE, session_id, bucket,
+            "[]", metadata_json, title, None,
+            _MEMORY_ITEM_INITIAL_STATUS[OPEN_QUESTION_ITEM_TYPE], ext, now, now,
+        ))
+    return rows, skipped_blank, truncated_to_cap
+
+
+def _insert_open_question_rows(conn, rows) -> int:
+    """Insert mirror rows inside the caller's open transaction.
+
+    INSERT ... ON CONFLICT(project, external_id) DO NOTHING -- the single
+    idempotent write both mirror-on-save and the backfill use. Returns the
+    number of rows actually created.
+    """
+    created = 0
+    for row in rows:
+        conn.execute(
+            """INSERT INTO memory_items
+               (id, item_type, session_id, project, tags, metadata, title,
+                body, status, external_id, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(project, external_id) DO NOTHING""",
+            row,
+        )
+        # changes() excludes trigger rows (the FTS mirror trigger fires on
+        # every insert), unlike Connection.total_changes.
+        created += conn.execute("SELECT changes()").fetchone()[0]
+    return created
+
+
+def _is_sqlite_busy(exc) -> bool:
+    text = str(exc).lower()
+    return isinstance(exc, sqlite3.OperationalError) and any(
+        marker in text for marker in _SQLITE_BUSY_MARKERS)
 
 
 def _check_shared_environment_warning() -> None:
@@ -2793,17 +2877,24 @@ class SessionDatabase:
         include_external: bool = False,
         semantic: bool = False,
         include_passages: bool = True,
+        include_resolved: bool = False,
     ) -> List[dict]:
         """Assemble the get_context_for MCP response (SH-101930).
 
         Retrieves via get_context_for() and applies the SH-13436 trust
         framing in one place -- the fallback script and loreconvo-cli get
         the same untrusted-session-content boundary as the MCP tool.
+        SH-106986: open questions are rendered status-aware (resolved rows
+        hidden unless include_resolved); each item carries question_status
+        'applied' or 'unavailable' so machine callers know whether the list
+        is authoritative.
         """
         results = self.get_context_for(
             topic, max_results, include_external=include_external,
             semantic=semantic, include_passages=include_passages,
         )
+        question_status = self.apply_question_status(
+            [r.session for r in results], include_resolved=include_resolved)
         out = []
         for r in results:
             s = r.session
@@ -2821,6 +2912,7 @@ class SessionDatabase:
                 "open_questions": [trust_framing.wrap_untrusted(q) if q else q for q in s.open_questions] if s.open_questions else s.open_questions,
                 "passages": [trust_framing.wrap_untrusted(p) if p else p for p in passages] if passages else [],
                 "match_score": r.match_score,
+                "question_status": question_status,
             })
         return out
 
@@ -3529,6 +3621,11 @@ class SessionDatabase:
                 (session.id, skill_name, position)
             )
         self.conn.commit()
+
+        # SH-106986: mirror open questions into memory_items as a SEPARATE
+        # short transaction after the session commit; never fails the save.
+        if session.open_questions:
+            self._mirror_open_questions_safe(session.id)
 
         # Index co-occurrences and auto-link related sessions (additive, non-blocking)
         try:
@@ -5008,6 +5105,10 @@ class SessionDatabase:
                 conn.execute("ROLLBACK")
                 raise
 
+        # SH-106986: a replaced question list is mirrored after the commit.
+        if open_questions:
+            self._mirror_open_questions_safe(session_id)
+
         # Invalidate memory digests if summary, project, or surface changed.
         # Source-affecting writes invalidate both old and new (project, surface) scopes.
         summary_changed = summary is not None and summary != old_summary
@@ -6214,12 +6315,15 @@ class SessionDatabase:
         self, item_type: Optional[str] = None, project: Optional[str] = None,
         status: Optional[str] = None, artifact_type: Optional[str] = None,
         days: Optional[int] = None, limit: int = 50,
+        older_than_days: Optional[int] = None,
     ) -> dict:
         """Query memory_items by type, project, status, artifact_type, and recency.
 
         Date comparison uses lexicographic ISO 8601 UTC string comparison
         (correct for fixed-width zero-padded timestamps); a defensive LIKE
         filter excludes malformed created_at rows from the days window.
+        older_than_days (SH-106986) keeps only items created at least N days
+        ago -- the "stale open questions" view.
         """
         if not self._memory_items_available:
             return {
@@ -6252,6 +6356,11 @@ class SessionDatabase:
             cutoff = (datetime.now(timezone.utc) - timedelta(days=int(days))).strftime("%Y-%m-%dT%H:%M:%SZ")
             clauses.append("created_at >= ?")
             params.append(cutoff)
+            clauses.append("created_at LIKE '____-__-__T__:__:__Z'")
+        if older_than_days is not None:
+            stale_cutoff = (datetime.now(timezone.utc) - timedelta(days=int(older_than_days))).strftime("%Y-%m-%dT%H:%M:%SZ")
+            clauses.append("created_at <= ?")
+            params.append(stale_cutoff)
             clauses.append("created_at LIKE '____-__-__T__:__:__Z'")
 
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
@@ -6433,6 +6542,327 @@ class SessionDatabase:
                 raise
 
         return {"ok": True, "id": item_id, "truncated": truncated}
+
+    # -- Open-question lifecycle bridge (SH-106986) --
+
+    def mirror_open_questions(self, session_id: str) -> dict:
+        """Upsert a session's open_questions list into memory_items.
+
+        Runs as its own short BEGIN IMMEDIATE transaction AFTER the session
+        save has committed; at most MIRROR_MAX_QUESTIONS_PER_SAVE rows per
+        call (the rest are picked up by backfill_open_questions). Idempotent:
+        a repeat is a no-op (created=0). The session list itself is never
+        edited -- the memory_items row is the lifecycle record.
+        """
+        if not self._memory_items_available:
+            return {"ok": False, "code": "memory_items_unavailable", "created": 0}
+        row = self.conn.execute(
+            "SELECT project, open_questions FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if row is None:
+            return {"ok": False, "code": "not_found", "created": 0}
+        questions = self._parse_json_field(row["open_questions"])
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        rows, skipped_blank, truncated_to_cap = _open_question_rows(
+            session_id, row["project"], questions, "mirror", session_id, now,
+            cap=MIRROR_MAX_QUESTIONS_PER_SAVE,
+        )
+        created = 0
+        if rows:
+            with self._write_context() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    created = _insert_open_question_rows(conn, rows)
+                    conn.execute("COMMIT")
+                except Exception:
+                    conn.execute("ROLLBACK")
+                    raise
+        return {
+            "ok": True, "created": created, "considered": len(rows),
+            "skipped_blank": skipped_blank, "truncated_to_cap": truncated_to_cap,
+        }
+
+    def _mirror_open_questions_safe(self, session_id: str) -> None:
+        """Mirror after a save; a failure (BUSY, disk) never fails the save.
+
+        The session is already committed when this runs. On failure the
+        questions simply render as open (pre-feature behaviour) until the
+        idempotent backfill reconciles them.
+        """
+        try:
+            self.mirror_open_questions(session_id)
+        except Exception as exc:
+            logger.warning(
+                "open-question mirror failed for session %s (session save is "
+                "unaffected; run --backfill-open-questions to reconcile): %s",
+                session_id, exc,
+            )
+
+    def question_statuses(self, project: Optional[str], keys) -> dict:
+        """{key: status} for the given question keys within one project.
+
+        Keys with no row are absent. Raises StatusLookupError when the lookup
+        itself fails; returns an error-free empty dict only when there are
+        genuinely no rows.
+        """
+        if not self._memory_items_available:
+            raise StatusLookupError("memory_items_unavailable")
+        bucket = question_project(project)
+        found = question_statuses(self.conn, keys)
+        return {k: s for (p, k), s in found.items() if p == bucket}
+
+    def apply_question_status(self, sessions, include_resolved: bool = False) -> str:
+        """Rewrite each session's open_questions in place per lifecycle status.
+
+        ONE batched lookup for the whole rendered session set. Resolved rows
+        are dropped (or labelled "[resolved] " when include_resolved); strings
+        with no row stay. Returns QUESTION_STATUS_APPLIED, or
+        QUESTION_STATUS_UNAVAILABLE when the lookup could not run -- in which
+        case every list is left as written so no question is hidden silently.
+        Limits and counts stay SESSION counts; this touches only the rendered
+        question strings.
+        """
+        sessions = list(sessions)
+        keys = []
+        for s in sessions:
+            keys.extend(question_keys_for(s.open_questions))
+        if not keys:
+            return QUESTION_STATUS_APPLIED
+        if not self._memory_items_available:
+            return QUESTION_STATUS_UNAVAILABLE
+        try:
+            statuses = question_statuses(self.conn, keys)
+        except StatusLookupError as exc:
+            logger.warning("open-question status lookup unavailable: %s", exc)
+            return QUESTION_STATUS_UNAVAILABLE
+        for s in sessions:
+            if s.open_questions:
+                s.open_questions = filter_open_questions(
+                    s.open_questions, s.project, statuses, include_resolved)
+        return QUESTION_STATUS_APPLIED
+
+    def _backup_database_for_backfill(self, backup_dir: Optional[Path] = None) -> Path:
+        """Consistent SQLite online-backup copy, integrity-checked, 0600.
+
+        Raises RuntimeError if the copy fails PRAGMA integrity_check. Restore
+        procedure (also in the fallback script's --help): stop every LoreConvo
+        process (MCP, hooks, Hermes); move aside sessions.db, sessions.db-wal,
+        sessions.db-shm; copy the backup to sessions.db; restart.
+        """
+        src = Path(self.config.db_path)
+        target_dir = Path(backup_dir) if backup_dir is not None else src.parent
+        target_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        backup_path = target_dir / f"{src.name}.pre-oq-backfill-{stamp}"
+        if backup_path.exists():
+            raise RuntimeError(f"backup target already exists: {backup_path}")
+        dest = sqlite3.connect(str(backup_path))
+        try:
+            with self._write_lock:
+                self._ensure_conn_locked().backup(dest)
+            verdict = dest.execute("PRAGMA integrity_check").fetchone()[0]
+        finally:
+            dest.close()
+        os.chmod(str(backup_path), 0o600)
+        if verdict != "ok":
+            raise RuntimeError(
+                f"backup at {backup_path} failed integrity_check: {verdict}")
+        return backup_path
+
+    def _scan_open_questions_for_backfill(self, project: Optional[str]) -> dict:
+        """Distinct (project, external_id) -> (first session_id, question text)
+        across every session list, oldest session first. Also returns counts."""
+        sql = ("SELECT id, project, open_questions FROM sessions "
+               "WHERE open_questions IS NOT NULL AND open_questions != '[]'")
+        params: list = []
+        if project:
+            normalized = normalize_project_name(project)
+            sql += " AND project = ?"
+            params.append(normalized)
+        sql += " ORDER BY start_date ASC, id ASC"
+        distinct = {}
+        sessions_scanned = 0
+        questions_seen = 0
+        skipped_blank = 0
+        for row in self.conn.execute(sql, params):
+            sessions_scanned += 1
+            bucket = question_project(row["project"])
+            for q in self._parse_json_field(row["open_questions"]):
+                questions_seen += 1
+                ext = question_external_id(q)
+                if ext is None:
+                    skipped_blank += 1
+                    continue
+                distinct.setdefault((bucket, ext), (row["id"], str(q)))
+        return {
+            "distinct": distinct, "sessions_scanned": sessions_scanned,
+            "questions_seen": questions_seen, "skipped_blank": skipped_blank,
+        }
+
+    def backfill_open_questions(
+        self, project: Optional[str] = None, apply: bool = False,
+        backup_dir: Optional[Path] = None, batch_size: int = BACKFILL_BATCH_SIZE,
+    ) -> dict:
+        """Mirror every legacy open question into memory_items.
+
+        Dry-run by default: reports would_create / already_mirrored /
+        skipped_blank and writes nothing. With apply=True: takes an
+        integrity-checked backup first (refuses to continue if that fails),
+        then inserts in batches of `batch_size`, each its own short
+        transaction, every insert ON CONFLICT DO NOTHING -- so a crash between
+        commit and the progress print can never duplicate or alter a row, and
+        re-running continues (second run creates 0). BUSY: any
+        BACKFILL_MAX_BUSY_FAILURES failures in total abort with counts. Any
+        non-BUSY SQLite error: roll back, drop the connection, abort with
+        counts. Nothing in `sessions` is edited or deleted.
+        """
+        report = {
+            "ok": True, "apply": bool(apply), "project": project,
+            "sessions_scanned": 0, "questions_seen": 0, "skipped_blank": 0,
+            "would_create": 0, "already_mirrored": 0, "created": 0,
+            "batches": 0, "busy_failures": 0, "backup_path": None,
+            "longest_batch_seconds": 0.0, "run_id": str(uuid.uuid4()),
+            "error": None,
+        }
+        if not self._memory_items_available:
+            report["ok"] = False
+            report["error"] = "memory_items_unavailable"
+            return report
+
+        scan = self._scan_open_questions_for_backfill(project)
+        report.update({k: scan[k] for k in ("sessions_scanned", "questions_seen", "skipped_blank")})
+        distinct = scan["distinct"]
+        keys = [ext[len(OPEN_QUESTION_EXTERNAL_ID_PREFIX):] for (_, ext) in distinct]
+        try:
+            existing = question_statuses(self.conn, keys)
+        except StatusLookupError as exc:
+            report["ok"] = False
+            report["error"] = f"status lookup failed: {exc}"
+            return report
+        pending = []
+        for (bucket, ext), (session_id, text) in distinct.items():
+            if (bucket, ext[len(OPEN_QUESTION_EXTERNAL_ID_PREFIX):]) in existing:
+                report["already_mirrored"] += 1
+            else:
+                pending.append((bucket, session_id, text))
+        report["would_create"] = len(pending)
+        if not apply:
+            return report
+
+        try:
+            report["backup_path"] = str(self._backup_database_for_backfill(backup_dir))
+        except Exception as exc:
+            report["ok"] = False
+            report["error"] = f"backup failed, refusing to apply: {exc}"
+            return report
+
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        rows = []
+        for bucket, session_id, text in pending:
+            built, _, _ = _open_question_rows(
+                session_id, bucket, [text], "backfill", report["run_id"], now)
+            rows.extend(built)
+        batch_size = max(1, int(batch_size))
+        start = 0
+        while start < len(rows):
+            batch = rows[start:start + batch_size]
+            began = time.monotonic()
+            try:
+                with self._write_context() as conn:
+                    conn.execute("BEGIN IMMEDIATE")
+                    try:
+                        created = _insert_open_question_rows(conn, batch)
+                        conn.execute("COMMIT")
+                    except Exception:
+                        conn.execute("ROLLBACK")
+                        raise
+            except sqlite3.Error as exc:
+                if _is_sqlite_busy(exc):
+                    report["busy_failures"] += 1
+                    if report["busy_failures"] >= BACKFILL_MAX_BUSY_FAILURES:
+                        report["ok"] = False
+                        report["error"] = (
+                            f"aborted after {report['busy_failures']} BUSY failures: {exc}")
+                        return report
+                    continue  # retry the same batch
+                report["ok"] = False
+                report["error"] = f"aborted on SQLite error: {exc}"
+                self.release_idle_connection()
+                return report
+            elapsed = time.monotonic() - began
+            report["created"] += created
+            report["batches"] += 1
+            report["longest_batch_seconds"] = max(report["longest_batch_seconds"], elapsed)
+            start += batch_size
+        return report
+
+    def suggest_resolved_open_questions(
+        self, project: Optional[str] = None, limit: int = 50,
+    ) -> dict:
+        """Suggest-only assist: open mirrored questions whose normalized text
+        is contained in a LATER session's decisions in the same project.
+
+        Exact containment on normalized text; no embedding, no LLM, never
+        auto-closes. Each hit is labelled "candidate" with the matching
+        session id so a human or agent can call transition_memory_item.
+        """
+        if not self._memory_items_available:
+            return {"ok": False, "code": "memory_items_unavailable",
+                    "message": "Structured memory items are unavailable on this installation."}
+        limit = max(1, min(int(limit), 200))
+        sql = ("SELECT m.id, m.project, m.title, m.created_at, m.session_id, "
+               "s.start_date AS origin_start FROM memory_items m "
+               "LEFT JOIN sessions s ON s.id = m.session_id "
+               "WHERE m.item_type = ? AND m.status = 'open' AND m.external_id LIKE ?")
+        params: list = [OPEN_QUESTION_ITEM_TYPE, OPEN_QUESTION_EXTERNAL_ID_PREFIX + "%"]
+        if project:
+            sql += " AND m.project = ?"
+            params.append(question_project(normalize_project_name(project)))
+        sql += " ORDER BY m.created_at ASC"
+        open_rows = self.conn.execute(sql, params).fetchall()
+
+        decisions_by_project: dict = {}
+        candidates = []
+        for item in open_rows:
+            bucket = item["project"]
+            if bucket not in decisions_by_project:
+                # A NULL/empty session project mirrors into the 'unspecified'
+                # bucket (question_project), so match both spellings there.
+                drows = self.conn.execute(
+                    "SELECT id, title, start_date, decisions FROM sessions "
+                    "WHERE (project = ? OR (? = ? AND (project IS NULL OR project = ''))) "
+                    "AND decisions IS NOT NULL AND decisions != '[]'",
+                    (bucket, bucket, question_project(None)),
+                ).fetchall()
+                decisions_by_project[bucket] = [
+                    (d["id"], d["title"], d["start_date"] or "",
+                     [(dec, normalize_question(dec)) for dec in self._parse_json_field(d["decisions"])])
+                    for d in drows
+                ]
+            needle = normalize_question(item["title"])
+            if not needle:
+                continue
+            origin = item["origin_start"] or item["created_at"] or ""
+            for sid, stitle, sdate, decs in decisions_by_project[bucket]:
+                if sid == item["session_id"] or sdate <= origin:
+                    continue
+                hit = next((dec for dec, norm in decs if needle in norm), None)
+                if hit is not None:
+                    candidates.append({
+                        "label": "candidate",
+                        "item_id": item["id"],
+                        "project": bucket,
+                        "question": item["title"],
+                        "candidate_session_id": sid,
+                        "candidate_session_title": stitle,
+                        "candidate_session_date": sdate,
+                        "matched_decision": hit,
+                    })
+                    break
+            if len(candidates) >= limit:
+                break
+        return {"ok": True, "candidates": candidates, "count": len(candidates),
+                "open_questions_checked": len(open_rows)}
 
     def verify_memory_items_fts_integrity(self) -> dict:
         """Check memory_items_fts consistency via the FTS5 built-in integrity-check.

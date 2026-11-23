@@ -403,7 +403,7 @@
     },
     {
       "name": "get_recent_sessions",
-      "description": "Get recent session summaries.\n\nUse to see what work was done recently, optionally filtered by project or skill.\n\nArgs:\n    limit: Max sessions to return (default 10)\n    days_back: How far back to look (default 30 days)\n    project: Filter to sessions in this project\n    skill: Filter to sessions that used this skill\n",
+      "description": "Get recent session summaries.\n\nUse to see what work was done recently, optionally filtered by project or skill.\n\nArgs:\n    limit: Max sessions to return (default 10)\n    days_back: How far back to look (default 30 days)\n    project: Filter to sessions in this project\n    skill: Filter to sessions that used this skill\n    include_resolved: If True, open questions already answered (or marked\n        wont-answer) via transition_memory_item are shown labelled\n        \"[resolved]\" instead of hidden. Default False.\n",
       "parameters": {
         "properties": {
           "limit": {
@@ -439,6 +439,11 @@
             ],
             "default": null,
             "title": "Skill"
+          },
+          "include_resolved": {
+            "default": false,
+            "title": "Include Resolved",
+            "type": "boolean"
           }
         },
         "title": "get_recent_sessionsArguments",
@@ -601,7 +606,7 @@
     },
     {
       "name": "get_context_for",
-      "description": "Get relevant session context for a topic.\n\nUse at the start of a session to load prior decisions and context about a topic.\nReturns the most relevant session excerpts.\n\nArgs:\n    topic: The topic to find context for (e.g., 'K-1 parser', 'rental insurance')\n    max_results: Max excerpts to return (default 5)\n    include_external: If True, include sessions flagged as external_tool_session.\n        Default False.\n    semantic: If True, use LanceDB hybrid search (Pro only). Falls back to FTS5\n        if index not yet built.\n    include_passages: Return up to three matching passages of stored\n        conversation text per session. Default True.\n",
+      "description": "Get relevant session context for a topic.\n\nUse at the start of a session to load prior decisions and context about a topic.\nReturns the most relevant session excerpts.\n\nArgs:\n    topic: The topic to find context for (e.g., 'K-1 parser', 'rental insurance')\n    max_results: Max excerpts to return (default 5)\n    include_external: If True, include sessions flagged as external_tool_session.\n        Default False.\n    semantic: If True, use LanceDB hybrid search (Pro only). Falls back to FTS5\n        if index not yet built.\n    include_passages: Return up to three matching passages of stored\n        conversation text per session. Default True.\n    include_resolved: If True, open questions already answered (or marked\n        wont-answer) via transition_memory_item are shown labelled\n        \"[resolved]\" instead of hidden. Default False. Each result carries\n        question_status 'applied' or 'unavailable'.\n",
       "parameters": {
         "properties": {
           "topic": {
@@ -626,6 +631,11 @@
           "include_passages": {
             "default": true,
             "title": "Include Passages",
+            "type": "boolean"
+          },
+          "include_resolved": {
+            "default": false,
+            "title": "Include Resolved",
             "type": "boolean"
           }
         },
@@ -2077,7 +2087,7 @@
     },
     {
       "name": "query_memory_items",
-      "description": "Query structured memory items by type, project, status, and recency.\n\nArgs:\n    item_type: Filter to 'decision', 'open_question', or 'artifact'.\n    project: Filter to a project namespace.\n    status: Filter to a lifecycle status (e.g. 'active', 'open', 'retired').\n    artifact_type: Filter artifacts by their artifact_type. Only applies\n        with item_type='artifact'.\n    days: Only items created in the last N days.\n    limit: Max rows to return (default 50, max 200).\n",
+      "description": "Query structured memory items by type, project, status, and recency.\n\nArgs:\n    item_type: Filter to 'decision', 'open_question', or 'artifact'.\n    project: Filter to a project namespace.\n    status: Filter to a lifecycle status (e.g. 'active', 'open', 'retired').\n    artifact_type: Filter artifacts by their artifact_type. Only applies\n        with item_type='artifact'.\n    days: Only items created in the last N days.\n    limit: Max rows to return (default 50, max 200).\n    older_than_days: Only items created at least N days ago (e.g. stale\n        open questions: item_type='open_question', status='open').\n",
       "parameters": {
         "properties": {
           "item_type": {
@@ -2144,6 +2154,18 @@
             "default": 50,
             "title": "Limit",
             "type": "integer"
+          },
+          "older_than_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Older Than Days"
           }
         },
         "title": "query_memory_itemsArguments",

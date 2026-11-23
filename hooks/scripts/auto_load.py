@@ -163,7 +163,7 @@ def query_recent_sessions(db_path, cwd, days_back=14, limit=10):
         if cwd:
             project = os.path.basename(cwd.rstrip("/"))
             cursor = conn.execute(
-                "SELECT id, title, summary, decisions, artifacts,"
+                "SELECT id, title, project, summary, decisions, artifacts,"
                 " open_questions, tags, start_date, end_date, source"
                 + summary_source_col + kf_col +
                 " FROM sessions"
@@ -285,6 +285,39 @@ def select_sessions(sessions, max_count=5):
     return [s for _, s in good[:max_count]]
 
 
+def _parse_list_field(raw):
+    """JSON list column -> list; malformed or NULL -> []."""
+    try:
+        return json.loads(raw) if isinstance(raw, str) else (raw or [])
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def question_statuses_for(db_path, sessions):
+    """ONE batched lifecycle lookup for every open question in the rendered set
+    (SH-106986). Returns (statuses, available). available=False means the
+    lookup could not run -- the caller shows the full legacy list plus the
+    "[question status unavailable]" line, never a silently-trimmed list.
+    """
+    keys = []
+    for session in sessions:
+        keys.extend(_storage.question_keys_for(
+            _parse_list_field(session.get("open_questions", "[]"))))
+    if not keys:
+        return {}, True
+    if not db_path or not os.path.exists(db_path):
+        return {}, False
+    try:
+        conn = _open_conn(db_path, busy_timeout_ms=2000)
+        try:
+            return _storage.question_statuses(conn, keys), True
+        finally:
+            conn.close()
+    except Exception as exc:
+        sys.stderr.write(f"LoreConvo auto-load: question status unavailable: {exc}\n")
+        return {}, False
+
+
 def format_context(sessions, cwd, db_path=None, session_nonce=None):
     """Format session data into a concise context block for Claude.
 
@@ -332,6 +365,13 @@ def format_context(sessions, cwd, db_path=None, session_nonce=None):
         lines.append("Recent sessions (no project filter):")
     lines.append("")
 
+    # SH-106986: resolved open questions are hidden per memory_items status.
+    # If the lookup itself fails the full list is shown and labelled so.
+    statuses, status_available = question_statuses_for(db_path, sessions)
+    if not status_available:
+        lines.append(_storage.QUESTION_STATUS_UNAVAILABLE_LINE)
+        lines.append("")
+
     # Wrapper overhead is subtracted from the budget once, up front, so the
     # per-block cap check below still reflects the real total context size
     # after wrapping (SH-13436).
@@ -378,6 +418,9 @@ def format_context(sessions, cwd, db_path=None, session_nonce=None):
             open_questions = json.loads(open_q_raw) if isinstance(open_q_raw, str) else (open_q_raw or [])
         except (json.JSONDecodeError, TypeError):
             open_questions = []
+        if open_questions and status_available:
+            open_questions = _storage.filter_open_questions(
+                open_questions, session.get("project"), statuses)
         if open_questions:
             block.append("Open questions:")
             for q in open_questions[:4]:
