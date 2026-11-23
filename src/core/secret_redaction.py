@@ -1,7 +1,7 @@
 """GENERATED from scripts/lib/secret_redaction.py -- do not edit.
 
 Regenerate with: .venv/bin/python scripts/generate_secret_redaction.py
-LoreConvo ships standalone to PyPI and cannot import scripts/lib directly,
+The products ship standalone to PyPI and cannot import scripts/lib directly,
 so this is a byte-identical copy of the canonical module's body
 (CLAUDE.md drift rules 1, 3, 4: one human-edited source, products get a
 generated copy). --check mode runs in safe_git.py and release.sh.
@@ -26,15 +26,25 @@ _PATTERNS = [
     re.compile(r"sk-[A-Za-z0-9_-]{20,}"),       # OpenAI (sk- / sk-proj- / sk-svcacct-)
     re.compile(r"ghp_[A-Za-z0-9]{20,}"),        # GitHub classic PAT
     re.compile(r"xoxb-[A-Za-z0-9-]{20,}"),      # Slack bot token
+    # Lore license key (SH-107003): LAB-{base64url(payload)}.{base64url(sig)}
+    # per ron_skills/loreconvo/src/core/license.py. Real keys carry an ~80-130
+    # char payload (it includes the customer email and expiry) and an 86-char
+    # Ed25519 signature, so {20,} is a safe floor. Must run before the generic
+    # assignment rule so LORECONVO_PRO=LAB-... is consumed whole, dot included.
+    re.compile(r"LAB-[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}"),
     # AWS secret access key -- self-contained: the aws_secret_access_key
     # keyword is part of the match, so no cross-field pairing is needed or
     # claimed [r4/sec-H3].
     re.compile(
         r"(?i)aws[_-]?secret[_-]?(access[_-]?)?key\s*[=:]\s*['\"]?[A-Za-z0-9/+=]{40}"
     ),
-    # Generic API-key/secret/password/token assignment.
+    # Generic API-key/secret/password/token/license-key assignment. The Lore
+    # Pro env names (LORECONVO_PRO / LOREDOCS_PRO, SH-107003) are listed so a
+    # truncated or malformed key value (no "." so the bare rule above misses
+    # it) is still redacted; a dev-mode LORECONVO_PRO=1 is too short to match.
     re.compile(
-        r"(?i)(api[_-]?key|secret|password|token)\s*[=:]\s*['\"]?[A-Za-z0-9_\-]{16,}"
+        r"(?i)(api[_-]?key|secret|password|token|license[_-]?key|lore(?:convo|docs)_pro)"
+        r"\s*[=:]\s*['\"]?[A-Za-z0-9_\-]{16,}"
     ),
     # Bearer token.
     re.compile(r"(?i)bearer\s+[A-Za-z0-9_\-.]{20,}"),

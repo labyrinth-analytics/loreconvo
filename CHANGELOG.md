@@ -11,6 +11,19 @@
   a 60 s deadline, single-flight, never writes. `--save-history PATH` (script
   only) appends a one-line JSON summary. Not an answer-quality measure.
 
+### Fixed
+
+- SH-107003: secret redaction now recognises Lore's own Pro license keys. The
+  bare key shape (`LAB-{payload}.{signature}`) and the `LORECONVO_PRO` /
+  `LOREDOCS_PRO` / `license_key` assignments were not in the pattern set, so a
+  key pasted or printed into a session (for example while inspecting
+  `.mcp.json` during an upgrade) was stored unredacted; the key payload carries
+  the customer email and expiry. Patterns live in the canonical
+  `scripts/lib/secret_redaction.py`; `core/secret_redaction.py` is the
+  regenerated copy. Backfill for existing databases: run
+  `loreconvo-scan-secrets` (dry-run by default) to find and redact keys already
+  stored before this release.
+
 ### Changed
 
 - SH-106842: `surface` parameter is now validated on `save_session` and
