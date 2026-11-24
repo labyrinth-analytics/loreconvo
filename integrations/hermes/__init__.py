@@ -639,6 +639,7 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
         # SH-106986: same status-aware rendering as the MCP tool.
         question_status = self._db.apply_question_status(
             results, include_resolved=include_resolved)
+        from loreconvo.core import trust_framing
         sessions = []
         for s in results:
             sessions.append({
@@ -648,7 +649,11 @@ class LoreConvoMemoryProvider(MemoryProvider):  # type: ignore
                 "surface": getattr(s, "surface", ""),
                 "summary": (getattr(s, "summary", "") or "")[:300],
                 "tags": getattr(s, "tags", []),
-                "open_questions": list(getattr(s, "open_questions", []) or []),
+                # Same untrusted-data boundary as MCP get_recent_sessions.
+                "open_questions": [
+                    trust_framing.wrap_untrusted(q) if q else q
+                    for q in (getattr(s, "open_questions", []) or [])
+                ],
             })
         return json.dumps({
             "project": project, "count": len(sessions), "sessions": sessions,
