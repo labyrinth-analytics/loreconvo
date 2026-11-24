@@ -48,7 +48,7 @@ def _path_to_id(path: str) -> str:
     The same path always returns the same ID, so view/create/str_replace
     all resolve to the same session without a lookup by title.
     """
-    digest = hashlib.md5(path.encode("utf-8")).hexdigest()
+    digest = hashlib.md5(path.encode("utf-8"), usedforsecurity=False).hexdigest()
     return str(uuid.UUID(digest))
 
 
