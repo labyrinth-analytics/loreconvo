@@ -83,6 +83,12 @@ def redact_parsed_session(parsed):
 # Used as PRAGMA user_version for cross-environment compatibility gating.
 SCHEMA_REVISION = 4
 
+# Canonical surface vocabulary (SH-107153). server.py validates every write
+# against this set; the one-shot migrate_surfaces.py script and any other
+# stdlib-only caller import it from here rather than importing the FastMCP
+# server module or restating the list.
+ALLOWED_SURFACES = ("code", "chat", "cowork")
+
 # ---------------------------------------------------------------------------
 # DDL constants
 # ---------------------------------------------------------------------------

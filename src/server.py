@@ -63,10 +63,8 @@ from core.onboard_tool import run_onboard as _run_onboard, _config_path as _onbo
 from core.timeutil import parse_iso_utc
 from core.session_id_resolver import resolve_session_id, resolve_session_ids
 from core import trust_framing
+from core.storage_core import ALLOWED_SURFACES
 from compat_check import check as _compat_check, emit_startup_warnings as _compat_emit
-
-
-ALLOWED_SURFACES = ("code", "chat", "cowork")
 
 
 _EGG_INFO_CANDIDATES = (

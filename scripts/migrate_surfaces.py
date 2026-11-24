@@ -10,20 +10,42 @@ Usage (dry run is the default and writes nothing):
     python scripts/migrate_surfaces.py [--db PATH]
     python scripts/migrate_surfaces.py --apply --backup-dir DIR [--db PATH]
 
-The allowed set is imported from server.ALLOWED_SURFACES, never restated.
+The allowed set is imported from storage_core.ALLOWED_SURFACES, never restated.
 A real run takes a timestamped backup first and refuses to write if the
 backup is missing or does not verify.
 """
 
 import argparse
+import importlib.util
 import os
 import sqlite3
 import sys
 from datetime import datetime
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+# Resolve storage_core through the single hook bootstrap -- no sys.path
+# mutation and no importing the FastMCP server module. ALLOWED_SURFACES and
+# the connection opener both come from storage_core, the same source the MCP
+# server validates against (SH-107153).
+_BOOTSTRAP_PATH = (
+    Path(__file__).resolve().parent.parent / "hooks" / "scripts" / "_bootstrap.py"
+)
+_bootstrap_spec = importlib.util.spec_from_file_location(
+    "_loreconvo_bootstrap", str(_BOOTSTRAP_PATH)
+)
+_bootstrap = importlib.util.module_from_spec(_bootstrap_spec)
+_bootstrap_spec.loader.exec_module(_bootstrap)
 
-from server import ALLOWED_SURFACES  # noqa: E402
+# clear_breadcrumb=False: a one-shot migration command must not erase the
+# hook_failure.json marker that records a broken HOOK save (SH-105345).
+try:
+    _storage = _bootstrap.resolve_storage_core(Path(__file__), clear_breadcrumb=False)
+except _bootstrap.BootstrapError as exc:
+    print("ERROR: %s" % exc, file=sys.stderr)
+    sys.exit(1)
+
+_open_conn = _storage._open_conn
+ALLOWED_SURFACES = _storage.ALLOWED_SURFACES
 
 TARGET_SURFACE = "code"
 DEFAULT_DB = os.path.join(os.path.expanduser("~"), ".loreconvo", "sessions.db")
@@ -46,9 +68,12 @@ def backup_database(db_path, backup_dir):
     os.makedirs(backup_dir, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = os.path.join(backup_dir, "sessions_pre_surface_migrate_%s.db" % stamp)
-    src = sqlite3.connect(db_path)
-    dst = sqlite3.connect(dest)
+    src = _open_conn(db_path)
+    # The online backup needs a plain destination handle, not a WAL-mode
+    # store (same rationale as database.py's backfill backup).
+    dst = sqlite3.connect(dest)  # ddl-guard: allow
     try:
+        os.chmod(dest, 0o600)
         src.backup(dst)
         n_src = src.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
         n_dst = dst.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
@@ -68,7 +93,7 @@ def migrate_surfaces(db_path, apply=False, backup_dir=None):
     before the first write. Returns a dict with counts, rewritten rows and
     the backup path. Idempotent: a second run rewrites 0 rows.
     """
-    conn = sqlite3.connect(db_path)
+    conn = _open_conn(db_path)
     try:
         counts = count_nonstandard(conn)
         result = {"counts": counts, "rewritten": 0, "backup": None}
