@@ -1,6 +1,7 @@
 # LoreConvo v0.12.1
 
 [![LoreConvo MCP server](https://mcprush.com/badge/loreconvo-mcp/card.svg)](https://mcprush.com/to/loreconvo-mcp?ref=badge)
+[![labyrinth-analytics/loreconvo MCP server](https://glama.ai/mcp/servers/labyrinth-analytics/loreconvo/badges/score.svg)](https://glama.ai/mcp/servers/labyrinth-analytics/loreconvo)
 
 Your memory follows your identity, not your tool — with your consent.
 
