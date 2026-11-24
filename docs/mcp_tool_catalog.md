@@ -19,7 +19,7 @@ Save a session summary to persistent memory. Claude calls this at the end of a s
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `title` | text | yes | Short descriptive title for the session |
-| `surface` | text | yes | Where this session ran: `cowork`, `code`, or `chat` |
+| `surface` | text | yes | Where this session ran: `code` (Claude Code), `chat` (Claude.ai Chat web), or `cowork` (Claude.ai Cowork project sessions). Use `chat` for standard claude.ai conversations; use `cowork` only for Cowork project-scoped sessions. |
 | `summary` | text | yes | 2-3 paragraph narrative of what happened |
 | `decisions` | list of text | no | Key decisions made during the session |
 | `artifacts` | list of text | no | Files created or modified |
