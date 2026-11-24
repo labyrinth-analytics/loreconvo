@@ -48,7 +48,7 @@ from core.loredocs_bridge import (
 )
 from core.config import (
     Config,
-    get_summarizer_api_key,
+    get_anthropic_capture_key,
     set_tier as _set_tier_config,
     save_tool_groups as _save_tool_groups,
 )
@@ -168,8 +168,12 @@ mcp = FastMCP(
 
 
 def _compress_summary(raw_summary: str) -> str:
-    """Compress raw_summary via Claude API. Returns raw on any failure (no key, import error, API error)."""
-    api_key = get_summarizer_api_key()
+    """Compress raw_summary via Claude API. Returns raw on any failure (no key, import error, API error).
+
+    Posts to Anthropic's SDK, so it reads only LORECONVO_ANTHROPIC_API_KEY
+    (SH-107043) -- never the active summarizer backend's key.
+    """
+    api_key = get_anthropic_capture_key()
     if not api_key:
         return raw_summary
     try:

@@ -4,6 +4,25 @@
 
 ### Added
 
+- SH-107043: provider-swappable background summarizer (Pro). The async session
+  summarizer now resolves its LLM backend from a registry
+  (`core/summarizer_backends.py`): built-in `anthropic-haiku` (default,
+  unchanged request) and `ollama-local`, plus your own OpenAI-compatible
+  Chat Completions endpoint defined under `summarizer.backends` in
+  `~/.loreconvo/config.json`. Select with `LORECONVO_SUMMARIZER_BACKEND` or
+  `summarizer.backend`. A custom backend reads only its derived
+  `LORECONVO_<ID>_API_KEY`; keys are never stored in config. Invalid or
+  unknown configuration fails closed (no request, logged reason, no retry
+  unit consumed); there is no fallback to another provider. HTTP redirects
+  are refused, `http://` is accepted only for loopback hosts, response bodies
+  are capped at 1 MiB and parsed by shape (a leading thinking block no longer
+  breaks parsing). `python -m loreconvo.core.summarizer_backends --check`
+  validates the configuration without a request. `save_session(summarize=True)`
+  and post-turn capture keep calling Anthropic with
+  `LORECONVO_ANTHROPIC_API_KEY` only, and the hooks that dispatch the
+  summarizer now gate on the configured backend instead of that one key.
+  See INSTALL.md, "Choosing a summarizer provider".
+
 - SH-106986: open-question lifecycle bridge. Every question in a session's
   `open_questions` list is now mirrored on save into a `memory_items`
   `open_question` row (identity `oq:<sha256 of the normalized text>`, idempotent,

@@ -9,14 +9,40 @@ from pathlib import Path
 
 _VALID_TIERS = {"free", "pro"}
 
-# Every LLM summarization path reads this key and nothing else. Never fall
-# back to ANTHROPIC_API_KEY: the README promises that leaving this unset keeps
-# all data local (SH-105079).
+# The Anthropic key LoreConvo owns. Never fall back to ANTHROPIC_API_KEY: the
+# README promises that leaving this unset keeps all data local (SH-105079).
+# It is the key env of the built-in `anthropic-haiku` summarizer backend and
+# the ONLY key the Anthropic-SDK paths (capture_worker, save_session
+# summarize=True) may use (SH-107043).
 SUMMARIZER_API_KEY_ENV = "LORECONVO_ANTHROPIC_API_KEY"
 
 
 def get_summarizer_api_key() -> str:
-    """Return the LoreConvo summarizer API key, or '' when unset."""
+    """Return the ACTIVE summarizer backend's API key, or '' when it is unset
+    or the backend configuration is invalid (SH-107043).
+
+    With nothing configured the active backend is `anthropic-haiku`, so this
+    reads LORECONVO_ANTHROPIC_API_KEY exactly as before. A configured
+    OpenAI-compatible backend reads its own derived LORECONVO_<ID>_API_KEY.
+    Callers that post to Anthropic's SDK must NOT use this accessor -- see
+    get_anthropic_capture_key().
+    """
+    from .summarizer_backends import BackendConfigError, get_active_backend
+    try:
+        backend = get_active_backend()
+    except BackendConfigError:
+        return ""
+    return os.environ.get(backend.key_env, "")
+
+
+def get_anthropic_capture_key() -> str:
+    """Return LORECONVO_ANTHROPIC_API_KEY only, or '' when unset.
+
+    For code that calls api.anthropic.com directly (the post-turn capture
+    worker and save_session(summarize=True)). It never returns another
+    backend's key, so a non-Anthropic summarizer key can never be sent to
+    Anthropic (SH-107043 wire-boundary invariant).
+    """
     return os.environ.get(SUMMARIZER_API_KEY_ENV, "")
 
 

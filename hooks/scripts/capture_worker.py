@@ -72,14 +72,17 @@ def get_daily_limit():
 
 
 def get_api_key():
+    # SH-107043: this worker posts to Anthropic's SDK, so it may use ONLY the
+    # Anthropic key -- never the active summarizer backend's key, which could
+    # belong to another provider.
     try:
-        from core.config import get_summarizer_api_key
+        from core.config import get_anthropic_capture_key
     except ImportError:
         try:
-            from loreconvo.core.config import get_summarizer_api_key
+            from loreconvo.core.config import get_anthropic_capture_key
         except ImportError:
             return ''
-    return get_summarizer_api_key()
+    return get_anthropic_capture_key()
 
 
 def haiku_available():

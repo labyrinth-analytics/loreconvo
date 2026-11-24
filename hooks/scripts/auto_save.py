@@ -475,14 +475,40 @@ def _is_valid_transcript_path(transcript_path):
         return False
 
 
+def summarizer_configured():
+    """SH-107043: is a summarizer backend configured for this environment?
+
+    Gate for the async-summarizer dispatchers (this hook and periodic_save).
+    Delegates to core.summarizer_backends.summarizer_configured(), which knows
+    the selection precedence and every backend's key env; a fixed
+    LORECONVO_ANTHROPIC_API_KEY check here would silently never dispatch for a
+    customer on a non-Anthropic backend. Resolution follows the hook
+    bootstrap (installed package first, sibling src/ checkout second).
+    """
+    from _bootstrap import resolve_session_core, BootstrapError
+    try:
+        resolve_session_core(Path(__file__))
+    except BootstrapError:
+        return False
+    try:
+        from loreconvo.core.summarizer_backends import summarizer_configured as _gate
+    except ImportError:
+        # Older installed build without the registry: its summarizer only
+        # knows the fixed Anthropic key, so gate on that one.
+        from loreconvo.core.config import SUMMARIZER_API_KEY_ENV
+        return bool(os.environ.get(SUMMARIZER_API_KEY_ENV))
+    return _gate()
+
+
 def _dispatch_async_summarizer(session_id, transcript_path):
     """Fire-and-forget background subprocess to upgrade session to LLM summary.
 
-    Only dispatched when LORECONVO_ANTHROPIC_API_KEY is set. The hook
-    returns immediately; summarization happens asynchronously.
+    Only dispatched when a summarizer backend is configured
+    (summarizer_configured). The hook returns immediately; summarization
+    happens asynchronously.
     """
     import subprocess
-    if not os.environ.get("LORECONVO_ANTHROPIC_API_KEY"):
+    if not summarizer_configured():
         return
     try:
         # Locate session_summarizer.py relative to this hook's src directory.

@@ -7,7 +7,10 @@ auto_save.py after the hook completes.
 Key design decisions (per R5/R6 final spec):
 - No fcntl: uses SQLite WAL + busy_timeout=10000ms for all coordination.
 - BEGIN EXCLUSIVE for atomic cap check+increment (_claim_cap_slot).
-- LORECONVO_ANTHROPIC_API_KEY required (no fallback to ANTHROPIC_API_KEY).
+- The LLM backend comes from core.summarizer_backends (SH-107043): default
+  anthropic-haiku reading LORECONVO_ANTHROPIC_API_KEY (no fallback to
+  ANTHROPIC_API_KEY); a configured backend reads its own derived key env.
+  Invalid backend config fails closed: no request, no retry unit consumed.
 - Pro-tier check via Config().is_pro (Ed25519 -- stronger than proposed HMAC).
 - session_id validated via stdlib uuid.UUID(val, version=4).
 - _verify_db_ownership() UID check (skipped on Windows).
@@ -31,16 +34,21 @@ from pathlib import Path
 try:
     from .core.storage_core import _open_conn, redact_parsed_session, redact_text
     from .core.verbatim import open_authorized_transcript
+    from .core import summarizer_backends as _backends
 except ImportError:
     from core.storage_core import _open_conn, redact_parsed_session, redact_text
     from core.verbatim import open_authorized_transcript
+    from core import summarizer_backends as _backends
 
 # Module-level constants.
 MAX_SUMMARY_RETRIES = 5
 DAILY_CAP_DEFAULT = 100
 _LOG_PATH = Path.home() / ".loreconvo" / "summarizer.log"
-_SUMMARIZER_MODEL = "claude-haiku-4-5-20251001"
-_MAX_TRANSCRIPT_CHARS = 40000
+# Default-backend values, derived from the registry (one derivation per fact).
+# Imported by internal_tools/loreconvo-bench and scripts/benchmarks.
+_DEFAULT_BACKEND = _backends.BUILTIN_BACKENDS[_backends.DEFAULT_BACKEND_ID]
+_SUMMARIZER_MODEL = _DEFAULT_BACKEND.model
+_MAX_TRANSCRIPT_CHARS = _DEFAULT_BACKEND.max_input_chars
 _SCHEMA_MIGRATION = "v06_v07"
 SKIP_SUMMARIZE_SOURCES = frozenset({'claude_api', 'claude_async', 'pre_migration_unknown'})
 
@@ -88,12 +96,28 @@ def _get_db_path() -> str:
 
 
 def _get_api_key() -> str:
-    """Return LORECONVO_ANTHROPIC_API_KEY. No fallback to ANTHROPIC_API_KEY (R6 CRITICAL)."""
+    """Return the active backend's key (default: LORECONVO_ANTHROPIC_API_KEY).
+
+    No fallback to ANTHROPIC_API_KEY (R6 CRITICAL); '' when the backend config
+    is invalid.
+    """
     try:
         from .core.config import get_summarizer_api_key
     except ImportError:
         from core.config import get_summarizer_api_key
     return get_summarizer_api_key()
+
+
+def _safe_error_text(exc: Exception) -> str:
+    """Fallback-reason text that cannot echo endpoint or provider details.
+
+    Backend errors carry only a class name, a fixed reason and an HTTP status
+    (SH-107043); anything else keeps the historical str(exc)[:200].
+    """
+    if isinstance(exc, (_backends.BackendConfigError, _backends.BackendResponseError,
+                        _backends.BackendTransportError)):
+        return f"{type(exc).__name__}:{exc}"[:200]
+    return str(exc)[:200]
 
 
 def _get_daily_cap() -> int:
@@ -216,44 +240,15 @@ def _fetch_session(conn: sqlite3.Connection, session_id: str):
 
 
 def _call_claude_api(transcript_excerpt: str, api_key: str) -> dict:
-    """Call Claude Haiku to summarize the transcript excerpt.
+    """DEPRECATED (SH-107043): delegating shim, kept as the historical patch point.
 
-    Returns parsed JSON dict with title/summary/decisions/artifacts/open_questions.
-    Raises on API error.
+    Resolves the active backend and delegates to summarizer_backends.call,
+    so tests and tools that patch this name keep working. New code calls
+    summarizer_backends.call directly; removing this shim is a P3 follow-up.
+    Returns the parsed JSON dict; raises Backend*Error on failure.
     """
-    import urllib.request
-
-    payload = json.dumps({
-        "model": _SUMMARIZER_MODEL,
-        "max_tokens": 1024,
-        "messages": [
-            {
-                "role": "user",
-                "content": f"{_SUMMARY_PROMPT}\n\n<transcript>\n{transcript_excerpt}\n</transcript>",
-            }
-        ],
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=payload,
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        method="POST",
-    )
-
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read())
-
-    text = data["content"][0]["text"]
-    # Strip any markdown fences the model may add.
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    return json.loads(text)
+    backend = _backends.get_active_backend()
+    return _backends.call(backend, api_key, _SUMMARY_PROMPT, transcript_excerpt)
 
 
 def _as_list(value) -> list:
@@ -365,10 +360,18 @@ def summarize_session(session_id: str, transcript_path: str = None) -> bool:
         log.error("Invalid session_id %r: %s", session_id, exc)
         return False
 
+    # Resolve the configured backend (SH-107043). Invalid or unknown config
+    # fails closed: nothing is sent anywhere and no retry unit is consumed.
+    try:
+        backend = _backends.get_active_backend()
+    except _backends.BackendConfigError as exc:
+        log.warning("backend config invalid: %s -- skipping async summarization", exc)
+        return False
+
     # Check API key (never log its value).
     api_key = _get_api_key()
-    if not api_key:
-        log.warning("LORECONVO_ANTHROPIC_API_KEY not set -- skipping async summarization")
+    if not api_key and not backend.key_optional:
+        log.warning("%s not set -- skipping async summarization", backend.key_env)
         return False
 
     # Check Pro license.
@@ -448,7 +451,7 @@ def summarize_session(session_id: str, transcript_path: str = None) -> bool:
                     transcript_text = transcript.read()
                 # SH-105853: redact before the cut (a key straddling it would
                 # otherwise survive as an unmatchable prefix).
-                transcript_text = redact_text(transcript_text)[:_MAX_TRANSCRIPT_CHARS]
+                transcript_text = redact_text(transcript_text)[:backend.max_input_chars]
             except Exception as exc:
                 log.warning("Could not read authorized transcript: %s", type(exc).__name__)
                 transcript_text = row["summary"] or ""
@@ -463,14 +466,17 @@ def summarize_session(session_id: str, transcript_path: str = None) -> bool:
         # SH-105853: never send a raw secret to the API.
         transcript_text = redact_text(transcript_text)
 
-        # Call API.
+        # Call the configured backend. Log only the validated id/model and the
+        # error class + status -- never the URL, key, or provider error text.
+        log.info("Calling backend=%s model=%s for session %s",
+                 backend.id, backend.model, session_id)
         try:
             result = _call_claude_api(transcript_text, api_key)
         except Exception as exc:
-            # Never log the exc message if it might contain key material.
-            safe_msg = str(exc)[:200]
+            safe_msg = _safe_error_text(exc)
             _mark_fallback(conn, session_id, f"api_error:{safe_msg}")
-            log.error("API call failed for session %s: %s", session_id, safe_msg)
+            log.error("API call failed for session %s backend=%s: %s",
+                      session_id, backend.id, safe_msg)
             return False
 
         try:

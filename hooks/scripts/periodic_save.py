@@ -23,7 +23,10 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
 # auto_save resolves utc_now_iso through _bootstrap; reuse it rather than
 # bootstrapping a second copy (this module already reuses its helpers).
-from auto_save import capture_verbatim, get_db_path, parse_transcript, save_to_db, utc_now_iso
+from auto_save import (
+    capture_verbatim, get_db_path, parse_transcript, save_to_db, summarizer_configured,
+    utc_now_iso,
+)
 
 
 STATE_FILE = os.path.expanduser("~/.loreconvo/periodic_state.json")
@@ -125,7 +128,8 @@ def main():
         _save_state(state)
 
         # Re-queue sweep: retry pending/heuristic sessions from prior saves.
-        if os.environ.get("LORECONVO_ANTHROPIC_API_KEY"):
+        # SH-107043: gate on the configured backend, not a fixed key env.
+        if summarizer_configured():
             _requeue_pending_summaries(db_path)
 
     except json.JSONDecodeError:
