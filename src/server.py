@@ -1,6 +1,7 @@
 """Session Bridge MCP Server - FastMCP interface for LLM access."""
 
 import concurrent.futures
+import dataclasses
 import json
 import signal
 import sys
@@ -48,7 +49,6 @@ from core.loredocs_bridge import (
 )
 from core.config import (
     Config,
-    get_anthropic_capture_key,
     set_tier as _set_tier_config,
     save_tool_groups as _save_tool_groups,
 )
@@ -166,34 +166,31 @@ mcp = FastMCP(
 
 
 def _compress_summary(raw_summary: str) -> str:
-    """Compress raw_summary via Claude API. Returns raw on any failure (no key, import error, API error).
+    """Compress raw_summary via the active summarizer backend (SH-107219).
 
-    Posts to Anthropic's SDK, so it reads only LORECONVO_ANTHROPIC_API_KEY
-    (SH-107043) -- never the active summarizer backend's key.
+    Returns raw_summary on any failure: nothing configured, invalid config,
+    transport error, or an empty/reasoning-only response. Waits at most
+    SYNC_TIMEOUT_CAP_S seconds because a user is waiting on save_session.
     """
-    api_key = get_anthropic_capture_key()
-    if not api_key:
-        return raw_summary
     try:
-        import anthropic
-    except ImportError:
-        return raw_summary
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
-            messages=[{
-                "role": "user",
-                "content": (
-                    "Summarize the following session notes concisely. "
-                    "Preserve all key decisions, artifacts, and open questions. "
-                    "Output only the summary text:\n\n" + raw_summary
-                ),
-            }],
+        from core import summarizer_backends as backends
+        from core.storage_core import redact_text
+        backend = backends.get_active_backend()
+        api_key = backends.get_api_key(backend)
+        if not api_key and not backend.key_optional:
+            return raw_summary
+        backend = dataclasses.replace(
+            backend, timeout_s=min(backend.timeout_s, backends.SYNC_TIMEOUT_CAP_S))
+        return backends.call_text(
+            backend, api_key,
+            "Summarize the following session notes concisely. "
+            "Preserve all key decisions, artifacts, and open questions. "
+            "Output only the summary text:",
+            redact_text(raw_summary)[:backend.max_input_chars],
+            max_chars=8192,
         )
-        return response.content[0].text
-    except Exception:
+    except Exception as exc:
+        logger.debug("summary compression skipped: %s", type(exc).__name__)
         return raw_summary
 
 
@@ -1658,9 +1655,11 @@ def export_for_anthropic(
     Anthropic managed-agents memory stores. Only non-periodic, non-file-memory sessions
     are exported (contamination control).
 
-    NOTE: Field mapping is preliminary pending Anthropic beta API schema stabilization.
-    Cassandra will signal when the schema is stable. Save the output and validate
-    against Anthropic docs before submitting to a managed-agents memory store.
+    Each entry includes 'path' and 'content' matching the Anthropic Managed Agents
+    memory create API (POST /v1/memory_stores/{id}/memories, beta header
+    agent-memory-2026-07-22). A consumer script iterates entries and calls the
+    create API per entry. Tags and metadata are supplementary fields not accepted
+    by the API; embed them in content if needed.
 
     Args:
         output_path: File path to write the export. If omitted, data is returned inline.

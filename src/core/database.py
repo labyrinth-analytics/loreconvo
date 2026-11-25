@@ -6069,7 +6069,9 @@ class SessionDatabase:
         entries = []
         for s in sessions:
             entries.append({
+                "type": "memory",
                 "id": s.id,
+                "path": "/sessions/{}.md".format(s.id),
                 "content": s.summary or "",
                 "created_at": s.created_at,
                 "tags": s.tags or [],
@@ -6085,8 +6087,12 @@ class SessionDatabase:
             "source": "loreconvo",
             "exported_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "schema_note": (
-                "Preliminary field mapping -- validate against Anthropic beta API "
-                "docs before submitting to Anthropic memory stores."
+                "Verified against Anthropic Managed Agents memory public beta "
+                "(agent-memory-2026-07-22). Each entry has 'path' and 'content' "
+                "matching the POST /v1/memory_stores/{id}/memories create params. "
+                "Tags and metadata are supplementary (not API fields); embed in "
+                "content if needed. 'id' is the source session UUID; the API "
+                "assigns its own mem_... ID on create."
             ),
             "entry_count": len(entries),
             "entries": entries,
