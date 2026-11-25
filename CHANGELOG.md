@@ -50,6 +50,11 @@
 
 ### Fixed
 
+- SH-106864: documentation correction. The v0.12.0 entry for SH-106311 says
+  `LORECONVO_ENABLE_IDLE_BACKSTOP` is enabled by `1` or `true`
+  "(case-insensitive)". That is wrong: `server._resolve_backstop_env` is a
+  case-sensitive match on exactly `1` or `true`; `TRUE` and `True` leave the
+  backstop off. Behavior is unchanged; the published entry is left as written.
 - SH-107003: secret redaction now recognises Lore's own Pro license keys. The
   bare key shape (`LAB-{payload}.{signature}`) and the `LORECONVO_PRO` /
   `LOREDOCS_PRO` / `license_key` assignments were not in the pattern set, so a
