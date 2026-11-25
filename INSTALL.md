@@ -365,8 +365,8 @@ Claude calls `save_session` directly. Use the `--project` name that matches your
 **For long conversations in Chat/Home, prevent duplicate saves by reusing the session ID from the first save:**
 
 1. Save the first checkpoint: "Save this conversation checkpoint to LoreConvo as project my_project"
-   - Claude returns a session ID (e.g., `01a1e098-...`)
-2. At the next checkpoint: "Update session 01a1e098-... with these new decisions: ..."
+   - Claude returns a session ID (e.g., `<session-id>`)
+2. At the next checkpoint: "Update session <session-id> with these new decisions: ..."
    - Claude reuses the same session ID, updating the record instead of creating a duplicate
 
 **For first-turn context recall in hook-less surfaces:**
