@@ -480,7 +480,10 @@ def _extract_openai_text(data):
     if not isinstance(message, dict):
         raise BackendResponseError("no_text_content")
     content = message.get("content")
-    if not (isinstance(content, str) and content.strip()) and _has_reasoning(message):
+    # SH-107231: list-form content is a valid shape handled by the elif below;
+    # only raise reasoning_exhausted_output when content is genuinely
+    # empty/whitespace/absent (string or None), not when it's a list.
+    if not isinstance(content, list) and not (isinstance(content, str) and content.strip()) and _has_reasoning(message):
         # Reasoning model spent the whole output budget on hidden reasoning
         # (SH-107219). Only the presence of the field is checked, never its text.
         raise BackendResponseError("reasoning_exhausted_output")
