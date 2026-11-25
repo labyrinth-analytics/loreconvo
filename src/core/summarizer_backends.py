@@ -464,6 +464,14 @@ def _extract_anthropic_text(data):
     return "".join(parts)
 
 
+def _has_reasoning(message):
+    for field in ("reasoning", "reasoning_content"):
+        value = message.get(field)
+        if isinstance(value, str) and value.strip():
+            return True
+    return False
+
+
 def _extract_openai_text(data):
     choices = data.get("choices")
     if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
@@ -472,6 +480,10 @@ def _extract_openai_text(data):
     if not isinstance(message, dict):
         raise BackendResponseError("no_text_content")
     content = message.get("content")
+    if not (isinstance(content, str) and content.strip()) and _has_reasoning(message):
+        # Reasoning model spent the whole output budget on hidden reasoning
+        # (SH-107219). Only the presence of the field is checked, never its text.
+        raise BackendResponseError("reasoning_exhausted_output")
     if isinstance(content, str):
         text = content
     elif isinstance(content, list):
@@ -508,17 +520,7 @@ def _parse_summary_json(text):
 
 
 def parse_response(backend, body):
-    try:
-        data = json.loads(body)
-    except ValueError:
-        raise BackendResponseError("non_json_body") from None
-    if not isinstance(data, dict):
-        raise BackendResponseError("non_object_body")
-    if backend.protocol == PROTOCOL_ANTHROPIC:
-        text = _extract_anthropic_text(data)
-    else:
-        text = _extract_openai_text(data)
-    return _parse_summary_json(text)
+    return _parse_summary_json(_extract_text(backend, body))
 
 
 def call(backend, api_key, prompt, excerpt):
@@ -527,6 +529,39 @@ def call(backend, api_key, prompt, excerpt):
     req = build_request(backend, api_key, prompt, excerpt)
     body = _send(backend, req)
     return parse_response(backend, body)
+
+
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+SYNC_TIMEOUT_CAP_S = 30
+
+
+def _extract_text(backend, body):
+    try:
+        data = json.loads(body)
+    except ValueError:
+        raise BackendResponseError("non_json_body") from None
+    if not isinstance(data, dict):
+        raise BackendResponseError("non_object_body")
+    if backend.protocol == PROTOCOL_ANTHROPIC:
+        return _extract_anthropic_text(data)
+    return _extract_openai_text(data)
+
+
+def call_text(backend, api_key, prompt, excerpt, *, max_chars):
+    """One plain-text attempt: build, send, extract, sanitize. Never returns "".
+
+    Output contract (SH-107219): stripped; control characters other than
+    newline and tab removed; empty after that -> BackendResponseError
+    ("empty_text"); longer than max_chars -> truncated. Raises
+    BackendConfigError, BackendTransportError or BackendResponseError;
+    never retries.
+    """
+    req = build_request(backend, api_key, prompt, excerpt)
+    text = _extract_text(backend, _send(backend, req))
+    text = _CONTROL_CHARS_RE.sub("", text).strip()
+    if not text:
+        raise BackendResponseError("empty_text")
+    return text[:max_chars]
 
 
 # ---------------------------------------------------------------------------
@@ -571,6 +606,9 @@ def main(argv=None):
     else:
         key_state, rc = "UNSET -- summarization will be skipped", 1
     print(f"key env: {backend.key_env} {key_state}")
+    if backend.protocol == PROTOCOL_OPENAI and "reasoning_effort" not in backend.extra_body:
+        print("note: reasoning models (for example qwen3.5) may return empty output "
+              "unless the overlay sets extra_body {\"reasoning_effort\": \"none\"}")
     print("no request was made")
     return rc
 

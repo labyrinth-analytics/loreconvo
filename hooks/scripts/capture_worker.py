@@ -71,56 +71,49 @@ def get_daily_limit():
         return 100
 
 
-def get_api_key():
-    # SH-107043: this worker posts to Anthropic's SDK, so it may use ONLY the
-    # Anthropic key -- never the active summarizer backend's key, which could
-    # belong to another provider.
+def _backends():
     try:
-        from core.config import get_anthropic_capture_key
+        from core import summarizer_backends
     except ImportError:
         try:
-            from loreconvo.core.config import get_anthropic_capture_key
+            from loreconvo.core import summarizer_backends
         except ImportError:
-            return ''
-    return get_anthropic_capture_key()
+            return None
+    return summarizer_backends
 
 
 def haiku_available():
-    if not get_api_key():
+    """True when the active summarizer backend can be called (SH-107219).
+
+    Name kept for existing callers; it covers every configured backend. An
+    INVALID configuration reports True so call_haiku fails closed per call.
+    """
+    backends = _backends()
+    if backends is None:
         return False
-    try:
-        from anthropic import Anthropic  # noqa: F401
-    except ImportError:
-        return False
-    return True
+    return backends.summarizer_configured()
 
 
 def call_haiku(excerpt):
-    try:
-        from anthropic import Anthropic
-    except ImportError:
+    """Summarize excerpt via the active backend; return excerpt on any error."""
+    backends = _backends()
+    if backends is None:
         return excerpt
-
-    api_key = get_api_key()
-    if not api_key:
-        return excerpt
-
     try:
-        client = Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model='claude-haiku-4-5-20251001',
-            max_tokens=100,
-            messages=[{
-                'role': 'user',
-                'content': (
-                    'Summarize this conversation excerpt in 100 tokens or less, '
-                    'focusing on key decisions and new information:\n\n'
-                    f'{excerpt}'
-                ),
-            }],
-            timeout=5.0,
-        )
-        return response.content[0].text
+        import dataclasses
+        backend = backends.get_active_backend()
+        api_key = backends.get_api_key(backend)
+        if not api_key and not backend.key_optional:
+            return excerpt
+        if backend.id == backends.DEFAULT_BACKEND_ID:
+            # Anthropic keeps this worker's historical limits.
+            backend = dataclasses.replace(backend, timeout_s=5.0, max_output_tokens=100)
+        text = backends.call_text(
+            backend, api_key,
+            'Summarize this conversation excerpt in 100 tokens or less, '
+            'focusing on key decisions and new information:',
+            excerpt, max_chars=600)
+        return text.encode('ascii', 'replace').decode('ascii')
     except Exception:
         return excerpt
 

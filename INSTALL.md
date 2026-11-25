@@ -109,9 +109,9 @@ The `--env=LORECONVO_PRO=<your-license-key>` flag is optional -- omit it if you 
 | `LORECONVO_DB` | Path to your session memory database (optional) | `--env=LORECONVO_DB=/path/to/sessions.db` in the command |
 | `LORECONVO_PROJECT_PATH` | Directory to scan for MEMORY.md at session start (optional) | `--env=LORECONVO_PROJECT_PATH=/path/to/project` in the command |
 | `LORECONVO_DREAM_INJECT` | Controls whether the memory digest is injected at session start (optional) | Set to `false` to disable digest injection globally: `--env=LORECONVO_DREAM_INJECT=false` |
-| `LORECONVO_ANTHROPIC_API_KEY` | Anthropic API key for all LLM summarization: async session summaries (Pro), post-turn capture (Pro), and `save_session(summarize=True)` -- optional | `--env=LORECONVO_ANTHROPIC_API_KEY=<key>` in the `claude mcp add` command. Note: this is separate from `ANTHROPIC_API_KEY`; LoreConvo uses its own key so it never interferes with your main Claude session budget. |
+| `LORECONVO_ANTHROPIC_API_KEY` | Key for the default `anthropic-haiku` backend, used by async session summaries (Pro), post-turn capture (Pro), and `save_session(summarize=True)` -- optional. Selecting another backend (below) moves all three paths to it | `--env=LORECONVO_ANTHROPIC_API_KEY=<key>` in the `claude mcp add` command. Note: this is separate from `ANTHROPIC_API_KEY`; LoreConvo uses its own key so it never interferes with your main Claude session budget. |
 | `LORECONVO_SUMMARIZER_DAILY_CAP` | Maximum sessions to upgrade via LLM summarization per day (optional, default: 100) -- Pro only | `--env=LORECONVO_SUMMARIZER_DAILY_CAP=50` to reduce API spend |
-| `LORECONVO_SUMMARIZER_BACKEND` | Which LLM backend the background summarizer uses (optional, default: `anthropic-haiku`) -- Pro only. Overrides the `summarizer.backend` setting in `config.json`. See [Choosing a summarizer provider](#choosing-a-summarizer-provider) | `--env=LORECONVO_SUMMARIZER_BACKEND=ollama-local` |
+| `LORECONVO_SUMMARIZER_BACKEND` | Which LLM backend all three summarization paths use (optional, default: `anthropic-haiku`). Overrides the `summarizer.backend` setting in `config.json`. See [Choosing a summarizer provider](#choosing-a-summarizer-provider) | `--env=LORECONVO_SUMMARIZER_BACKEND=ollama-local` |
 | `LORECONVO_EMBEDDING_LINKS` | Disable embedding-based session auto-links (optional) -- Pro only | Set to `0` to use keyword co-occurrence links only: `--env=LORECONVO_EMBEDDING_LINKS=0` |
 | `LORECONVO_TOOL_GROUPS` | Which tool groups to load, comma-separated (optional; default: all). `core` is always loaded. Overrides the `tool_groups` setting that the `configure_tools` tool saves. See [Tool Groups](docs/mcp_tool_catalog.md#tool-groups-v01020) | `--env=LORECONVO_TOOL_GROUPS=memory,graph` in the command |
 | `HF_HUB_OFFLINE` | Blocks HuggingFace Hub network calls after the initial model download (Pro tier only, optional) | Set to `1` to prevent all post-download hub requests: `--env=HF_HUB_OFFLINE=1` |
@@ -517,7 +517,7 @@ claude mcp add --scope user \
 **How it works:**
 
 1. **Stage 1 (fast, every N tool calls):** `post_turn_capture.py` enqueues a snapshot to `~/.loreconvo/capture_queue/` and exits. The interval is per-session and controlled by `LORECONVO_TURN_CAPTURE_INTERVAL` (default: every 10 tool calls).
-2. **Stage 2 (async worker):** `capture_worker.py` drains the queue, summarizes captured content using `claude-haiku-4-5-20251001`, and saves to your database.
+2. **Stage 2 (async worker):** `capture_worker.py` drains the queue, summarizes captured content using the active summarizer backend (default `claude-haiku-4-5-20251001`), and saves to your database.
 
 **Environment variables:**
 
@@ -530,9 +530,8 @@ claude mcp add --scope user \
 **Requirements:**
 
 - **Pro license required.** The worker checks your Pro license before making API calls.
-- **`anthropic` package required.** Install it with: `pip install anthropic`
-  The `anthropic` package is not included in the base LoreConvo install. If it is not installed, the worker skips API calls silently.
-- **API key required.** Set `LORECONVO_ANTHROPIC_API_KEY` in your environment. The generic `ANTHROPIC_API_KEY` is not used. Post-turn capture always calls Anthropic; it does not follow the summarizer provider selected below.
+- **No `anthropic` package needed.** Summarization uses LoreConvo's built-in HTTP client.
+- **API key required.** Set `LORECONVO_ANTHROPIC_API_KEY` in your environment. The generic `ANTHROPIC_API_KEY` is not used. Post-turn capture follows the summarizer backend selected below; with the default backend it calls Anthropic. The worker waits up to 5 s for Anthropic and up to the backend's `timeout_s` (120 s for `ollama-local`) otherwise; it runs detached, one inference at a time, so a slow local model never blocks your turn.
 
 **Queue cleanup:** Queue entries older than 7 days are discarded automatically. If the daily cap is reached, remaining queue entries are held until the next day.
 
@@ -540,11 +539,12 @@ claude mcp add --scope user \
 
 ## Choosing a summarizer provider
 
-Available from LoreConvo 0.13.0. Pro only. Older builds ignore these settings and keep
+Available from LoreConvo 0.13.0. Older builds ignore these settings and keep
 using Anthropic whenever `LORECONVO_ANTHROPIC_API_KEY` is set.
 
-The background session summarizer (the one that upgrades auto-saved sessions to
-LLM-quality summaries) can use one of three kinds of backend:
+All three summarization paths use the selected backend: the background summarizer (Pro,
+upgrades auto-saved sessions to LLM-quality summaries), post-turn capture (Pro), and
+`save_session(summarize=True)`. A backend is one of three kinds:
 
 | Backend id | What it is | Key it reads |
 |------------|-----------|--------------|
@@ -586,6 +586,21 @@ Then set `LORECONVO_MY_PROVIDER_API_KEY` in the environment. Rules:
 - A backend id matches `^[a-z][a-z0-9-]{0,31}$`, may not reuse a built-in id, and may not derive a built-in key name (so `anthropic` is rejected). Keys are read only from the environment, never from `config.json`.
 - Daily cap (`LORECONVO_SUMMARIZER_DAILY_CAP`) and the per-session retry budget apply to every backend.
 
+**Reasoning models** (for example `qwen3.5`) can spend the whole output budget on hidden reasoning
+and return nothing. LoreConvo reports this as `reasoning_exhausted_output` in the log. Fix it with a
+per-model overlay that turns reasoning off:
+
+```json
+{"summarizer": {"backend": "my-qwen", "backends": {"my-qwen": {
+  "protocol": "openai-chat", "base_url": "http://127.0.0.1:11434/v1",
+  "model": "qwen3.5:9b", "key_optional": true, "timeout_s": 120,
+  "extra_body": {"reasoning_effort": "none"}}}}}
+```
+
+**Latency.** `save_session(summarize=True)` waits at most 30 seconds, then saves the raw summary.
+The background summarizer and capture worker wait up to `timeout_s`. Local models cost no money per
+call but use CPU/GPU, memory and battery; quality and speed are your trade-off. The daily caps still apply.
+
 **Fail closed.** A missing, unknown or invalid backend, or a selected backend whose key is unset,
 skips summarization with one line in `~/.loreconvo/summarizer.log` (`backend config invalid: ...`).
 LoreConvo never falls back to a different provider than the one you selected. Sessions keep their
@@ -598,10 +613,12 @@ and whether its key is set; never the key itself):
 python -m loreconvo.core.summarizer_backends --check
 ```
 
-**Privacy.** The redacted transcript excerpt (up to `max_input_chars`) is sent to whichever provider
-you configure. Retention and data-use terms are that provider's and your choice; review them before
-selecting a backend. `save_session(summarize=True)` and post-turn capture are separate paths that
-always use Anthropic with `LORECONVO_ANTHROPIC_API_KEY`.
+**Privacy.** Summarization is off unless you configure it. If you choose a model running on your own
+computer (for example through Ollama), the session text is sent only to that local service (the
+loopback address). If you choose a remote provider, a redacted excerpt of the session text is sent to
+that provider using your own API key, and that provider's data handling applies. Redaction is best
+effort. LoreConvo cannot control your Ollama installation: if you bind Ollama to a network interface or
+expose it through a tunnel, other hosts may reach it, so keep the default loopback binding.
 
 ---
 
@@ -811,17 +828,18 @@ to any cloud service. You own your data.
 
 By default, LoreConvo stores session data locally with no external network calls.
 If you pass `summarize=True` to `save_session`, LoreConvo sends the session summary
-to the Anthropic API (using your `LORECONVO_ANTHROPIC_API_KEY`) to produce a compressed version
-before saving locally. This is opt-in and disabled by default.
+to the active summarizer backend (by default the Anthropic API, using your `LORECONVO_ANTHROPIC_API_KEY`)
+to produce a compressed version before saving locally. This is opt-in and disabled by default.
 
 When `summarize=True`:
-- Your session summary is transmitted to Anthropic and is subject to Anthropic's
-  [Privacy Policy](https://www.anthropic.com/legal/privacy).
+- Your redacted session summary is transmitted to the backend you selected. With the default
+  backend that is Anthropic, subject to Anthropic's
+  [Privacy Policy](https://www.anthropic.com/legal/privacy); with `ollama-local` it goes only to
+  your local Ollama service.
 - If `LORECONVO_ANTHROPIC_API_KEY` is not set, or the API call fails for any reason, LoreConvo
   falls back to saving the raw summary. Session saves never fail due to this feature.
-- The `anthropic` package must be installed: `pip install loreconvo[bridge]`
-- This path always uses Anthropic. It does not follow the background summarizer's provider
-  selection (see "Choosing a summarizer provider").
+- The call waits at most 30 seconds, then the raw summary is saved.
+- This path follows the summarizer provider selection (see "Choosing a summarizer provider").
 
 ---
 
