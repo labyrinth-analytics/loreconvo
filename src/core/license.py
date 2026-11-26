@@ -56,6 +56,18 @@ class LicenseError(Exception):
     """Raised when a license key is invalid, expired, or wrong product."""
 
 
+# Revocation module: loaded after LicenseError is defined so the generated
+# license_revocation.py can import it (from .license import LicenseError).
+# Fail-open if the module is absent (older install / missing generated copy).
+try:
+    from . import license_revocation as _revocation_mod
+except ImportError:
+    try:
+        import license_revocation as _revocation_mod  # noqa: F401
+    except ImportError:
+        _revocation_mod = None
+
+
 def _load_public_key():
     """Load the embedded Labyrinth Ed25519 public key."""
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -151,6 +163,11 @@ def validate_license_key(key: str) -> dict:
                 f"Renew at {LORECONVO_UPGRADE_URL}."
             )
 
+    # Revocation check: fail-open on module absence or unexpected errors.
+    # LicenseRevoked subclasses LicenseError and propagates to callers.
+    if _revocation_mod is not None:
+        _revocation_mod.check_not_revoked(key)
+
     return payload
 
 
@@ -238,3 +255,17 @@ def get_license_status(env_value: Optional[str] = None) -> dict:
         return {"is_pro": False, "mode": "invalid_key", "error": env_invalid_error}
 
     return {"is_pro": False, "mode": "free"}
+
+
+def get_revocation_info() -> dict:
+    """Return revocation list status for the ``license status`` command.
+
+    Never raises. Returns ``{"seq": None, "status": "none"}`` if the
+    revocation module is absent or no bundled list exists.
+    """
+    if _revocation_mod is None:
+        return {"seq": None, "status": "none"}
+    try:
+        return _revocation_mod.get_revocation_status()
+    except Exception:
+        return {"seq": None, "status": "none"}

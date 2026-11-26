@@ -2590,6 +2590,15 @@ def main():
     # for months -- the gap is invisible without an explicit check. Runs on a
     # background thread so initialize is not blocked (SH-106690).
     _start_background_coverage_check()
+
+    # Revocation list refresh: one unauthenticated GET at startup (daemon
+    # thread, fail-open, LORE_REVOCATION_REFRESH=0 disables). Never blocks.
+    try:
+        from core.license_revocation import refresh_cache_async
+        refresh_cache_async("loreconvo")
+    except Exception:
+        pass
+
     try:
         mcp.run(transport="stdio")
     finally:

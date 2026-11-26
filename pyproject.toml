@@ -101,7 +101,7 @@ packages = [
 # SH-105356: the Hermes provider reads its tool schemas from the installed
 # package (hermes_tool_loader.py); without this the wheel exposes zero tools.
 [tool.setuptools.package-data]
-"loreconvo.core" = ["hermes_tool_schemas.json"]
+"loreconvo.core" = ["hermes_tool_schemas.json", "revocations.lrl"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
