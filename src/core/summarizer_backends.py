@@ -35,6 +35,7 @@ import math
 import os
 import re
 import sys
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -534,7 +535,13 @@ def call(backend, api_key, prompt, excerpt):
     return parse_response(backend, body)
 
 
-_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+def _strip_unsafe_chars(text):
+    """Drop Unicode categories Cc (except newline, tab) and Cf (SH-107303)."""
+    return "".join(
+        ch for ch in text
+        if ch in "\n\t" or unicodedata.category(ch) not in ("Cc", "Cf"))
+
+
 SYNC_TIMEOUT_CAP_S = 30
 
 
@@ -554,14 +561,14 @@ def call_text(backend, api_key, prompt, excerpt, *, max_chars):
     """One plain-text attempt: build, send, extract, sanitize. Never returns "".
 
     Output contract (SH-107219): stripped; control characters other than
-    newline and tab removed; empty after that -> BackendResponseError
+    newline and tab, and Unicode format characters (bidi, zero-width), removed; empty after that -> BackendResponseError
     ("empty_text"); longer than max_chars -> truncated. Raises
     BackendConfigError, BackendTransportError or BackendResponseError;
     never retries.
     """
     req = build_request(backend, api_key, prompt, excerpt)
     text = _extract_text(backend, _send(backend, req))
-    text = _CONTROL_CHARS_RE.sub("", text).strip()
+    text = _strip_unsafe_chars(text).strip()
     if not text:
         raise BackendResponseError("empty_text")
     return text[:max_chars]
