@@ -101,6 +101,13 @@ def call_haiku(excerpt):
         return excerpt
     try:
         import dataclasses
+        try:
+            from core.storage_core import redact_text
+        except ImportError:
+            from loreconvo.core.storage_core import redact_text
+        # SH-107302: a raw credential must not leave the machine. An
+        # unimportable redactor raises here and fails closed (excerpt stays local).
+        outbound = redact_text(excerpt)
         backend = backends.get_active_backend()
         api_key = backends.get_api_key(backend)
         if not api_key and not backend.key_optional:
@@ -112,7 +119,7 @@ def call_haiku(excerpt):
             backend, api_key,
             'Summarize this conversation excerpt in 100 tokens or less, '
             'focusing on key decisions and new information:',
-            excerpt, max_chars=600)
+            outbound, max_chars=600)
         return text.encode('ascii', 'replace').decode('ascii')
     except Exception:
         return excerpt
