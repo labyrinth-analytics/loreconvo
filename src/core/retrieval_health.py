@@ -25,7 +25,12 @@ import time
 from collections import Counter
 from typing import Callable, Optional
 
-from .storage_core import normalize_project_name, sanitize_fts_query, session_visibility_clause
+from .storage_core import (
+    normalize_project_name,
+    readonly_uri,
+    sanitize_fts_query,
+    session_visibility_clause,
+)
 
 # Fixed reason codes (the only values "reason" may take).
 REASON_STORE_UNAVAILABLE = "store_unavailable"
@@ -110,7 +115,7 @@ def _unavailable(reason: str, seed, sample) -> dict:
 
 
 def _open_ro_conn(db_path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    conn = sqlite3.connect(readonly_uri(db_path), uri=True)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=10000")
     return conn

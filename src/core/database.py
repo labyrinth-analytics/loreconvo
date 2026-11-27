@@ -37,6 +37,7 @@ from .storage_core import (
     ANTI_PATTERN_SCHEMA_SQL,
     VERBATIM_SCHEMA_SQL,
     ensure_verbatim_schema,
+    readonly_uri,
     _is_in_memory_db,
     _open_conn,
     _truncate_if_needed,
@@ -683,7 +684,11 @@ class SessionDatabase:
         be opened read-only. Release with `release_readonly()`, NOT `close()`
         (close() checkpoints the WAL, which is a write).
         """
-        conn = sqlite3.connect(f"file:{config.db_path}?mode=ro", uri=True)
+        # mode=ro on an idle WAL store still creates empty -wal/-shm files
+        # (SH-107000). When neither exists, no connection has the store open,
+        # so immutable=1 is safe and creates nothing. If either exists, a
+        # writer may be live: stay on plain mode=ro so we see its commits.
+        conn = sqlite3.connect(readonly_uri(config.db_path), uri=True)
         try:
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA busy_timeout=10000")

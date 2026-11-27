@@ -299,6 +299,19 @@ END;
 """
 
 
+def readonly_uri(db_path) -> str:
+    """SQLite URI for a read-only open that creates no files (SH-107000).
+
+    mode=ro on an idle WAL store still creates empty -wal/-shm files. When
+    neither exists no connection has the store open, so immutable=1 is safe
+    and creates nothing. If either exists a writer may be live: stay on plain
+    mode=ro so its commits stay visible.
+    """
+    p = str(db_path)
+    idle = not (os.path.exists(p + "-wal") or os.path.exists(p + "-shm"))
+    return f"file:{p}?" + ("mode=ro&immutable=1" if idle else "mode=ro")
+
+
 def ensure_verbatim_schema(conn: sqlite3.Connection) -> None:
     """Create the verbatim recall tables, index and triggers. Idempotent.
 
