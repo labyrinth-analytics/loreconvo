@@ -399,6 +399,11 @@ def _no_redirect_handler():
     return _NoRedirect()
 
 
+def _build_refresh_opener():
+    """Opener with the default HTTP/HTTPS handlers and redirects refused."""
+    o = urllib.request.OpenerDirector(); o.add_handler(_no_redirect_handler()); return o
+
+
 def _do_refresh(product: str, bundled_seq: int) -> None:
     """Attempt to download a fresh revocation list and cache it.
 
@@ -412,8 +417,7 @@ def _do_refresh(product: str, bundled_seq: int) -> None:
         current_cache = _load_cache(product, bundled_seq)
         current_seq = current_cache["seq"] if current_cache else 0
 
-        opener = urllib.request.OpenerDirector()
-        opener.add_handler(_no_redirect_handler())
+        opener = _build_refresh_opener()
 
         req = urllib.request.Request(
             _REFRESH_URL,
