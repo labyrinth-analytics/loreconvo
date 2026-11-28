@@ -6,13 +6,27 @@ Provides one canonical source for surface derivation across all hook scripts.
 Import: from surface_utils import get_surface_from_hook_input
 """
 
+import functools
 import os
+import sys
+from pathlib import Path
 from typing import Dict, Optional
 
+sys.path.insert(0, str(Path(__file__).parent))
+from _bootstrap import resolve_storage_core  # noqa: E402
 
-# Accepted explicit surface values. Mirrors the vocabulary documented in the
-# MCP server instructions (src/server.py): code/cowork/chat/codex/custom.
-ALLOWED_SURFACES = frozenset({"code", "cowork", "chat", "codex", "custom"})
+
+@functools.lru_cache(maxsize=1)
+def _allowed_surfaces() -> frozenset:
+    """Accepted explicit surface values.
+
+    One derivation (SH-107166): storage_core.ALLOWED_SURFACES, the same set
+    the MCP server validates against and migrate_surfaces enforces. Resolved
+    lazily; clear_breadcrumb=False so this lookup never erases hook-failure
+    evidence.
+    """
+    storage = resolve_storage_core(Path(__file__), clear_breadcrumb=False)
+    return frozenset(storage.ALLOWED_SURFACES)
 
 
 def get_surface_from_hook_input(hook_input: Dict, env_override: Optional[Dict] = None) -> str:
@@ -44,7 +58,7 @@ def get_surface_from_hook_input(hook_input: Dict, env_override: Optional[Dict] =
     # Only accept it when it is a known surface string; anything else falls
     # through to environment detection.
     surface = hook_input.get('surface')
-    if isinstance(surface, str) and surface in ALLOWED_SURFACES:
+    if isinstance(surface, str) and surface in _allowed_surfaces():
         return surface
 
     # Get environment variables (use override for testing)
