@@ -140,7 +140,7 @@ async def _round_trip_loreconvo(session: ClientSession) -> str:
         "save_session",
         {
             "title": f"Smoke test {marker}",
-            "surface": "smoke",
+            "surface": "code",
             "summary": f"Cross-platform smoke marker {marker}",
             "tags": ["smoke"],
         },
