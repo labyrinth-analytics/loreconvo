@@ -1,6 +1,6 @@
 # LoreConvo Changelog
 
-## Unreleased
+## v0.13.0 (2026-11-27)
 
 ### Added
 
@@ -48,6 +48,22 @@
   a 60 s deadline, single-flight, never writes. `--save-history PATH` (script
   only) appends a one-line JSON summary. Not an answer-quality measure.
 
+- SH-107316 / SH-107481: Pro license key revocation. `core/license_revocation.py`
+  (generated from `scripts/lib/license_revocation.py`) checks the key against a
+  signed revocation list during validation; `LicenseRevoked` subclasses
+  `LicenseError`, so a revoked key is treated as an invalid key. A bundled
+  `core/revocations.lrl` ships with the package; at MCP server startup a
+  background thread refreshes it from
+  `https://labyrinthanalyticsconsulting.com/revocations.lrl` at most once per
+  24 h (plain GET, no key, email or machine identifier sent; failures ignored).
+  `LORE_REVOCATION_REFRESH=0` disables the refresh. Fail-open if the module is
+  absent. SH-107481 fixed the refresh opener to use `build_opener` so the HTTPS
+  handler exists.
+- SH-107094: `scripts/migrate_surfaces.py`, a one-shot migration that rewrites
+  session `surface` values outside `storage_core.ALLOWED_SURFACES` to `code`.
+  Dry run by default; `--apply --backup-dir DIR` takes a verified backup first
+  and refuses to write without it. Idempotent; not run automatically on open.
+
 ### Fixed
 
 - SH-106864: documentation correction. The v0.12.0 entry for SH-106311 says
@@ -65,6 +81,24 @@
   regenerated copy. Backfill for existing databases: run
   `loreconvo-scan-secrets` (dry-run by default) to find and redact keys already
   stored before this release.
+
+- SH-107212: `export_for_anthropic` format `anthropic-memory-v1` now emits
+  `path` + `content` entries matching the Managed Agents memory create API
+  (`POST /v1/memory_stores/{id}/memories`, beta `agent-memory-2026-07-22`).
+  SH-107226 regenerated the Hermes tool schema for parity.
+- SH-107219: all three summarizer paths (`call_text`, `compress`, the capture
+  worker) now go through the backend registry; a `reasoning_exhausted_output`
+  diagnostic reports a reasoning model that spent its budget without text.
+  SH-107231 fixed that check misfiring on list-form content.
+- SH-107302: the capture worker redacts the excerpt before the summarizer call.
+- SH-107303: `call_text` strips C0/C1 control (except newline and tab) and
+  format characters (for example U+202E, U+200B, U+FEFF) from model output.
+- SH-107124: `consolidate_memories(mode="llm")` returns `mode_unavailable`
+  instead of silently running the heuristic mode.
+- SH-107000: `get_retrieval_health` opens an idle WAL store read-only without
+  creating `-wal`/`-shm` files.
+- SH-107156: md5/sha1 ID hashes pass `usedforsecurity=False` (IDs unchanged;
+  stability tests added).
 
 ### Changed
 

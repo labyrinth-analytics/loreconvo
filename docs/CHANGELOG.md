@@ -4,6 +4,59 @@ What changed in each release, written for users (not developers).
 
 ---
 
+## v0.13.0 (2026-11-27)
+
+### Added
+
+- New `get_retrieval_health` tool, with a matching `--health` option on the
+  fallback script, checks that search can find what you saved. It works
+  offline and changes nothing. Free covers keyword search; Pro can also check
+  semantic search.
+- Open questions you record in a session are now tracked. Once you mark one
+  answered or won't-answer, it stops showing up when you recall context
+  (ask for resolved questions to see them again). LoreConvo can also point
+  out questions that a later session seems to have settled. A backfill
+  command, which starts as a dry run, brings in questions from sessions you
+  saved before this release.
+- Pro: choose which provider writes background session summaries. Anthropic
+  stays the default. You can also use a local Ollama model or your own
+  OpenAI-compatible endpoint. A configuration that is wrong or incomplete
+  sends nothing and never falls back to another provider. INSTALL.md,
+  "Choosing a summarizer provider", explains the setup.
+- Pro license keys can now be revoked. Every release includes the current
+  revocation list, so a revoked key stops working once you install a release
+  that lists it. When the server starts, LoreConvo also
+  downloads a small public revocation list from
+  labyrinthanalyticsconsulting.com in the background, at most once a day.
+  Nothing about you, your license or your sessions is sent. To stop the daily
+  download, set `LORE_REVOCATION_REFRESH=0`.
+- If an older setup saved sessions with a surface name LoreConvo no longer
+  accepts, a one-time migration script can convert them. It starts as a dry
+  run and takes a verified backup before it changes anything.
+
+### Changed
+
+- `save_session` and `update_session` now accept only the surface values
+  `code`, `chat` and `cowork`. Any other value returns an error straight away
+  instead of being saved.
+
+### Fixed
+
+- Lore Pro license keys that were pasted or printed into a session are now
+  redacted before they are stored. To clean up keys saved before this
+  release, run `loreconvo-scan-secrets` (it starts as a dry run).
+- The Anthropic memory export now matches Anthropic's current Managed Agents
+  memory format.
+- Asking `consolidate_memories` for a mode that isn't available now returns a
+  clear error instead of quietly running a different mode.
+- Text from the summarizer is cleaned of hidden control and formatting
+  characters, and conversation excerpts are redacted before they are sent for
+  summarizing.
+- Summaries from reasoning models are read correctly, and a model that runs
+  out of budget before writing a summary is now reported.
+- The health check no longer leaves extra database files next to an idle
+  store.
+
 ## v0.12.1 (2026-11-20)
 
 ### Fixed
