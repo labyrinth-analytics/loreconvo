@@ -401,7 +401,7 @@ def _no_redirect_handler():
 
 def _build_refresh_opener():
     """Opener with the default HTTP/HTTPS handlers and redirects refused."""
-    o = urllib.request.OpenerDirector(); o.add_handler(_no_redirect_handler()); return o
+    return urllib.request.build_opener(_no_redirect_handler())
 
 
 def _do_refresh(product: str, bundled_seq: int) -> None:
