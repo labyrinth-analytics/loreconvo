@@ -2808,11 +2808,24 @@ class SessionDatabase:
         Shared core version of the consolidate_memories tool body: the
         HeuristicConsolidator wiring, lore_dir resolution, and the
         on-demand trigger live in ONE place; the fallback script and
-        loreconvo-cli are second callers of this method. `mode` is
-        accepted for MCP signature parity but forced to heuristic --
-        LLM mode is deferred to v0.6.1 exactly as the MCP tool behaves.
+        loreconvo-cli are second callers of this method. Only
+        mode='heuristic' exists. Any other value (including 'llm', which
+        never shipped) is rejected with status='mode_unavailable' instead
+        of silently running heuristic (SH-107124); nothing runs and no
+        daily consolidation is consumed.
         """
         from .consolidation import HeuristicConsolidator
+
+        if mode != "heuristic":
+            return {
+                "status": "mode_unavailable",
+                "mode_requested": mode,
+                "available_modes": ["heuristic"],
+                "message": (
+                    f"consolidate_memories mode={mode!r} is not available. "
+                    "Only mode='heuristic' is supported; no consolidation was run."
+                ),
+            }
 
         lore_dir = str(Path(self.config.db_path).parent)
         consolidator = HeuristicConsolidator(lore_dir=lore_dir)
@@ -2821,7 +2834,7 @@ class SessionDatabase:
             surface=surface,
             db=self,
             max_sessions=max_sessions,
-            mode="heuristic",  # LLM mode deferred to v0.6.1
+            mode="heuristic",
             is_pro=self.config.is_pro,
             trigger="on-demand",
             dedup=dedup,

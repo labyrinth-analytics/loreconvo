@@ -1858,7 +1858,9 @@ def consolidate_memories(
         project: Project name (matches the --project tag used when saving sessions)
         surface: Surface to consolidate ('code', 'cowork', 'chat', etc.) or None for all
         max_sessions: Maximum number of recent sessions to analyze (default 50)
-        mode: 'heuristic' (free, default). 'llm' requires Pro (v0.6.1).
+        mode: 'heuristic' (the only available mode, default). Any other
+            value, including 'llm', returns status='mode_unavailable' and
+            runs nothing.
         dedup: Semantic dedup pass mode: 'off' (default), 'conservative', or
             'balanced'. When 'off' (or unset, or unrecognised), the pass does
             not run and consolidation behaves exactly as before. 'conservative'

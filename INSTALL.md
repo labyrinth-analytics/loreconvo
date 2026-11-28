@@ -662,7 +662,7 @@ Add it via `--env=LORECONVO_DREAM_INJECT=false` in your `claude mcp add` command
 
 ### Known limitations (v0.6.0)
 
-- **no-llm tag:** If you tag a session with `no-llm`, it is excluded from future LLM-mode consolidation (v0.6.1). In v0.6.0 heuristic mode, all sessions are processed regardless of this tag.
+- **Heuristic mode only:** `consolidate_memories` supports `mode='heuristic'` only. Requesting `mode='llm'` returns `status='mode_unavailable'` and runs nothing. The `no-llm` tag has no effect today; all sessions are processed.
 - **Bulk imports leave the digest stale.** If you import a batch of sessions, the digest is not updated until you run `consolidate_memories` again. LoreConvo uses the `updated_at` timestamp on the digest to determine freshness -- importing sessions does not update that timestamp.
 - **Project or surface renames strand the digest.** Digests are keyed by project name and surface. If you rename a project in `--project` tags, the old digest is no longer linked. Run `consolidate_memories` again after renaming.
 - **Free-tier rate limit is enforced in the MCP layer.** The 3/day limit applies to calls through the MCP tool. The Python consolidation library does not enforce this limit if called directly.
